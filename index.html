@@ -396,6 +396,33 @@
       見どころが続く区間では差し込みません。頻度は区間あたり1〜2回までです。
     </p>
 
+    <label for="feeds">フィード・一覧ページ（任意）</label>
+    <textarea id="feeds" style="min-height:60px"
+      placeholder="1行に1つ。例：https://note.com/ユーザー名/rss"></textarea>
+    <div class="row" style="margin-top:8px">
+      <div>
+        <label for="feedOrder">拾う順番</label>
+        <select id="feedOrder">
+          <option value="date">新着順</option>
+          <option value="popular">人気順</option>
+        </select>
+      </div>
+      <div>
+        <label for="feedMax">1つのフィードから拾う本数</label>
+        <input type="text" id="feedMax" value="3" inputmode="numeric">
+      </div>
+      <div class="fixed"><button id="btnFeedFetch">新着を読み込む</button></div>
+      <div class="fixed">
+        <label style="margin:0"><input type="checkbox" id="feedAuto" style="width:auto;margin-right:6px">台本を作る前に確認する</label>
+      </div>
+    </div>
+    <p class="hint">
+      登録したフィードから新しい記事を拾い、興味・関心のURLと同じように<b>要約と感想を作って残します</b>。
+      読んだ記事は <code>character/reads/</code> に貯まり、次の台本から雑談の材料になります。同じ記事は読み直しません。<br>
+      <b>人気順</b>は、RSSに人気の情報が入っていないため、そのサイトの<b>人気順・ランキングのページ</b>を登録したときに効きます。
+      通常のRSSでは新着順になります。
+    </p>
+
     <div class="row" style="margin-top:10px">
       <div class="fixed"><button id="btnReadUrls">URLを読んで感想を作る</button></div>
       <div class="fixed"><button id="btnCharPull">リポジトリから読み込む</button></div>
@@ -2281,6 +2308,18 @@ for (const b of document.querySelectorAll(".tabBtn")) {
 // ファイル名は動画IDと区間で決まるので読めない。表示名は一覧ファイルに持たせる
 const SCRIPT_INDEX = "scripts/_index.json";
 
+
+// 動画名だけならAPIキーなしで取れる（oEmbedはCORSを許可している）
+async function ytTitle(videoId) {
+  try {
+    const u = "https://www.youtube.com/oembed?url="
+            + encodeURIComponent("https://www.youtube.com/watch?v=" + videoId) + "&format=json";
+    const r = await fetch(u);
+    if (!r.ok) return "";
+    return (await r.json())?.title || "";
+  } catch (e) { return ""; }
+}
+
 async function readScriptIndex() {
   try {
     const raw = await ghGetRaw(SCRIPT_INDEX);
@@ -2295,8 +2334,9 @@ async function writeScriptIndex(idx) {
 window.__noteScriptSaved = async data => {
   try {
     const key = scriptKey(data), idx = await readScriptIndex();
+    const title = data.meta?.title || await ytTitle(data.videoId);
     idx[key] = {
-      label: idx[key]?.label || data.meta?.title || key,
+      label: idx[key]?.label || title || key,
       videoId: data.videoId, start: data.start || 0, end: data.covered ?? data.end ?? 0,
       savedAt: new Date().toISOString()
     };
@@ -2315,15 +2355,44 @@ async function openPicker() {
   } catch (e) { $("pickHint").textContent = e.message; return; }
   if (!files.length) { $("pickHint").textContent = "まだ台本が保存されていません。台本を作ってから「リポジトリに保存」を押してください。"; return; }
   $("pickHint").textContent = "選ぶと読み込んで再生します。";
-  files.sort((x, y) => (idx[y.name.replace(/\.json$/, "")]?.savedAt || "").localeCompare(idx[x.name.replace(/\.json$/, "")]?.savedAt || ""));
+  const info4 = f => idx[f.name.replace(/\.json$/, "")] || {};
+  files.sort((x, y) => (info4(y).fav ? 1 : 0) - (info4(x).fav ? 1 : 0)
+                    || (info4(y).savedAt || "").localeCompare(info4(x).savedAt || ""));
   for (const f of files) {
     const key = f.name.replace(/\.json$/, "");
     const info = idx[key] || {};
     const row = document.createElement("div");
     row.className = "pick";
-    row.innerHTML = '<div class="row"><div><b class="nm"></b><br><span class="hint sub"></span></div>'
+    row.innerHTML = '<div class="row"><div class="fixed"><button type="button" class="fav" title="お気に入り"></button></div>'
+                  + '<div><b class="nm"></b><br><span class="hint sub"></span></div>'
                   + '<div class="fixed"><button type="button" class="ren">名前を変更</button></div></div>';
-    row.querySelector(".nm").textContent = info.label || key;
+    const fav = row.querySelector(".fav");
+    const paintFav = on => { fav.textContent = on ? "★" : "☆"; fav.style.color = on ? "var(--accent)" : "var(--sub)"; };
+    paintFav(!!info.fav);
+    fav.onclick = async ev => {
+      ev.stopPropagation();
+      const on = !(info.fav);
+      info.fav = on; paintFav(on);
+      try {
+        const all = await readScriptIndex();
+        all[key] = { ...(all[key] || {}), fav: on };
+        await writeScriptIndex(all);
+      } catch (e) { $("pickHint").textContent = e.message; paintFav(!on); info.fav = !on; }
+    };
+    const nm = row.querySelector(".nm");
+    nm.textContent = info.label || "（読み込み中…）";
+    if (!info.label) {
+      // 名前が無い台本は動画名を引いて埋める。次からは一覧ファイルから出る
+      ytTitle(key.split("_")[0]).then(async t => {
+        nm.textContent = t || key;
+        if (!t) return;
+        try {
+          const all = await readScriptIndex();
+          all[key] = { ...(all[key] || {}), label: t };
+          await writeScriptIndex(all);
+        } catch (e) {}
+      });
+    }
     row.querySelector(".sub").textContent = info.start !== undefined
       ? `${fmtTime(info.start)}〜${fmtTime(info.end)} ／ ${key}` : key;
     row.querySelector(".nm").parentElement.onclick = async () => {
@@ -3622,6 +3691,11 @@ async function run() {
         if (end === null && meta.duration) { end = meta.duration; log(`動画の長さ: ${fmtTime(meta.duration)}`); }
       } catch (e) { log("動画情報の取得に失敗（終了時刻を手入力してください）: " + e.message, "warn"); }
     }
+    // タイトルだけはAPIキーなしでも取れる。保存済み台本の表示名に使うので必ず控える
+    if (!meta?.title) {
+      const t = await ytTitle(videoId);
+      if (t) { meta = { ...(meta || {}), title: t }; log(`タイトル: ${t}`); }
+    }
     if (end === null) { end = start + 600; log(`終了時刻が未指定のため ${fmtTime(end)} までを対象にします。`, "warn"); }
     if (end <= start) throw new Error("終了時刻は開始時刻より後にしてください。");
 
@@ -3629,7 +3703,14 @@ async function run() {
     const persona = $("persona").value.trim();
     const sceneDensity = +$("densityScene").value;
     const chatDensity = +$("densityChat").value;
-    // 未読のURLがあれば先に読ませる。台本の材料を揃えてから本編に入る
+    // 未読のURLとフィードの新着を先に読ませる。台本の材料を揃えてから本編に入る
+    if ($("feedAuto").checked && $("feeds").value.trim()) {
+      log("フィードの新着を確認しています...");
+      try {
+        const r = await fetchFeeds(m => log("  " + m));
+        log(`  新しい記事 ${r.ok}件（読めなかった ${r.ng}件・既読 ${r.skip}件）`);
+      } catch (e) { log("  フィードを見られませんでした: " + e.message, "warn"); }
+    }
     const interests = await prepareInterests(persona, m => log("  " + m));
 
     // チャンクごとに台本を生成
@@ -4011,6 +4092,7 @@ const GH = "https://api.github.com";
 const CHAR_FILES = {
   persona:   { path: "character/persona.md",   label: "キャラクター設定" },
   interests: { path: "character/interests.md", label: "興味・関心" },
+  feeds:     { path: "character/feeds.md",     label: "フィード" },
 };
 
 function ghHeaders() {
@@ -4192,6 +4274,98 @@ function insertNotes(text, notes) {
   return out.join("\n");
 }
 
+
+/* ---------- フィードから新着を拾う ---------- */
+// ブラウザからは他所のフィードを取れない（CORS）。Geminiの url_context に読ませる。
+// RSSはtext/xmlとして読めるし、人気順のページならHTMLとして読める
+async function geminiListFeed(feedUrl, order, max) {
+  const key = lsGet("gemini-api-key");
+  const model = lsGet("model", "gemini-3.6-flash");
+  const how = order === "popular"
+    ? "そのページが人気順・ランキングとして並べている順に、上から"
+    : "新しいものから順に";
+  const prompt = `次のページ（RSSフィードまたは記事の一覧ページ）を読み、記事を${how}最大${max}件挙げてください。
+
+${feedUrl}
+
+# 出力の形式（この形以外は書かない）
+URL | タイトル
+
+- 1行に1件。区切りは半角の縦棒
+- URLは記事そのものへの絶対URL。一覧ページやトップページのURLは挙げない
+- 見出しも説明も要らない
+- 読めなかったときは「読めませんでした」とだけ書く`;
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`,
+    { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], tools: [{ url_context: {} }] }) }
+  );
+  if (!res.ok) {
+    let d = ""; try { d = (await res.json())?.error?.message || ""; } catch (e) {}
+    throw new Error(`Gemini API ${res.status}${d ? "：" + d : ""}`);
+  }
+  const data = await res.json();
+  const meta = data?.candidates?.[0]?.urlContextMetadata?.urlMetadata
+            ?? data?.candidates?.[0]?.url_context_metadata?.url_metadata ?? [];
+  const st = meta.map(m => m.urlRetrievalStatus || m.url_retrieval_status || "");
+  if (st.length && !st.some(x => /SUCCESS/i.test(x))) throw new Error("フィードを取得できませんでした。");
+  const text = (data?.candidates?.[0]?.content?.parts || []).map(p => p.text).filter(Boolean).join("").trim();
+  if (/読めませんでした/.test(text)) throw new Error("フィードを読めませんでした。");
+  const out = [];
+  for (const line of text.split("\n")) {
+    const m = line.match(/(https?:\/\/\S+?)\s*\|\s*(.+)$/);
+    if (m) out.push({ url: m[1].replace(/[)\]、。]+$/, ""), title: m[2].trim() });
+  }
+  return out.slice(0, max);
+}
+
+// 登録したフィードを見て、まだ読んでいない記事だけ要約と感想を作る
+async function fetchFeeds(onProgress = () => {}) {
+  const feeds = [...new Set(($("feeds").value.match(URL_RE) || []))];
+  if (!feeds.length) { onProgress("フィードが登録されていません。"); return { ok: 0, ng: 0, skip: 0 }; }
+
+  const useRepo = !!(lsGet("data-repo") && lsGet("github-pat"));
+  const cache = urlNotes();
+  let known = { ...cache }, shas = {};
+  if (useRepo) {
+    try { const r = await collectReads(); known = { ...r.notes, ...cache }; shas = r.shas; }
+    catch (e) { onProgress(`記録を読めませんでした（${e.message}）。この端末の控えで判定します。`); }
+  }
+
+  const order = $("feedOrder").value;
+  const max = Math.max(1, Math.min(10, parseInt($("feedMax").value, 10) || 3));
+  const persona = $("persona").value.trim();
+  const res = { ok: 0, ng: 0, skip: 0 };
+
+  for (const f of feeds) {
+    let items = [];
+    onProgress(`フィードを見ています: ${f}`);
+    try { items = await geminiListFeed(f, order, max); }
+    catch (e) { res.ng++; onProgress(`読めませんでした（${e.message}）`); continue; }
+    if (!items.length) { onProgress("新しい記事は見つかりませんでした。"); continue; }
+
+    for (const it of items) {
+      if (known[it.url]) { res.skip++; continue; }   // 同じ記事は読み直さない
+      onProgress(`記事を読んでいます: ${it.title || it.url}`);
+      try {
+        const r = await geminiReadUrl(it.url, persona);
+        cache[it.url] = known[it.url] = r.note;
+        if (useRepo) {
+          const path = `${READS_DIR}/${readSlug(it.url)}.md`;
+          await ghPutText(path, readFileBody(it.url, r), `追加: 記事の要約と感想（${r.title || it.title || it.url}）`, shas[path]);
+        }
+        res.ok++;
+      } catch (e) {
+        res.ng++;
+        onProgress(`読めませんでした（${e.message}）`);
+      }
+    }
+  }
+  lsSet("url-notes", JSON.stringify(cache));
+  lsSet("feeds-checked", String(Date.now()));
+  return res;
+}
+
 // character/reads/ の記録を集める。URL→感想 と、上書き用のsha
 async function collectReads() {
   const files = (await ghList(READS_DIR)).filter(f => f.name?.endsWith(".md"));
@@ -4243,7 +4417,9 @@ async function prepareInterests(persona, onProgress = () => {}) {
   lsSet("url-notes", JSON.stringify(cache));
 
   if (useRepo) {
-    const list = urls.map(u => notes[u]).filter(Boolean);
+    // フィードから拾った記事は興味・関心の欄に載らないので、記録にある感想はすべて材料にする。
+    // 増えすぎるとプロンプトが膨らむので上限を置く
+    const list = [...new Set(Object.values(notes).filter(Boolean))].slice(0, 15);
     if (!list.length) return text.trim();
     return `${text.trim()}\n\n# 読んだものの感想\n${list.join("\n\n")}`;
   }
@@ -4322,6 +4498,23 @@ $("btnSave").onclick = () => {
   lsSet("github-pat", $("genGhPat").value.trim());
   $("dlg").close();
 };
+$("btnFeedFetch").onclick = async () => {
+  const btn = $("btnFeedFetch");
+  btn.disabled = true;
+  charStatus("フィードを見ています…");
+  try {
+    const r = await fetchFeeds(m => charStatus(m));
+    charStatus(`新しい記事 ${r.ok}件を読みました（読めなかった ${r.ng}件・既読 ${r.skip}件）。`, r.ok ? "ok" : "");
+  } catch (e) {
+    charStatus(e.message, "err");
+  } finally {
+    btn.disabled = false;
+  }
+};
+$("feedAuto").onchange = () => lsSet("feed-auto", $("feedAuto").checked ? "1" : "");
+$("feedOrder").onchange = () => lsSet("feed-order", $("feedOrder").value);
+$("feedMax").onchange = () => lsSet("feed-max", $("feedMax").value);
+
 $("btnReadUrls").onclick = async () => {
   const btn = $("btnReadUrls");
   btn.disabled = true;
@@ -4392,6 +4585,11 @@ $("btnCopy").onclick = async () => {
   $("persona").value = lsGet("persona", $("persona").value);
   $("persona").onchange = () => lsSet("persona", $("persona").value);
   $("interests").value = lsGet("interests");
+  $("feeds").value = lsGet("feeds");
+  $("feeds").onchange = () => lsSet("feeds", $("feeds").value);
+  $("feedAuto").checked = lsGet("feed-auto") === "1";
+  $("feedOrder").value = lsGet("feed-order", "date");
+  $("feedMax").value = lsGet("feed-max", "3");
   $("interests").onchange = () => lsSet("interests", $("interests").value);
   $("genDataRepo").value = lsGet("data-repo");
   $("genGhPat").value = lsGet("github-pat");

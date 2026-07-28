@@ -793,6 +793,7 @@
     <p class="hint" id="repoHint">
       PCで作った音声をスマホで鳴らすための置き場です。<b>台本と音声をあなたのプライベートリポジトリに保存し、別の端末で取り込みます。</b>
       取り込んだ音声はエンジンの設定に関係なく再生されるので、スマホに内蔵音声しかなくてもPCで作った声で鳴ります。
+      <b>台本を読み込むと、その台本の音声は自動で取り込まれます。</b>下のボタンは、失敗したときの再試行用です。
     </p>
     <details>
       <summary>初回の準備（3ステップ）</summary>
@@ -1042,6 +1043,7 @@ function loadScript(data, remember = true) {
   $("btnPrepare").disabled = false;
   renderTimeline();
   setupPlayer(data.videoId);
+  autoPullAudio(data);
   status("読み込みました。「再生を開始」を押してください。", "ok");
 }
 
@@ -2052,6 +2054,38 @@ async function repoPush() {
     status("保存できませんでした: " + e.message, "err");
   } finally {
     $("btnRepoPush").disabled = false;
+  }
+}
+
+
+// 台本を読み込んだら、その台本の音声も自動で取り込む。
+// 取り込み済みは飛ばすので、2回目以降は一覧を1回取るだけで終わる
+let autoPullKey = "";
+async function autoPullAudio(data) {
+  if (!lsGet("data-repo") || !lsGet("github-pat")) return;
+  const key = scriptKey(data);
+  if (autoPullKey === key) return;   // 同じ台本で何度も走らせない
+  autoPullKey = key;
+  try {
+    const idx = await ghGetRaw(`audio/${key}/index.json`);
+    if (!idx) return;                // 音声が無い台本なら黙って何もしない
+    const meta = JSON.parse(new TextDecoder().decode(idx));
+    const items = meta.items || [];
+    let got = 0, have = 0;
+    for (const it of items) {
+      if (await idbGet("i:" + it.h)) { have++; continue; }
+      status(`保存済みの音声を取り込んでいます... ${got + have + 1}/${items.length}`);
+      const bytes = await ghGetRaw(`audio/${key}/${it.h}.${it.ext}`);
+      if (!bytes) continue;
+      await idbSet("i:" + it.h, makeClip(it.enc, bytes, it.rate, it.ext));
+      got++;
+    }
+    if (got) {
+      clearAudioCache();
+      status(`保存済みの音声を取り込みました（新規 ${got}件・取り込み済み ${have}件）。このまま再生できます。`, "ok");
+    }
+  } catch (e) {
+    status(`音声の取り込みに失敗しました（${e.message}）。「保存した音声を取り込む」で再試行できます。`, "warn");
   }
 }
 

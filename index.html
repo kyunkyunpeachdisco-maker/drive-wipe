@@ -190,20 +190,21 @@
   /* 全画面のメニュー。押したときだけタイムラインと操作を出す */
   #fsMenu { position: absolute; top: 10px; right: 92px; z-index: 2; display: none; }
   #stage.full #fsMenu { display: block; }
-  /* パネルより上に出す。でないとメニューを開いた瞬間に隠れて閉じられなくなる */
-  body.full-mode #fsMenu { position: fixed; top: 10px; right: 92px; z-index: 103; }
-  body.full-mode #exitFull { position: fixed; top: 10px; right: 10px; z-index: 103; }
-  body.full-mode #timeline, body.full-mode #stageBar { display: none; }
-  body.full-mode.menu-open #timeline {
-    display: block; position: fixed; right: 0; top: 0; bottom: 0;
+  /* 全画面では stage の中へ移して重ねる。stage をそのまま全画面にするので、
+     端末の切り欠きぶんの黒帯が出ない */
+  #stage.full > #tlWrap, #stage.full > #stageBar { display: none; }
+  body.menu-open #stage.full > #tlWrap {
+    display: block; position: absolute; right: 0; top: 0; bottom: 0;
     width: min(380px, 46vw); z-index: 101; background: var(--bg);
-    border-radius: 0; border-left: 1px solid var(--line);
+    border-left: 1px solid var(--line);
   }
-  body.full-mode.menu-open #stageBar {
-    display: flex; position: fixed; right: 0; bottom: 0;
+  body.menu-open #stage.full > #tlWrap > #timeline { border: 0; border-radius: 0; }
+  body.menu-open #stage.full > #stageBar {
+    display: flex; position: absolute; right: 0; bottom: 0;
     width: min(380px, 46vw); z-index: 102; margin: 0; padding: 10px;
     background: var(--bg); border-top: 1px solid var(--line); border-left: 1px solid var(--line);
   }
+  body.full-mode #fsMenu, body.full-mode #exitFull { position: absolute; z-index: 103; }
 
   :root {
     --bg: #ffffff; --fg: #1a1a1a; --sub: #666; --line: #e0e0e0;
@@ -2480,18 +2481,34 @@ document.addEventListener("keydown", e => {
   if (e.key === "Escape" && document.body.classList.contains("menu-open")) closeFsMenu();
 });
 
+// 全画面の間はタイムラインと操作を stage の中へ移す。
+// stage の外に置いたままだと、stage を全画面にしたときに描画されない
+let fsHome = null;
+function moveIntoStage() {
+  const tl = $("tlWrap"), bar = $("stageBar");
+  if (!fsHome) fsHome = { tlNext: tl.nextSibling, tlParent: tl.parentNode, barNext: bar.nextSibling, barParent: bar.parentNode };
+  $("stage").appendChild(tl);
+  $("stage").appendChild(bar);
+}
+function moveBackFromStage() {
+  if (!fsHome) return;
+  fsHome.tlParent.insertBefore($("tlWrap"), fsHome.tlNext);
+  fsHome.barParent.insertBefore($("stageBar"), fsHome.barNext);
+}
+
 $("btnFull").onclick = () => {
+  moveIntoStage();
   $("stage").classList.add("full");
   document.body.classList.add("full-mode");
-  // stage だけを全画面にすると、その外にあるタイムラインや操作が描画されない。
-  // 文書全体を全画面にして、stage は position:fixed で画面を覆う
-  const root = document.documentElement;
-  if (root.requestFullscreen) root.requestFullscreen().catch(() => {});
+  // stage 自体を全画面にする。文書全体を全画面にすると、端末によっては
+  // 切り欠きぶんの余白が黒帯として残る
+  if ($("stage").requestFullscreen) $("stage").requestFullscreen().catch(() => {});
 };
 $("exitFull").onclick = () => {
   $("stage").classList.remove("full");
   document.body.classList.remove("full-mode");
   closeFsMenu();
+  moveBackFromStage();
   if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
 };
 document.addEventListener("fullscreenchange", () => {
@@ -2499,6 +2516,7 @@ document.addEventListener("fullscreenchange", () => {
     $("stage").classList.remove("full");
     document.body.classList.remove("full-mode");
     closeFsMenu();
+    moveBackFromStage();
   }
 });
 $("showAvatar").onchange = () => $("avatar").classList.toggle("hidden", !$("showAvatar").checked);

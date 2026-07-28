@@ -1229,6 +1229,7 @@ async function ghError(res) {
   if (res.status === 401) return "トークンが正しくありません。発行し直して貼り直してください。";
   if (res.status === 403) return "権限が足りません。トークンの Repository permissions に Contents: Read and write が要ります。";
   if (res.status === 404) return "リポジトリが見つかりません。名前の綴りと、トークンがそのリポジトリを選んでいるかを確認してください。";
+  if (res.status === 409 || res.status === 422) return "リポジトリ側が新しくなっています。もう一度押すと最新に合わせて保存します。";
   return `GitHub ${res.status}${m ? "：" + m : ""}`;
 }
 function b64encode(u8) {
@@ -1238,7 +1239,7 @@ function b64encode(u8) {
 }
 // shaは親ディレクトリの一覧から取る（本文が1MBを超えると GET /contents が403になるため）
 async function ghList(dir) {
-  const res = await fetch(`${GH}/repos/${repoReady()}/contents/${dir}`, { headers: ghHeaders() });
+  const res = await fetch(`${GH}/repos/${repoReady()}/contents/${dir}`, { headers: ghHeaders(), cache: "no-store" });
   if (res.status === 404) return [];
   if (!res.ok) throw new Error(await ghError(res));
   const j = await res.json();
@@ -1246,7 +1247,7 @@ async function ghList(dir) {
 }
 async function ghGetText(path) {
   const res = await fetch(`${GH}/repos/${repoReady()}/contents/${path}`, {
-    headers: { ...ghHeaders(), "Accept": "application/vnd.github.raw" }
+    headers: { ...ghHeaders(), "Accept": "application/vnd.github.raw" }, cache: "no-store"
   });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(await ghError(res));

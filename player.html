@@ -86,6 +86,27 @@
     box-shadow: 0 4px 20px rgba(0,0,0,.45); pointer-events: none;
   }
   #avatar.hidden { display: none; }
+  /* 配置モードのときだけ触れるようにする。普段は映像側の操作を邪魔しない */
+  #avatar.movable { pointer-events: auto; cursor: move; outline: 2px dashed rgba(255,255,255,.75); }
+  #avatar .grip { display: none; }
+  #avatar.movable .grip {
+    display: block; position: absolute; right: 0; bottom: 0; width: 22px; height: 22px;
+    background: rgba(255,255,255,.85); border-radius: 10px 0 10px 0; cursor: nwse-resize;
+  }
+  #timeline {
+    max-height: 320px; overflow-y: auto; margin-top: 10px;
+    border: 1px solid var(--line); border-radius: 10px;
+  }
+  #timeline:empty { display: none; }
+  #timeline .cue {
+    display: flex; gap: 10px; padding: 7px 10px; cursor: pointer;
+    border-top: 1px solid var(--line); font-size: 14px; line-height: 1.5;
+  }
+  #timeline .cue:first-child { border-top: 0; }
+  #timeline .cue:hover { background: var(--panel); }
+  #timeline .cue.now { background: var(--panel); font-weight: 600; }
+  #timeline .cue .t { flex: 0 0 auto; color: var(--accent); font-variant-numeric: tabular-nums; }
+  #timeline .cue .k { flex: 0 0 auto; color: var(--sub); font-size: 12px; padding-top: 2px; }
   /* 調整用のプレビュー。スライダーの隣に常に出しておく */
   #previewBox {
     width: min(100%, 320px); margin: 4px auto 12px;
@@ -459,6 +480,10 @@
       <div class="fixed">
         <label style="margin:0"><input type="checkbox" id="showCaption" checked style="width:auto;margin-right:6px">字幕を表示</label>
       </div>
+      <div class="fixed">
+        <label style="margin:0"><input type="checkbox" id="moveWipe" style="width:auto;margin-right:6px">ワイプを配置</label>
+      </div>
+      <div class="fixed"><button id="btnWipeReset">位置と大きさを戻す</button></div>
     </div>
     <div class="row" style="margin-top:10px">
       <button id="btnPrepare" class="fixed" disabled>音声をまとめて用意</button>
@@ -466,6 +491,7 @@
       <button id="btnStart" class="primary fixed" disabled>再生を開始</button>
       <button id="btnFull" class="fixed" disabled>全画面</button>
     </div>
+    <div id="timeline"></div>
     <p class="hint">
       <b>「音声をまとめて用意」</b>を先に実行すると、再生中に音声を作らないため利用上限に当たりません。
       作った音声は端末に保存され、同じ台本の2回目以降は生成なしで再生できます。<br>
@@ -478,6 +504,7 @@
       <div id="avatar">
         <canvas id="face" width="300" height="400"></canvas>
         <canvas id="vrm" class="off"></canvas>
+        <div class="grip"></div>
       </div>
       <div id="caption"></div>
     </div>
@@ -556,6 +583,7 @@ function loadScript(data, remember = true) {
   $("btnStart").disabled = false;
   $("btnFull").disabled = false;
   $("btnPrepare").disabled = false;
+  renderTimeline();
   setupPlayer(data.videoId);
   status("読み込みました。「再生を開始」を押してください。", "ok");
 }
@@ -583,7 +611,7 @@ $("btnPaste").onclick = () => {
   if (!t) return;
   try { loadScript(JSON.parse(t)); } catch (err) { status("読み取れませんでした: " + err.message, "err"); }
 };
-$("useComments").onchange = () => { if (script) cues = buildCues(script, $("useComments").checked); };
+$("useComments").onchange = () => { if (script) { cues = buildCues(script, $("useComments").checked); renderTimeline(); } };
 
 /* ---------- YouTube プレイヤー ---------- */
 let ytReady = false, pendingVideo = null;
@@ -1063,6 +1091,117 @@ $("framing").onchange = () => lsSet("player-framing", $("framing").value);
 
 // ワイプの形と大きさ。縦横で見え方が大きく変わるので選べるようにする
 const WIPE_AR = { portrait: "3 / 4", square: "1 / 1", landscape: "4 / 3", wide: "16 / 9" };
+/* ---------- セリフのタイムライン ---------- */
+// 押した発話の時刻へ飛ぶ。tick() が2秒以上の移動をシークとして扱うので、読み上げ位置も自動で揃う
+function renderTimeline() {
+  const el = $("timeline");
+  el.innerHTML = "";
+  if (!cues.length) return;
+  const frag = document.createDocumentFragment();
+  for (const c of cues) {
+    const row = document.createElement("div");
+    row.className = "cue";
+    row.dataset.id = String(c.id);
+    row.innerHTML = `<span class="t"></span><span class="k"></span><span class="x"></span>`;
+    row.children[0].textContent = fmtTime(c.at);
+    row.children[1].textContent = c.comment ? "コメント" : c.kind === "chat" ? "雑談" : "実況";
+    row.children[2].textContent = c.text;
+    row.onclick = () => seekToCue(c);
+    frag.appendChild(row);
+  }
+  el.appendChild(frag);
+}
+
+function seekToCue(c) {
+  if (!player || !player.seekTo) { status("先に動画を読み込んでください。", "err"); return; }
+  player.seekTo(Math.max(0, c.at - 1), true);   // 1秒手前から入ると聞き逃さない
+  if (player.playVideo) player.playVideo();
+  highlightCue(c.id);
+}
+
+let lastHighlight = -1;
+function highlightCue(id) {
+  if (id === lastHighlight) return;
+  const el = $("timeline");
+  el.querySelector(".cue.now")?.classList.remove("now");
+  const row = el.querySelector(`.cue[data-id="${id}"]`);
+  if (row) {
+    row.classList.add("now");
+    // 一覧を自分でスクロールしているときに引き戻さない
+    if (document.activeElement !== el) row.scrollIntoView({ block: "nearest" });
+  }
+  lastHighlight = id;
+}
+
+/* ---------- ワイプの配置（移動・大きさ） ---------- */
+// 既定は右下だが、YouTubeの操作エリアに重なるので動かせるようにする。
+// 位置は overlay に対する割合で持つ（全画面や画面幅が変わっても同じ位置になる）
+function applyWipePos() {
+  const el = $("avatar");
+  const l = lsGet("player-wipeLeft"), t = lsGet("player-wipeTop");
+  if (l === "" || t === "") {
+    el.style.left = el.style.top = "";
+    el.style.right = "2%"; el.style.bottom = "8%";
+    return;
+  }
+  el.style.right = el.style.bottom = "";
+  el.style.left = l + "%"; el.style.top = t + "%";
+}
+
+function setupWipeDrag() {
+  const el = $("avatar"), grip = el.querySelector(".grip");
+  let mode = null, dx = 0, dy = 0, box = null;
+
+  const rect = () => $("overlay").getBoundingClientRect();
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+  el.addEventListener("pointerdown", e => {
+    if (!$("moveWipe").checked) return;
+    e.preventDefault();
+    const r = rect(), a = el.getBoundingClientRect();
+    box = r;
+    mode = e.target === grip ? "size" : "move";
+    dx = e.clientX - a.left; dy = e.clientY - a.top;
+    el.setPointerCapture(e.pointerId);   // 映像の上に出ても追い続ける
+  });
+
+  el.addEventListener("pointermove", e => {
+    if (!mode || !box) return;
+    e.preventDefault();
+    const a = el.getBoundingClientRect();
+    if (mode === "move") {
+      const left = clamp(e.clientX - dx - box.left, 0, box.width - a.width);
+      const top = clamp(e.clientY - dy - box.top, 0, box.height - a.height);
+      lsSet("player-wipeLeft", (left / box.width * 100).toFixed(2));
+      lsSet("player-wipeTop", (top / box.height * 100).toFixed(2));
+      applyWipePos();
+    } else {
+      // 縦横比はCSSが保つので、幅だけを割合で決める
+      const w = clamp((e.clientX - a.left) / box.width * 100, +$("wipeSize").min, +$("wipeSize").max);
+      $("wipeSize").value = String(Math.round(w));
+      $("wipeSizeVal").textContent = $("wipeSize").value;
+      applyWipe();
+  applyWipePos();
+  setupWipeDrag();
+  $("moveWipe").onchange = () => $("avatar").classList.toggle("movable", $("moveWipe").checked);
+  $("btnWipeReset").onclick = () => {
+    lsSet("player-wipeLeft", ""); lsSet("player-wipeTop", "");
+    $("wipeSize").value = "22"; $("wipeSizeVal").textContent = "22";
+    applyWipe(); applyWipePos();
+    status("ワイプの位置と大きさを戻しました。", "ok");
+  };
+    }
+  });
+
+  const end = e => {
+    if (!mode) return;
+    mode = null;
+    try { el.releasePointerCapture(e.pointerId); } catch (err) {}
+  };
+  el.addEventListener("pointerup", end);
+  el.addEventListener("pointercancel", end);
+}
+
 function applyWipe() {
   const shape = $("wipeShape").value, w = +$("wipeSize").value;
   document.documentElement.style.setProperty("--wipe-ar", WIPE_AR[shape] || "3 / 4");
@@ -1070,7 +1209,8 @@ function applyWipe() {
   document.documentElement.style.setProperty("--wipe-w", w + "%");
   document.documentElement.style.setProperty("--wipe-w-sp", Math.min(60, Math.round(w * 1.35)) + "%");
   // 字幕がワイプに重ならないように右の余白を合わせる
-  $("caption").style.right = (w + 5) + "%";
+  // 右下にいるときだけ字幕を避ける。動かしたあとは重ならないので触らない
+  $("caption").style.right = lsGet("player-wipeLeft") === "" ? (w + 5) + "%" : "3%";
   lsSet("player-wipeShape", shape); lsSet("player-wipeSize", String(w));
   window.dispatchEvent(new Event("resize"));
 }
@@ -1651,6 +1791,8 @@ function tick() {
   }
   drain();
   prefetch(t);
+  const cur = cues.filter(c => c.at <= t).pop();
+  if (cur) highlightCue(cur.id);
   requestAnimationFrame(tick);
 }
 

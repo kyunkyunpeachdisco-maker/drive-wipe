@@ -93,9 +93,17 @@
     display: block; position: absolute; right: 0; bottom: 0; width: 22px; height: 22px;
     background: rgba(255,255,255,.85); border-radius: 10px 0 10px 0; cursor: nwse-resize;
   }
+  /* 映像の横に台本を並べる。スマホでは下に回す */
+  #playArea { display: flex; gap: 12px; align-items: stretch; }
+  #playArea > #stage { flex: 1 1 auto; min-width: 0; }
   #timeline {
-    max-height: 320px; overflow-y: auto; margin-top: 10px;
+    flex: 0 0 300px; overflow-y: auto;
     border: 1px solid var(--line); border-radius: 10px;
+  }
+  body.full-mode #timeline { display: none; }
+  @media (max-width: 680px) {
+    #playArea { display: block; }
+    #timeline { margin-top: 10px; max-height: 260px; }
   }
   #timeline:empty { display: none; }
   #timeline .cue {
@@ -491,13 +499,13 @@
       <button id="btnStart" class="primary fixed" disabled>再生を開始</button>
       <button id="btnFull" class="fixed" disabled>全画面</button>
     </div>
-    <div id="timeline"></div>
     <p class="hint">
       <b>「音声をまとめて用意」</b>を先に実行すると、再生中に音声を作らないため利用上限に当たりません。
       作った音声は端末に保存され、同じ台本の2回目以降は生成なしで再生できます。<br>
       iPhoneでは最初の再生に画面のタップが必要です。この「再生を開始」がその操作を兼ねています。</p>
   </fieldset>
 
+  <div id="playArea">
   <div id="stage">
     <div id="ytbox"><div id="ytplayer"></div></div>
     <div id="overlay">
@@ -509,6 +517,8 @@
       <div id="caption"></div>
     </div>
     <button id="exitFull">閉じる</button>
+  </div>
+  <div id="timeline"></div>
   </div>
   <div id="status"></div>
 </main>

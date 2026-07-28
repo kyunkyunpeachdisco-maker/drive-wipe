@@ -212,9 +212,13 @@
 
   <div class="row" style="margin-bottom:16px">
     <button id="btnRun" class="primary fixed">台本を生成</button>
+    <button id="btnRepoSaveScript" class="fixed" disabled>リポジトリに保存</button>
     <button id="btnDownload" class="fixed" disabled>JSONを保存</button>
     <button id="btnCopy" class="fixed" disabled>JSONをコピー</button>
   </div>
+  <p class="hint" style="margin:-8px 0 16px">
+    「リポジトリに保存」を使うと、プレイヤーの「保存済みの台本を見る」からそのまま開けます（設定のステップ4が要ります）。
+  </p>
 
   <div id="log"></div>
   <div id="out"></div>
@@ -986,6 +990,7 @@ ${cmtList}` }], ASSIGN_SCHEMA);
     };
     render(lastResult);
     $("btnDownload").disabled = false;
+    $("btnRepoSaveScript").disabled = false;
     $("btnCopy").disabled = false;
     log("完了", "");
   } catch (e) {
@@ -1446,6 +1451,20 @@ async function prepareInterests(persona, onProgress = () => {}) {
   return $("interests").value.trim();
 }
 
+// 置き場所はプレイヤー側と同じ規則にする。動画IDと区間で決まる
+function scriptKey(d) {
+  return `${d.videoId}_${Math.round(d.start || 0)}-${Math.round(d.covered ?? d.end ?? 0)}`;
+}
+
+async function pushScript() {
+  if (!lastResult) return;
+  const key = scriptKey(lastResult);
+  const path = `scripts/${key}.json`;
+  const cur = (await ghList("scripts")).find(f => f.path === path);
+  await ghPutText(path, JSON.stringify(lastResult, null, 2), `更新: 台本 ${key}`, cur?.sha);
+  return key;
+}
+
 function charStatus(msg, cls = "") {
   const el = $("charStatus");
   el.textContent = msg;
@@ -1525,6 +1544,19 @@ $("btnCharPush").onclick = async () => {
 $("densityScene").oninput = () => { $("densitySceneVal").textContent = $("densityScene").value; };
 $("densityChat").oninput  = () => { $("densityChatVal").textContent  = $("densityChat").value; };
 $("btnRun").onclick = run;
+$("btnRepoSaveScript").onclick = async () => {
+  const btn = $("btnRepoSaveScript");
+  btn.disabled = true;
+  log("リポジトリに保存しています...");
+  try {
+    const key = await pushScript();
+    log(`保存しました: scripts/${key}.json`, "");
+  } catch (e) {
+    log("保存できませんでした: " + e.message, "err");
+  } finally {
+    btn.disabled = false;
+  }
+};
 $("btnDownload").onclick = () => {
   if (!lastResult) return;
   const blob = new Blob([JSON.stringify(lastResult, null, 2)], { type: "application/json" });

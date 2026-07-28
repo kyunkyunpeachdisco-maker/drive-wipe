@@ -76,7 +76,7 @@
     content: ""; position: fixed; inset: 0; background: #000; z-index: 99;
   }
   #ytbox { position: absolute; inset: 0; }
-  #ytbox iframe { width: 100%; height: 100%; border: 0; }
+  #ytbox iframe, #stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
   /* 再生位置のシークはプレイヤー本体で行うので、覆わない */
   #avatar {
     position: absolute; right: 2%; bottom: 8%;
@@ -473,7 +473,7 @@
   </fieldset>
 
   <div id="stage">
-    <div id="ytbox"></div>
+    <div id="ytbox"><div id="ytplayer"></div></div>
     <div id="overlay">
       <div id="avatar">
         <canvas id="face" width="300" height="400"></canvas>
@@ -605,9 +605,10 @@ window.onYouTubeIframeAPIReady = () => {
 function setupPlayer(videoId) {
   if (!ytReady) { pendingVideo = videoId; return; }
   if (player) { player.loadVideoById(videoId); return; }
-  if (!document.getElementById("ytbox")) { status("動画の表示枠が見つかりません。再読み込みしてください。", "err"); return; }
-  player = new YT.Player("ytbox", {
+  if (!document.getElementById("ytplayer")) { status("動画の表示枠が見つかりません。再読み込みしてください。", "err"); return; }
+  player = new YT.Player("ytplayer", {
     videoId,
+    width: "100%", height: "100%",
     playerVars: { playsinline: 1, rel: 0, modestbranding: 1 },
     events: {
       onReady: () => status("動画を読み込みました。"),

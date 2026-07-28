@@ -99,14 +99,17 @@
   /* 映像の横に台本を並べる。スマホでは下に回す */
   #playArea { display: flex; gap: 12px; align-items: stretch; }
   #playArea > #stage { flex: 1 1 auto; min-width: 0; }
+  /* 高さは映像側が決める。中身を絶対配置にして、台本の長さで縦に伸びないようにする */
+  #tlWrap { flex: 0 0 300px; position: relative; }
   #timeline {
-    flex: 0 0 300px; overflow-y: auto;
+    position: absolute; inset: 0; overflow-y: auto;
     border: 1px solid var(--line); border-radius: 10px;
   }
   body.full-mode #timeline { display: none; }
   @media (max-width: 680px) {
     #playArea { display: block; }
-    #timeline { margin-top: 10px; max-height: 260px; }
+    #tlWrap { position: static; }
+    #timeline { position: static; margin-top: 10px; max-height: 260px; }
   }
   #timeline:empty { display: none; }
   #timeline .cue {
@@ -160,6 +163,18 @@
     #caption { right: 35%; }
   }
 
+  /* 詳細設定はタブで切り替える。1枚に全部並べると届かない */
+  #tabs { display: flex; gap: 6px; margin: 18px 0 12px; overflow-x: auto; scrollbar-width: none; }
+  #tabs::-webkit-scrollbar { display: none; }
+  .tabBtn { flex: 0 0 auto; border-radius: 20px; padding: 7px 16px; }
+  .tabBtn.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .tabPane { display: none; }
+  .tabPane.on { display: block; }
+  #pickList .pick {
+    padding: 10px 12px; border-top: 1px solid var(--line); cursor: pointer; font-size: 14px;
+  }
+  #pickList .pick:first-child { border-top: 0; }
+  #pickList .pick:hover { background: var(--panel); }
   /* ---- 統合UI ---- */
   #quick { display: flex; gap: 8px; align-items: flex-end; margin-bottom: 10px; }
   #quick > .grow { flex: 1 1 auto; min-width: 0; }
@@ -302,6 +317,7 @@
              inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false">
     </div>
     <button id="btnGo" class="primary">作って再生</button>
+    <button id="btnOpenSaved">保存済みから選ぶ</button>
     <button id="btnSettings">設定</button>
   </div>
   <p class="hint" style="margin:-6px 0 12px">
@@ -324,7 +340,7 @@
     <button id="fsMenu">メニュー</button>
     <button id="exitFull">閉じる</button>
   </div>
-  <div id="timeline"></div>
+  <div id="tlWrap"><div id="timeline"></div></div>
   </div>
   <div id="status"></div>
   <div id="stageBar">
@@ -338,9 +354,13 @@
 
   
 
-  <details id="detailPanel">
-    <summary>詳細設定（キャラクター・区間・音声・アバター調整・データリポジトリ）</summary>
-
+  <div id="tabs">
+    <button type="button" class="tabBtn on" data-tab="make">台本づくり</button>
+    <button type="button" class="tabBtn" data-tab="voice">音声</button>
+    <button type="button" class="tabBtn" data-tab="avatar">アバター</button>
+    <button type="button" class="tabBtn" data-tab="data">データ</button>
+  </div>
+  <section class="tabPane on" id="pane-make">
   <fieldset>
     <legend>動画</legend>
 
@@ -360,7 +380,6 @@
     </div>
     <p class="hint">まずは10分程度で試すのを勧めます。長時間を一度に投げると無料枠（1日8時間）をすぐ使い切ります。</p>
   </fieldset>
-
   <fieldset>
     <legend>実況</legend>
     <label for="persona">キャラクター設定</label>
@@ -408,7 +427,6 @@
       信号での停止・発進は、その操作自体を<b>実況しません</b>。ただし信号待ちは雑談に向くので、独り言は入りえます。
     </p>
   </fieldset>
-
   <fieldset>
     <legend>コメント欄（任意）</legend>
     <div class="row">
@@ -443,70 +461,8 @@
 
   <div id="out"></div>
 
-  <fieldset>
-    <legend>台本</legend>
-    <div class="row">
-      <div class="fixed"><input type="file" id="file" accept="application/json,.json"></div>
-      <div class="fixed"><button id="btnPaste">JSONを貼り付け</button></div>
-    </div>
-    <p class="hint" id="loaded">台本ジェネレーターで保存したJSONを読み込んでください。</p>
-  </fieldset>
-
-  <fieldset>
-    <legend>データリポジトリ（端末間の受け渡し）</legend>
-    <div class="row">
-      <div>
-        <label for="dataRepo">リポジトリ</label>
-        <input type="text" id="dataRepo" placeholder="例: yourname/drive-wipe-data（URL貼り付けも可）"
-               autocapitalize="off" autocorrect="off" spellcheck="false">
-      </div>
-      <div>
-        <label for="ghPat">アクセストークン</label>
-        <input type="password" id="ghPat" placeholder="github_pat_..." autocapitalize="off" autocorrect="off" spellcheck="false">
-      </div>
-      <div class="fixed"><button id="btnRepoSave">保存</button></div>
-    </div>
-    <div class="row" style="margin-top:8px">
-      <div class="fixed"><button id="btnRepoPush">台本と音声を保存</button></div>
-      <div class="fixed"><button id="btnRepoPull">保存した音声を取り込む</button></div>
-      <div class="fixed"><button id="btnRepoList">保存済みの台本を見る</button></div>
-    </div>
-    <div class="row" style="margin-top:8px">
-      <div class="fixed"><button id="btnAvatarPush">アバターと調整値を保存</button></div>
-      <div class="fixed"><button id="btnAvatarPull">アバターと調整値を取り込む</button></div>
-    </div>
-    <p class="hint" id="repoHint">
-      PCで作った音声をスマホで鳴らすための置き場です。<b>台本と音声をあなたのプライベートリポジトリに保存し、別の端末で取り込みます。</b>
-      取り込んだ音声はエンジンの設定に関係なく再生されるので、スマホに内蔵音声しかなくてもPCで作った声で鳴ります。
-    </p>
-    <details>
-      <summary>初回の準備（3ステップ）</summary>
-      <p style="margin:8px 0"><b>ステップ1：プライベートリポジトリを作る</b><br>
-        <a href="https://github.com/new?name=drive-wipe-data&visibility=private" target="_blank" rel="noopener">
-          このリンクから作成（名前と非公開が入力済み）</a><br>
-        「Create repository」を押すだけです。すでに使いたいリポジトリがあれば、この手順は飛ばせます。
-      </p>
-      <p style="margin:8px 0"><b>ステップ2：Fine-grained トークンを発行する</b><br>
-        <a href="https://github.com/settings/personal-access-tokens/new?name=drive-wipe" target="_blank" rel="noopener">
-          このリンクから発行（Token nameが入力済み）</a><br>
-        Token name の例は <code>drive-wipe</code> です。次の3つを設定してください。
-      </p>
-      <ol style="margin:8px 0 8px 1.2em">
-        <li>Expiration：<code>90 days</code> か <code>Custom→1年後</code>（切れたら再発行して貼り直すだけです）</li>
-        <li>Repository access：<code>Only select repositories</code> → ステップ1のリポジトリを選ぶ</li>
-        <li>Repository permissions：<code>Contents: Read and write</code> だけ</li>
-      </ol>
-      <p style="margin:8px 0">「Generate token」を押し、表示された <code>github_pat_…</code> をコピーします。
-        <b>この画面を閉じるとトークンは二度と表示されません。</b></p>
-      <p style="margin:8px 0"><b>ステップ3：上の2つの欄に入れて「保存」</b><br>
-        複数の端末で使う場合は、同じ2つを各端末で入力してください。<br>
-        初回の保存時に、リポジトリへ案内ファイル（CLAUDE.md）を自動で作成します。これがあると、
-        claude.ai/code でこのリポジトリを開いたときにデータの場所と構造が伝わり、台本の書き換えを頼めます。
-        すでにCLAUDE.mdがある場合は何もしません。
-      </p>
-    </details>
-  </fieldset>
-
+  </section>
+  <section class="tabPane" id="pane-voice">
   <fieldset>
     <legend>音声</legend>
     <div class="row">
@@ -577,7 +533,8 @@
       生成した音声は端末に保存されるため、同じセリフを作り直して枠を減らすことはありません。
     </p>
   </fieldset>
-
+  </section>
+  <section class="tabPane" id="pane-avatar">
   <fieldset>
     <legend>アバターの調整</legend>
     <div id="previewBox"><canvas id="preview" width="320" height="427"></canvas></div>
@@ -745,7 +702,6 @@
       写真と音声から動画を作って読み込む方式が必要になります（未実装）。</p>
     </details>
   </fieldset>
-
   <fieldset>
     <legend>再生</legend>
     <div class="row">
@@ -769,9 +725,80 @@
       作った音声は端末に保存され、同じ台本の2回目以降は生成なしで再生できます。<br>
       iPhoneでは最初の再生に画面のタップが必要です。この「再生を開始」がその操作を兼ねています。</p>
   </fieldset>
-
-  </details>
+  </section>
+  <section class="tabPane" id="pane-data">
+  <fieldset>
+    <legend>台本</legend>
+    <div class="row">
+      <div class="fixed"><input type="file" id="file" accept="application/json,.json"></div>
+      <div class="fixed"><button id="btnPaste">JSONを貼り付け</button></div>
+    </div>
+    <p class="hint" id="loaded">台本ジェネレーターで保存したJSONを読み込んでください。</p>
+  </fieldset>
+  <fieldset>
+    <legend>データリポジトリ（端末間の受け渡し）</legend>
+    <div class="row">
+      <div>
+        <label for="dataRepo">リポジトリ</label>
+        <input type="text" id="dataRepo" placeholder="例: yourname/drive-wipe-data（URL貼り付けも可）"
+               autocapitalize="off" autocorrect="off" spellcheck="false">
+      </div>
+      <div>
+        <label for="ghPat">アクセストークン</label>
+        <input type="password" id="ghPat" placeholder="github_pat_..." autocapitalize="off" autocorrect="off" spellcheck="false">
+      </div>
+      <div class="fixed"><button id="btnRepoSave">保存</button></div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div class="fixed"><button id="btnRepoPush">台本と音声を保存</button></div>
+      <div class="fixed"><button id="btnRepoPull">保存した音声を取り込む</button></div>
+      <div class="fixed"><button id="btnRepoList">保存済みの台本を見る</button></div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div class="fixed"><button id="btnAvatarPush">アバターと調整値を保存</button></div>
+      <div class="fixed"><button id="btnAvatarPull">アバターと調整値を取り込む</button></div>
+    </div>
+    <p class="hint" id="repoHint">
+      PCで作った音声をスマホで鳴らすための置き場です。<b>台本と音声をあなたのプライベートリポジトリに保存し、別の端末で取り込みます。</b>
+      取り込んだ音声はエンジンの設定に関係なく再生されるので、スマホに内蔵音声しかなくてもPCで作った声で鳴ります。
+    </p>
+    <details>
+      <summary>初回の準備（3ステップ）</summary>
+      <p style="margin:8px 0"><b>ステップ1：プライベートリポジトリを作る</b><br>
+        <a href="https://github.com/new?name=drive-wipe-data&visibility=private" target="_blank" rel="noopener">
+          このリンクから作成（名前と非公開が入力済み）</a><br>
+        「Create repository」を押すだけです。すでに使いたいリポジトリがあれば、この手順は飛ばせます。
+      </p>
+      <p style="margin:8px 0"><b>ステップ2：Fine-grained トークンを発行する</b><br>
+        <a href="https://github.com/settings/personal-access-tokens/new?name=drive-wipe" target="_blank" rel="noopener">
+          このリンクから発行（Token nameが入力済み）</a><br>
+        Token name の例は <code>drive-wipe</code> です。次の3つを設定してください。
+      </p>
+      <ol style="margin:8px 0 8px 1.2em">
+        <li>Expiration：<code>90 days</code> か <code>Custom→1年後</code>（切れたら再発行して貼り直すだけです）</li>
+        <li>Repository access：<code>Only select repositories</code> → ステップ1のリポジトリを選ぶ</li>
+        <li>Repository permissions：<code>Contents: Read and write</code> だけ</li>
+      </ol>
+      <p style="margin:8px 0">「Generate token」を押し、表示された <code>github_pat_…</code> をコピーします。
+        <b>この画面を閉じるとトークンは二度と表示されません。</b></p>
+      <p style="margin:8px 0"><b>ステップ3：上の2つの欄に入れて「保存」</b><br>
+        複数の端末で使う場合は、同じ2つを各端末で入力してください。<br>
+        初回の保存時に、リポジトリへ案内ファイル（CLAUDE.md）を自動で作成します。これがあると、
+        claude.ai/code でこのリポジトリを開いたときにデータの場所と構造が伝わり、台本の書き換えを頼めます。
+        すでにCLAUDE.mdがある場合は何もしません。
+      </p>
+    </details>
+  </fieldset>
+  </section>
 </main>
+
+<dialog id="pickDlg">
+  <h2 style="margin-top:0;font-size:17px">保存済みの台本</h2>
+  <p class="hint" id="pickHint" style="margin-bottom:10px">データリポジトリに保存した台本を選ぶと、読み込んで再生します。</p>
+  <div id="pickList" style="border:1px solid var(--line);border-radius:10px"></div>
+  <div class="row" style="margin-top:16px"><button id="pickClose" class="fixed">閉じる</button></div>
+</dialog>
+
 
 <dialog id="dlg">
   <h2 style="margin-top:0;font-size:17px">セットアップ</h2>
@@ -1405,7 +1432,12 @@ function syncEngineRows() {
   $("gttsHelp").style.display = v === "gcloud" ? "" : "none";
 }
 
+let voicesReady = Promise.resolve();
 async function refreshVoices() {
+  let done; voicesReady = new Promise(r => { done = r; });
+  try { await refreshVoicesInner(); } finally { done(); }
+}
+async function refreshVoicesInner() {
   const sel = $("voice");
   sel.innerHTML = "";
   $("engineHint").className = "hint";
@@ -1980,6 +2012,7 @@ async function repoPush() {
                 `更新: 音声一覧 ${key}`, shas[`${dir}/index.json`]);
     await ghPut(`scripts/${key}.json`, new TextEncoder().encode(JSON.stringify(script, null, 2)),
                 `更新: 台本 ${key}`, shas[`scripts/${key}.json`]);
+    await window.__noteScriptSaved?.(script);
     const made = await ensureGuide();
     status(`保存しました。音声 ${put}件（既存の再利用 ${skip}件）と台本を置きました。`
          + (made ? " リポジトリに案内ファイル（CLAUDE.md）を作成しました。" : ""), "ok");
@@ -2047,7 +2080,7 @@ $("btnRepoSave").onclick = () => {
 };
 $("btnRepoPush").onclick = repoPush;
 $("btnRepoPull").onclick = repoPull;
-$("btnRepoList").onclick = repoListScripts;
+$("btnRepoList").onclick = openPicker;
 
 /* ---------- アバター（キャンバス） ---------- */
 // VRMに差し替えられるよう、描画はここだけに閉じてある
@@ -2221,6 +2254,8 @@ async function drain() {
 /* ---------- 起動 ---------- */
 $("btnStart").onclick = async () => {
   if (!script) return;
+  // 話者が決まる前に鳴らすと、作った音声を引く鍵が変わって作り直しになる
+  await voicesReady;
   cues = buildCues(script, $("useComments").checked);
   fired = new Set(); queue = []; lastT = -1;
   // iOSは利用者の操作を起点にしないと音が出せないので、ここで一度鳴らして解錠する
@@ -2231,8 +2266,92 @@ $("btnStart").onclick = async () => {
   tick();
 };
 
-$("btnPrepare").onclick = () => { primeAudio(); prepareAll(); };
+$("btnPrepare").onclick = async () => { primeAudio(); await voicesReady; prepareAll(); };
 $("btnCancelPrepare").onclick = () => { cancelPrepare = true; };
+
+/* ---------- 詳細設定のタブ ---------- */
+for (const b of document.querySelectorAll(".tabBtn")) {
+  b.onclick = () => {
+    for (const x of document.querySelectorAll(".tabBtn")) x.classList.toggle("on", x === b);
+    for (const p of document.querySelectorAll(".tabPane")) p.classList.toggle("on", p.id === "pane-" + b.dataset.tab);
+  };
+}
+
+/* ---------- 保存済みの台本 ---------- */
+// ファイル名は動画IDと区間で決まるので読めない。表示名は一覧ファイルに持たせる
+const SCRIPT_INDEX = "scripts/_index.json";
+
+async function readScriptIndex() {
+  try {
+    const raw = await ghGetRaw(SCRIPT_INDEX);
+    return raw ? JSON.parse(new TextDecoder().decode(raw)) : {};
+  } catch (e) { return {}; }
+}
+async function writeScriptIndex(idx) {
+  const cur = (await ghList("scripts")).find(f => f.path === SCRIPT_INDEX);
+  await ghPut(SCRIPT_INDEX, new TextEncoder().encode(JSON.stringify(idx, null, 2)), "更新: 台本の一覧", cur?.sha);
+}
+// 台本を保存したときに一覧へ追記する。表示名は動画のタイトルを初期値にする
+window.__noteScriptSaved = async data => {
+  try {
+    const key = scriptKey(data), idx = await readScriptIndex();
+    idx[key] = {
+      label: idx[key]?.label || data.meta?.title || key,
+      videoId: data.videoId, start: data.start || 0, end: data.covered ?? data.end ?? 0,
+      savedAt: new Date().toISOString()
+    };
+    await writeScriptIndex(idx);
+  } catch (e) {}   // 一覧の更新に失敗しても台本の保存は成立している
+};
+
+async function openPicker() {
+  $("pickDlg").showModal();
+  $("pickList").innerHTML = "";
+  $("pickHint").textContent = "読み込んでいます…";
+  let files, idx;
+  try {
+    files = (await ghList("scripts")).filter(f => f.name.endsWith(".json") && f.name !== "_index.json");
+    idx = await readScriptIndex();
+  } catch (e) { $("pickHint").textContent = e.message; return; }
+  if (!files.length) { $("pickHint").textContent = "まだ台本が保存されていません。台本を作ってから「リポジトリに保存」を押してください。"; return; }
+  $("pickHint").textContent = "選ぶと読み込んで再生します。";
+  files.sort((x, y) => (idx[y.name.replace(/\.json$/, "")]?.savedAt || "").localeCompare(idx[x.name.replace(/\.json$/, "")]?.savedAt || ""));
+  for (const f of files) {
+    const key = f.name.replace(/\.json$/, "");
+    const info = idx[key] || {};
+    const row = document.createElement("div");
+    row.className = "pick";
+    row.innerHTML = '<div class="row"><div><b class="nm"></b><br><span class="hint sub"></span></div>'
+                  + '<div class="fixed"><button type="button" class="ren">名前を変更</button></div></div>';
+    row.querySelector(".nm").textContent = info.label || key;
+    row.querySelector(".sub").textContent = info.start !== undefined
+      ? `${fmtTime(info.start)}〜${fmtTime(info.end)} ／ ${key}` : key;
+    row.querySelector(".nm").parentElement.onclick = async () => {
+      $("pickHint").textContent = "読み込んでいます…";
+      try {
+        const bytes = await ghGetRaw(f.path);
+        loadScript(JSON.parse(new TextDecoder().decode(bytes)));
+        $("pickDlg").close();
+        $("btnStart").click();
+      } catch (e) { $("pickHint").textContent = e.message; }
+    };
+    row.querySelector(".ren").onclick = async ev => {
+      ev.stopPropagation();
+      const name = prompt("表示名を入れてください。", info.label || key);
+      if (name === null) return;
+      try {
+        const all = await readScriptIndex();
+        all[key] = { ...(all[key] || {}), label: name.trim() || key };
+        await writeScriptIndex(all);
+        row.querySelector(".nm").textContent = all[key].label;
+      } catch (e) { $("pickHint").textContent = e.message; }
+    };
+    $("pickList").appendChild(row);
+  }
+}
+$("btnOpenSaved").onclick = openPicker;
+$("pickClose").onclick = () => $("pickDlg").close();
+
 // ジェネレーター側から台本を受け取り、読み込んで再生まで進める
 window.__onScriptReady = data => {
   loadScript(data);
@@ -2256,7 +2375,10 @@ document.addEventListener("keydown", e => {
 $("btnFull").onclick = () => {
   $("stage").classList.add("full");
   document.body.classList.add("full-mode");
-  if ($("stage").requestFullscreen) $("stage").requestFullscreen().catch(() => {});
+  // stage だけを全画面にすると、その外にあるタイムラインや操作が描画されない。
+  // 文書全体を全画面にして、stage は position:fixed で画面を覆う
+  const root = document.documentElement;
+  if (root.requestFullscreen) root.requestFullscreen().catch(() => {});
 };
 $("exitFull").onclick = () => {
   $("stage").classList.remove("full");
@@ -4143,6 +4265,7 @@ async function pushScript() {
   const path = `scripts/${key}.json`;
   const cur = (await ghList("scripts")).find(f => f.path === path);
   await ghPutText(path, JSON.stringify(lastResult, null, 2), `更新: 台本 ${key}`, cur?.sha);
+  await window.__noteScriptSaved?.(lastResult);
   return key;
 }
 

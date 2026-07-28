@@ -87,7 +87,10 @@
   }
   #avatar.hidden { display: none; }
   /* 配置モードのときだけ触れるようにする。普段は映像側の操作を邪魔しない */
-  #avatar.movable { pointer-events: auto; cursor: move; outline: 2px dashed rgba(255,255,255,.75); }
+  #avatar.movable {
+    pointer-events: auto; cursor: move; outline: 2px dashed rgba(255,255,255,.75);
+    touch-action: none; user-select: none; -webkit-user-select: none;
+  }
   #avatar .grip { display: none; }
   #avatar.movable .grip {
     display: block; position: absolute; right: 0; bottom: 0; width: 22px; height: 22px;
@@ -168,6 +171,9 @@
   /* 全画面のメニュー。押したときだけタイムラインと操作を出す */
   #fsMenu { position: absolute; top: 10px; right: 92px; z-index: 2; display: none; }
   #stage.full #fsMenu { display: block; }
+  /* パネルより上に出す。でないとメニューを開いた瞬間に隠れて閉じられなくなる */
+  body.full-mode #fsMenu { position: fixed; top: 10px; right: 92px; z-index: 103; }
+  body.full-mode #exitFull { position: fixed; top: 10px; right: 10px; z-index: 103; }
   body.full-mode #timeline, body.full-mode #stageBar { display: none; }
   body.full-mode.menu-open #timeline {
     display: block; position: fixed; right: 0; top: 0; bottom: 0;
@@ -2234,7 +2240,18 @@ window.__onScriptReady = data => {
 };
 
 // 全画面ではタイムラインと操作を隠しているので、必要なときだけ出す
-$("fsMenu").onclick = () => document.body.classList.toggle("menu-open");
+$("fsMenu").onclick = () => {
+  const open = document.body.classList.toggle("menu-open");
+  $("fsMenu").textContent = open ? "メニューを閉じる" : "メニュー";
+};
+// 全画面を抜けたらメニューの状態も戻す
+function closeFsMenu() {
+  document.body.classList.remove("menu-open");
+  $("fsMenu").textContent = "メニュー";
+}
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && document.body.classList.contains("menu-open")) closeFsMenu();
+});
 
 $("btnFull").onclick = () => {
   $("stage").classList.add("full");
@@ -2243,13 +2260,15 @@ $("btnFull").onclick = () => {
 };
 $("exitFull").onclick = () => {
   $("stage").classList.remove("full");
-  document.body.classList.remove("full-mode", "menu-open");
+  document.body.classList.remove("full-mode");
+  closeFsMenu();
   if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
 };
 document.addEventListener("fullscreenchange", () => {
   if (!document.fullscreenElement) {
     $("stage").classList.remove("full");
     document.body.classList.remove("full-mode");
+    closeFsMenu();
   }
 });
 $("showAvatar").onchange = () => $("avatar").classList.toggle("hidden", !$("showAvatar").checked);
@@ -2391,7 +2410,14 @@ $("vrmFile").onchange = async e => {
   applyWipe();
   applyWipePos();
   setupWipeDrag();
-  $("moveWipe").onchange = () => $("avatar").classList.toggle("movable", $("moveWipe").checked);
+  $("moveWipe").onchange = () => {
+    const on = $("moveWipe").checked;
+    $("avatar").classList.toggle("movable", on);
+    // 配置中はページが動くと合わせにくいので、スクロールを止める
+    document.body.style.overflow = on ? "hidden" : "";
+    if (on) $("stage").scrollIntoView({ block: "center", behavior: "smooth" });
+    status(on ? "ワイプをドラッグで移動、右下のつまみで大きさを変えられます。" : "", on ? "ok" : "");
+  };
   $("btnWipeReset").onclick = () => {
     lsSet("player-wipeLeft", ""); lsSet("player-wipeTop", "");
     $("wipeSize").value = "22"; $("wipeSizeVal").textContent = "22";

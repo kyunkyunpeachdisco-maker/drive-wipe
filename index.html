@@ -1229,6 +1229,8 @@ async function ghError(res) {
   if (res.status === 401) return "トークンが正しくありません。発行し直して貼り直してください。";
   if (res.status === 403) return "権限が足りません。トークンの Repository permissions に Contents: Read and write が要ります。";
   if (res.status === 404) return "リポジトリが見つかりません。名前の綴りと、トークンがそのリポジトリを選んでいるかを確認してください。";
+  if (/too large/i.test(m)) return "ファイルが大きすぎてGitHubのAPIで送れません。";
+  if (res.status === 413) return "送るデータが大きすぎます。";
   if (res.status === 409 || res.status === 422) return "リポジトリ側が新しくなっています。もう一度押すと最新に合わせて保存します。";
   return `GitHub ${res.status}${m ? "：" + m : ""}`;
 }

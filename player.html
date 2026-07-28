@@ -165,6 +165,10 @@
       <div class="fixed"><button id="btnRepoPull">保存した音声を取り込む</button></div>
       <div class="fixed"><button id="btnRepoList">保存済みの台本を見る</button></div>
     </div>
+    <div class="row" style="margin-top:8px">
+      <div class="fixed"><button id="btnAvatarPush">アバターと調整値を保存</button></div>
+      <div class="fixed"><button id="btnAvatarPull">アバターと調整値を取り込む</button></div>
+    </div>
     <p class="hint" id="repoHint">
       PCで作った音声をスマホで鳴らすための置き場です。<b>台本と音声をあなたのプライベートリポジトリに保存し、別の端末で取り込みます。</b>
       取り込んだ音声はエンジンの設定に関係なく再生されるので、スマホに内蔵音声しかなくてもPCで作った声で鳴ります。
@@ -390,7 +394,7 @@
         <tr>
           <td style="width:7em"><b>配布を使う</b><br><span style="opacity:.7">5分・無料</span></td>
           <td>
-            <a href="https://3d.nicovideo.jp/search?work_type=vrm" target="_blank" rel="noopener">ニコニ立体（VRMだけに絞った一覧）</a><br>
+            <a href="https://3d.nicovideo.jp/search?work_type=vrm&amp;sort=total&amp;order=1" target="_blank" rel="noopener">ニコニ立体（VRMだけに絞り、総合点が高い順）</a><br>
             <span style="opacity:.7">MMDが大半のサイトなので、この絞り込みが要ります。
             さらに「すべての作品」を<b>フルスクラッチ作品</b>にすると、権利者が1人で条件を読みやすくなります。</span><br>
             <a href="https://hub.vroid.com/characters" target="_blank" rel="noopener">VRoid Hub（すべてVRM）</a><br>
@@ -1051,6 +1055,7 @@ for (const [id, digits] of [["camDist", 2], ["camY", 2], ["armHeight", 2], ["arm
   $(id).oninput = () => {
     $(id + "Val").textContent = (+$(id).value).toFixed(digits);
     lsSet("player-" + id, $(id).value);
+    window.savePreset?.();
   };
 }
 $("framing").onchange = () => lsSet("player-framing", $("framing").value);
@@ -1322,6 +1327,8 @@ async function ghError(res) {
   if (res.status === 401) return "トークンが正しくありません。発行し直して貼り直してください。";
   if (res.status === 403) return "権限が足りません。トークンの Repository permissions に Contents: Read and write が要ります。";
   if (res.status === 404) return "リポジトリが見つかりません。名前の綴りと、トークンがそのリポジトリを選んでいるかを確認してください。";
+  if (/too large/i.test(m)) return "ファイルが大きすぎてGitHubのAPIで送れません。";
+  if (res.status === 413) return "送るデータが大きすぎます。";
   if (res.status === 409 || res.status === 422) return "リポジトリ側が新しくなっています。もう一度押すと最新に合わせて保存します。";
   return `GitHub ${res.status}${m ? "：" + m : ""}`;
 }
@@ -1373,6 +1380,7 @@ const GUIDE = `# データリポジトリ
 - \`character/persona.md\` … キャラクター設定。台本生成のプロンプトにそのまま入ります
 - \`character/interests.md\` … 興味・関心の単語と、読ませたい記事のURL
 - \`character/reads/<記事>.md\` … 貼られたURLをアプリが読んで残した記録（URL・読んだ日・要約・感想）
+- \`avatar/model.vrm\` … アバターのVRM。\`avatar/settings.json\` … 画角・腕・ワイプなどの調整値
 - \`scripts/<動画ID>_<開始>-<終了>.json\` … 台本。発話の時刻・本文・場面が入っています
 - \`audio/<同じ名前>/index.json\` … その台本の音声一覧（作った声の設定つき）
 - \`audio/<同じ名前>/<12桁>.mp3|wav\` … 発話1件ぶんの音声。ファイル名は本文のハッシュです
@@ -1385,6 +1393,10 @@ const GUIDE = `# データリポジトリ
   ファイルごと消すと、次に台本を作るときにそのURLを読み直します
 - \`reads/*.md\` の「## 要約」は記録用で、台本生成には渡していません
 - 感想は「詳しい説明」ではなく、ひとりごとで漏らす程度の**主観**にしてください（何が良かった・何が引っかかった）
+
+### アバター（avatar/）
+- \`settings.json\` はアプリが書き出す調整値です。手で編集しないでください
+- \`model.vrm\` はバイナリです。**再配布が許可されたモデルだけ**を置いてください（VRMの埋め込みライセンスで確認できます）
 
 ### 台本（scripts/）
 - 台本の \`items[].line\` は書き換えて構いません。読み上げの本文です
@@ -1736,6 +1748,73 @@ async function idbGet(k) {
   });
 }
 
+/* ---------- アバターと調整値のリポジトリ保存 ---------- */
+// PCで詰めた画角・腕・ワイプの調整を、別の端末でやり直さずに済ませるための置き場
+const AVATAR_MODEL = "avatar/model.vrm";
+const AVATAR_SETTINGS = "avatar/settings.json";
+const AVATAR_MAX_MB = 40;   // contents API は50MB前後で弾かれるため手前で止める
+
+// player- で始まる設定を全部集める。項目が増えても拾い漏らさない
+function playerSettings() {
+  const o = {};
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(LS + "player-")) o[k.slice(LS.length)] = localStorage.getItem(k);
+    }
+  } catch (e) {}
+  return o;
+}
+
+async function avatarPush() {
+  const shas = {};
+  for (const f of await ghList("avatar")) shas[f.path] = f.sha;
+
+  const settings = playerSettings();
+  await ghPut(AVATAR_SETTINGS, new TextEncoder().encode(JSON.stringify(settings, null, 2)),
+              "更新: アバターの調整値", shas[AVATAR_SETTINGS]);
+
+  const vrm = await idbGet("vrm");
+  if (!vrm) { status("調整値だけ保存しました（VRMがまだ読み込まれていません）。", "ok"); return; }
+  const mb = vrm.byteLength / 1024 / 1024;
+  if (mb > AVATAR_MAX_MB) {
+    status(`調整値は保存しました。VRMは${mb.toFixed(0)}MBあり、GitHubのAPIで送れる大きさ（${AVATAR_MAX_MB}MB）を超えています。`, "err");
+    return;
+  }
+  status(`VRMを送っています（${mb.toFixed(1)}MB）…`);
+  await ghPut(AVATAR_MODEL, new Uint8Array(vrm), "更新: アバターのVRM", shas[AVATAR_MODEL]);
+  status(`アバターと調整値を保存しました（${mb.toFixed(1)}MB）。`, "ok");
+}
+
+async function avatarPull() {
+  const raw = await ghGetRaw(AVATAR_SETTINGS);
+  let n = 0;
+  if (raw) {
+    const settings = JSON.parse(new TextDecoder().decode(raw));
+    for (const [k, v] of Object.entries(settings)) { lsSet(k, v); n++; }
+  }
+  status("VRMを取り込んでいます…");
+  const vrm = await ghGetRaw(AVATAR_MODEL);
+  if (vrm) await idbSet("vrm", vrm.buffer);
+  if (!raw && !vrm) { status("リポジトリに avatar/ がまだありません。先に「アバターと調整値を保存」を実行してください。", "err"); return; }
+  // 調整値の反映は init() が全部やっているので、読み直すのが確実
+  status(`取り込みました（調整値${n}件${vrm ? "・VRM" : ""}）。画面を読み込み直します…`, "ok");
+  setTimeout(() => location.reload(), 800);
+}
+
+$("btnAvatarPush").onclick = async () => {
+  $("btnAvatarPush").disabled = true;
+  status("保存しています…");
+  try { await avatarPush(); } catch (e) { status(e.message, "err"); }
+  finally { $("btnAvatarPush").disabled = false; }
+};
+$("btnAvatarPull").onclick = async () => {
+  $("btnAvatarPull").disabled = true;
+  status("取り込んでいます…");
+  try { await avatarPull(); } catch (e) { status(e.message, "err"); }
+  finally { $("btnAvatarPull").disabled = false; }
+};
+
 $("vrmFile").onchange = async e => {
   const f = e.target.files?.[0];
   if (!f) return;
@@ -2028,9 +2107,36 @@ if (THREE && VRMLoaderPlugin) {
     return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, r: Math.max((x1 - x0) / 2, (y1 - y0) / 2) };
   }
 
-  function autoFit() {
+  // モデルごとの調整値。別のモデルに変えても、そのモデルで詰めた値に戻れるようにする。
+  // 初めてのモデルは、最後に触った調整値を初期値にする（既定値から詰め直さずに済む）
+  function loadPresets() { try { return JSON.parse(lsGet("player-presets", "{}")); } catch (e) { return {}; } }
+  function savePreset() {
+    const key = window.__vrmFile;
+    if (!key || window.__fitting) return;
+    const all = loadPresets();
+    const values = {};
+    for (const [id] of FIT_DEFAULTS) values[id] = $(id).value;
+    all[key] = { updatedAt: Date.now(), values };
+    lsSet("player-presets", JSON.stringify(all));
+  }
+  // 保存済みのうち最後に触ったもの。無ければ既定値
+  function baseValues(key) {
+    const all = loadPresets();
+    if (all[key]?.values) return all[key].values;
+    const latest = Object.values(all).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
+    return latest?.values || Object.fromEntries(FIT_DEFAULTS);
+  }
+
+  // 測り直しの間はスライダーが何度も動くので、保存は終わってから1回だけにする
+  function withFit(fn) {
+    window.__fitting = true;
+    try { fn(); } finally { window.__fitting = false; savePreset(); }
+  }
+
+  function autoFit(base) {
     if (!vrm || !vrm.humanoid) return;
-    for (const [id, v] of FIT_DEFAULTS) setSlider(id, v);
+    const v0 = base || Object.fromEntries(FIT_DEFAULTS);
+    for (const [id, dflt] of FIT_DEFAULTS) setSlider(id, v0[id] !== undefined ? +v0[id] : dflt);
     frame();
     if (wheelMesh.visible && !poseDriving(0)) return;
     const pts = fitPoints();
@@ -2064,7 +2170,8 @@ if (THREE && VRMLoaderPlugin) {
       ? "画角を自動で合わせました（一部が画面からはみ出しています。横からの角度を小さくすると収まります）"
       : "画角を自動で合わせました。", fin.r > 1.0 ? "warn" : "ok");
   }
-  $("btnAutoFit").onclick = autoFit;
+  $("btnAutoFit").onclick = () => withFit(() => autoFit());
+  window.savePreset = savePreset;
 
   // モデルによっては背中を向けるので、利用者が反転できるようにしておく
   function applyFlip() {
@@ -2123,7 +2230,21 @@ if (THREE && VRMLoaderPlugin) {
       // 別のモデルを選んだときだけ、体格に合わせて測り直す
       if (window.__vrmFile !== window.__vrmFileLast) {
         window.__vrmFileLast = window.__vrmFile;
-        autoFit();
+        const all = loadPresets();
+        if (all[window.__vrmFile]?.values) {
+          // このモデルで詰めた値があるなら、測り直さずそれに戻す
+          withFit(() => {
+            for (const [id, dflt] of FIT_DEFAULTS) {
+              const v = all[window.__vrmFile].values[id];
+              setSlider(id, v !== undefined ? +v : dflt);
+            }
+            frame(); aimCamera();
+          });
+          setStatus("このモデルの前回の調整値に戻しました。", "ok");
+        } else {
+          // 初めてのモデルは、最後に触った調整値を出発点にして画角だけ測り直す
+          withFit(() => autoFit(baseValues(window.__vrmFile)));
+        }
       }
 
     } finally {

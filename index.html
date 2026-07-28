@@ -2,9 +2,184 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ドライブ実況台本ジェネレーター（検証版）</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ドライブ実況ワイプ（検証版）</title>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.185.1/build/three.module.js",
+    "three/": "https://unpkg.com/three@0.185.1/",
+    "@pixiv/three-vrm": "https://unpkg.com/@pixiv/three-vrm@3.5.5/lib/three-vrm.module.js"
+  }
+}
+</script>
 <style>
+  :root {
+    --bg: #ffffff; --fg: #1a1a1a; --sub: #666; --line: #e0e0e0;
+    --panel: #f7f7f8; --accent: #5D5CDE; --err: #c0392b; --warn: #b45309;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16161a; --fg: #eaeaea; --sub: #9a9aa0; --line: #33333a;
+      --panel: #1e1e24; --accent: #8b8aff; --err: #ff7b6b; --warn: #e0a458;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN", sans-serif;
+    font-size: 15px; line-height: 1.7;
+  }
+  header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; border-bottom: 1px solid var(--line);
+  }
+  header h1 { font-size: 15px; margin: 0; flex: 1; }
+  main { max-width: 1000px; margin: 0 auto; padding: 14px; }
+  fieldset { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin: 0 0 14px; }
+  legend { font-size: 13px; color: var(--sub); padding: 0 6px; }
+  label { display: block; font-size: 13px; color: var(--sub); margin: 8px 0 4px; }
+  input, select, button, textarea { font-family: inherit; font-size: 16px; }
+  input[type=text], input[type=password], select, textarea {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--line);
+    border-radius: 8px; background: var(--bg); color: var(--fg);
+  }
+  button {
+    padding: 8px 14px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--panel); color: var(--fg); cursor: pointer;
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button:disabled { opacity: .5; cursor: default; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+  .row > * { flex: 1; min-width: 120px; }
+  .row > .fixed { flex: 0 0 auto; min-width: 0; }
+  .hint { font-size: 12px; color: var(--sub); margin: 4px 0 0; }
+
+  /* 再生画面。これがそのまま「見る」対象になる */
+  #stage {
+    position: relative; width: 100%; aspect-ratio: 16 / 9;
+    background: #000; border-radius: 10px; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+  }
+  /* 映像の実表示領域（16:9）。ここを基準に置かないと黒帯の上にワイプが乗る */
+  #overlay {
+    position: relative; z-index: 1; pointer-events: none;
+    height: 100%; width: auto; aspect-ratio: 16 / 9;
+    max-width: 100%; max-height: 100%;
+  }
+  #stage.full {
+    position: fixed; inset: 0; z-index: 100; border-radius: 0;
+    width: 100vw; height: 100dvh; aspect-ratio: auto;
+  }
+  body.full-mode { overflow: hidden; }
+  body.full-mode::after {
+    content: ""; position: fixed; inset: 0; background: #000; z-index: 99;
+  }
+  #ytbox { position: absolute; inset: 0; }
+  #ytbox iframe, #stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  /* 再生位置のシークはプレイヤー本体で行うので、覆わない */
+  #avatar {
+    position: absolute; right: 2%; bottom: 8%;
+    width: var(--wipe-w, 22%); max-width: 320px; aspect-ratio: var(--wipe-ar, 3 / 4);
+    border-radius: 10px; overflow: hidden;
+    background: rgba(16,16,22,.72); backdrop-filter: blur(3px);
+    box-shadow: 0 4px 20px rgba(0,0,0,.45); pointer-events: none;
+  }
+  #avatar.hidden { display: none; }
+  /* 配置モードのときだけ触れるようにする。普段は映像側の操作を邪魔しない */
+  #avatar.movable { pointer-events: auto; cursor: move; outline: 2px dashed rgba(255,255,255,.75); }
+  #avatar .grip { display: none; }
+  #avatar.movable .grip {
+    display: block; position: absolute; right: 0; bottom: 0; width: 22px; height: 22px;
+    background: rgba(255,255,255,.85); border-radius: 10px 0 10px 0; cursor: nwse-resize;
+  }
+  /* 映像の横に台本を並べる。スマホでは下に回す */
+  #playArea { display: flex; gap: 12px; align-items: stretch; }
+  #playArea > #stage { flex: 1 1 auto; min-width: 0; }
+  #timeline {
+    flex: 0 0 300px; overflow-y: auto;
+    border: 1px solid var(--line); border-radius: 10px;
+  }
+  body.full-mode #timeline { display: none; }
+  @media (max-width: 680px) {
+    #playArea { display: block; }
+    #timeline { margin-top: 10px; max-height: 260px; }
+  }
+  #timeline:empty { display: none; }
+  #timeline .cue {
+    display: flex; gap: 10px; padding: 7px 10px; cursor: pointer;
+    border-top: 1px solid var(--line); font-size: 14px; line-height: 1.5;
+  }
+  #timeline .cue:first-child { border-top: 0; }
+  #timeline .cue:hover { background: var(--panel); }
+  #timeline .cue.now { background: var(--panel); font-weight: 600; }
+  #timeline .cue .t { flex: 0 0 auto; color: var(--accent); font-variant-numeric: tabular-nums; }
+  #timeline .cue .k { flex: 0 0 auto; color: var(--sub); font-size: 12px; padding-top: 2px; }
+  /* 調整用のプレビュー。スライダーの隣に常に出しておく */
+  #previewBox {
+    width: min(100%, 320px); margin: 4px auto 12px;
+    aspect-ratio: var(--wipe-ar, 3 / 4);
+    border-radius: 10px; overflow: hidden;
+    background: rgba(16,16,22,.72) center/cover;
+    outline: 1px solid var(--line);
+  }
+  #preview { width: 100%; height: 100%; display: block; }
+  #avatar { background-size: cover; background-position: center; }
+  #avatar canvas { width: 100%; height: 100%; display: block; }
+  #avatar canvas.off { display: none; }
+  #caption {
+    position: absolute; left: 3%; right: 27%; bottom: 8%;
+    color: #fff; font-size: clamp(13px, 2.2vw, 20px); font-weight: 600;
+    text-shadow: 0 2px 6px rgba(0,0,0,.9), 0 0 2px rgba(0,0,0,.9);
+    pointer-events: none; min-height: 1.6em;
+  }
+  #exitFull {
+    position: absolute; top: 10px; right: 10px; z-index: 2; display: none;
+  }
+  #stage.full #exitFull { display: block; }
+
+  details { font-size: 13px; color: var(--sub); margin-top: 8px; }
+  summary { cursor: pointer; color: var(--accent); }
+  details ol { padding-left: 1.3em; margin: 8px 0; }
+  details li { margin-bottom: 6px; }
+  details a { color: var(--accent); }
+  details table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+  details td { padding: 4px 8px 4px 0; vertical-align: top; border-top: 1px solid var(--line); }
+  #status { font-size: 13px; color: var(--sub); margin-top: 8px; white-space: pre-wrap; }
+  .err { color: var(--err); }
+  .warn { color: var(--warn); }
+  .ok { color: #2e7d32; }
+  @media (prefers-color-scheme: dark) { .ok { color: #7cc47f; } }
+  @media (max-width: 680px) {
+    .row > * { min-width: 100%; }
+    .row > .fixed { min-width: 0; }
+    #avatar { width: var(--wipe-w-sp, 30%); bottom: 10%; }
+    #caption { right: 35%; }
+  }
+
+  /* ---- 統合UI ---- */
+  #quick { display: flex; gap: 8px; align-items: flex-end; margin-bottom: 10px; }
+  #quick > .grow { flex: 1 1 auto; min-width: 0; }
+  #quick button { flex: 0 0 auto; }
+  #stageBar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 8px 0 16px; }
+  #stageBar label { margin: 0; font-size: 13px; }
+  #detailPanel { margin-top: 8px; }
+  #detailPanel > summary { padding: 8px 0; }
+  /* 全画面のメニュー。押したときだけタイムラインと操作を出す */
+  #fsMenu { position: absolute; top: 10px; right: 92px; z-index: 2; display: none; }
+  #stage.full #fsMenu { display: block; }
+  body.full-mode #timeline, body.full-mode #stageBar { display: none; }
+  body.full-mode.menu-open #timeline {
+    display: block; position: fixed; right: 0; top: 0; bottom: 0;
+    width: min(380px, 46vw); z-index: 101; background: var(--bg);
+    border-radius: 0; border-left: 1px solid var(--line);
+  }
+  body.full-mode.menu-open #stageBar {
+    display: flex; position: fixed; right: 0; bottom: 0;
+    width: min(380px, 46vw); z-index: 102; margin: 0; padding: 10px;
+    background: var(--bg); border-top: 1px solid var(--line); border-left: 1px solid var(--line);
+  }
+
   :root {
     --bg: #ffffff; --fg: #1a1a1a; --sub: #666; --line: #e0e0e0;
     --panel: #f7f7f8; --accent: #5D5CDE; --warn: #b45309; --err: #c0392b;
@@ -110,18 +285,58 @@
 <body>
 
 <header>
-  <h1>ドライブ実況台本ジェネレーター<span style="color:var(--sub);font-weight:400"> 検証版</span></h1>
-  <a href="./player.html" style="color:var(--accent);font-size:13px;white-space:nowrap">再生する</a>
-  <button id="btnSettings" class="fixed">設定</button>
+  <h1>ドライブ実況ワイプ<span style="color:var(--sub);font-weight:400"> 検証版</span></h1>
 </header>
 
 <main>
+  <div id="quick">
+    <div class="grow">
+      <label for="url">YouTubeのURLを貼る</label>
+      <input type="text" id="url" placeholder="https://www.youtube.com/watch?v=..."
+             inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false">
+    </div>
+    <button id="btnGo" class="primary">作って再生</button>
+    <button id="btnSettings">設定</button>
+  </div>
+  <p class="hint" style="margin:-6px 0 12px">
+    保存済みの設定でそのまま台本を作り、できあがったら再生に入ります。音声は再生しながら作られます。
+    公開動画のみ対応します（限定公開・非公開はGemini側が受け付けません）。
+  </p>
+  <div id="log"></div>
+
+  <div id="playArea">
+  <div id="stage">
+    <div id="ytbox"><div id="ytplayer"></div></div>
+    <div id="overlay">
+      <div id="avatar">
+        <canvas id="face" width="300" height="400"></canvas>
+        <canvas id="vrm" class="off"></canvas>
+        <div class="grip"></div>
+      </div>
+      <div id="caption"></div>
+    </div>
+    <button id="fsMenu">メニュー</button>
+    <button id="exitFull">閉じる</button>
+  </div>
+  <div id="timeline"></div>
+  </div>
+  <div id="status"></div>
+  <div id="stageBar">
+    <label><input type="checkbox" id="showAvatar" checked style="width:auto;margin-right:6px">アバターを表示</label>
+    <label><input type="checkbox" id="showCaption" checked style="width:auto;margin-right:6px">字幕を表示</label>
+    <label><input type="checkbox" id="moveWipe" style="width:auto;margin-right:6px">ワイプを配置</label>
+    <button id="btnWipeReset">位置と大きさを戻す</button>
+    <button id="btnStart" disabled>再生を開始</button>
+    <button id="btnFull" disabled>全画面</button>
+  </div>
+
+  
+
+  <details id="detailPanel">
+    <summary>詳細設定（キャラクター・区間・音声・アバター調整・データリポジトリ）</summary>
+
   <fieldset>
     <legend>動画</legend>
-    <label for="url">YouTube URL</label>
-    <input type="text" id="url" placeholder="https://www.youtube.com/watch?v=..."
-           inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false">
-    <p class="hint">公開動画のみ対応します（限定公開・非公開はGemini側が受け付けません）。</p>
 
     <div class="row">
       <div>
@@ -193,7 +408,7 @@
     <div class="row">
       <div class="fixed">
         <label style="margin:0">
-          <input type="checkbox" id="useComments" style="width:auto;margin-right:6px">
+          <input type="checkbox" id="genUseComments" style="width:auto;margin-right:6px">
           コメントを取得して場面に割り当てる
         </label>
       </div>
@@ -220,8 +435,336 @@
     「リポジトリに保存」を使うと、プレイヤーの「保存済みの台本を見る」からそのまま開けます（設定のステップ4が要ります）。
   </p>
 
-  <div id="log"></div>
   <div id="out"></div>
+
+  <fieldset>
+    <legend>台本</legend>
+    <div class="row">
+      <div class="fixed"><input type="file" id="file" accept="application/json,.json"></div>
+      <div class="fixed"><button id="btnPaste">JSONを貼り付け</button></div>
+    </div>
+    <p class="hint" id="loaded">台本ジェネレーターで保存したJSONを読み込んでください。</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>データリポジトリ（端末間の受け渡し）</legend>
+    <div class="row">
+      <div>
+        <label for="dataRepo">リポジトリ</label>
+        <input type="text" id="dataRepo" placeholder="例: yourname/drive-wipe-data（URL貼り付けも可）"
+               autocapitalize="off" autocorrect="off" spellcheck="false">
+      </div>
+      <div>
+        <label for="ghPat">アクセストークン</label>
+        <input type="password" id="ghPat" placeholder="github_pat_..." autocapitalize="off" autocorrect="off" spellcheck="false">
+      </div>
+      <div class="fixed"><button id="btnRepoSave">保存</button></div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div class="fixed"><button id="btnRepoPush">台本と音声を保存</button></div>
+      <div class="fixed"><button id="btnRepoPull">保存した音声を取り込む</button></div>
+      <div class="fixed"><button id="btnRepoList">保存済みの台本を見る</button></div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div class="fixed"><button id="btnAvatarPush">アバターと調整値を保存</button></div>
+      <div class="fixed"><button id="btnAvatarPull">アバターと調整値を取り込む</button></div>
+    </div>
+    <p class="hint" id="repoHint">
+      PCで作った音声をスマホで鳴らすための置き場です。<b>台本と音声をあなたのプライベートリポジトリに保存し、別の端末で取り込みます。</b>
+      取り込んだ音声はエンジンの設定に関係なく再生されるので、スマホに内蔵音声しかなくてもPCで作った声で鳴ります。
+    </p>
+    <details>
+      <summary>初回の準備（3ステップ）</summary>
+      <p style="margin:8px 0"><b>ステップ1：プライベートリポジトリを作る</b><br>
+        <a href="https://github.com/new?name=drive-wipe-data&visibility=private" target="_blank" rel="noopener">
+          このリンクから作成（名前と非公開が入力済み）</a><br>
+        「Create repository」を押すだけです。すでに使いたいリポジトリがあれば、この手順は飛ばせます。
+      </p>
+      <p style="margin:8px 0"><b>ステップ2：Fine-grained トークンを発行する</b><br>
+        <a href="https://github.com/settings/personal-access-tokens/new?name=drive-wipe" target="_blank" rel="noopener">
+          このリンクから発行（Token nameが入力済み）</a><br>
+        Token name の例は <code>drive-wipe</code> です。次の3つを設定してください。
+      </p>
+      <ol style="margin:8px 0 8px 1.2em">
+        <li>Expiration：<code>90 days</code> か <code>Custom→1年後</code>（切れたら再発行して貼り直すだけです）</li>
+        <li>Repository access：<code>Only select repositories</code> → ステップ1のリポジトリを選ぶ</li>
+        <li>Repository permissions：<code>Contents: Read and write</code> だけ</li>
+      </ol>
+      <p style="margin:8px 0">「Generate token」を押し、表示された <code>github_pat_…</code> をコピーします。
+        <b>この画面を閉じるとトークンは二度と表示されません。</b></p>
+      <p style="margin:8px 0"><b>ステップ3：上の2つの欄に入れて「保存」</b><br>
+        複数の端末で使う場合は、同じ2つを各端末で入力してください。<br>
+        初回の保存時に、リポジトリへ案内ファイル（CLAUDE.md）を自動で作成します。これがあると、
+        claude.ai/code でこのリポジトリを開いたときにデータの場所と構造が伝わり、台本の書き換えを頼めます。
+        すでにCLAUDE.mdがある場合は何もしません。
+      </p>
+    </details>
+  </fieldset>
+
+  <fieldset>
+    <legend>音声</legend>
+    <div class="row">
+      <div>
+        <label for="engine">エンジン</label>
+        <select id="engine">
+          <option value="gemini">Gemini音声（自然・全端末・1日10件まで）</option>
+          <option value="gcloud">Google Cloud音声（自然・全端末・無料枠が大きい）</option>
+          <option value="webspeech">ブラウザ内蔵（設定不要・機械的）</option>
+          <option value="voicevox">VOICEVOX（PCのみ・要起動）</option>
+        </select>
+      </div>
+      <div>
+        <label for="voice">話者</label>
+        <select id="voice"></select>
+      </div>
+      <div class="fixed"><button id="btnTest">声を確認</button></div>
+    </div>
+    <div class="row" style="margin-top:8px" id="ttsModelRow">
+      <div>
+        <label for="ttsModel">音声モデル（Gemini音声のみ）</label>
+        <select id="ttsModel"><option value="gemini-2.5-flash-preview-tts">gemini-2.5-flash-preview-tts</option></select>
+      </div>
+      <div class="fixed"><button id="btnTtsModels">使えるモデルを調べる</button></div>
+    </div>
+    <div class="row" style="margin-top:8px" id="gttsKeyRow">
+      <div>
+        <label for="gttsKey">Google Cloud のAPIキー</label>
+        <input type="password" id="gttsKey" placeholder="AIza..." autocapitalize="off" autocorrect="off" spellcheck="false">
+      </div>
+      <div class="fixed"><button id="btnGttsSave">保存して話者を取得</button></div>
+      <div class="fixed"><button id="btnGttsUseYt">YouTubeのキーを使う</button></div>
+    </div>
+    <p class="hint" id="gttsHelp">
+      Gemini音声とは<b>別のサービス</b>です（Cloud Text-to-Speech）。無料枠は
+      <b>WaveNet・Standardが月400万文字、Neural2・Chirp3が月100万文字</b>で、
+      ドライブ動画1時間ぶんの台本でも2万文字程度なので、実質使い切れません。<br>
+      手順：<a href="https://console.cloud.google.com/apis/library/texttospeech.googleapis.com" target="_blank" rel="noopener">① Cloud Text-to-Speech API を有効化</a>
+      → <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">② APIキーを発行</a> → ここに貼る。<br>
+      YouTubeのキーと<b>同じプロジェクト・同じキーが使えます</b>（キーに「APIの制限」を掛けている場合は、そこにCloud Text-to-Speech APIを追加してください）。
+      プロジェクトに請求先アカウントの紐付けを求められることがありますが、無料枠の内側なら請求は発生しません。
+    </p>
+    <div class="row" style="margin-top:8px">
+      <div>
+        <label for="rate">話す速さ <span id="rateVal">1.0</span></label>
+        <input type="range" id="rate" min="0.7" max="1.6" step="0.05" value="1.0" style="width:100%">
+      </div>
+      <div>
+        <label for="duck">実況中の動画音量 <span id="duckVal">25</span>%</label>
+        <input type="range" id="duck" min="0" max="100" step="5" value="25" style="width:100%">
+      </div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div>
+        <label for="style">話し方の指示（Gemini音声のみ）</label>
+        <input type="text" id="style" value="落ち着いた自然な声で、独り言のように、少し抑えめに">
+      </div>
+    </div>
+    <p class="hint" id="engineHint"></p>
+    <p class="hint">
+      Gemini音声は上から<b>穏やか → 明るい → 力強い → 説明向き</b>の順に並べてあります。
+      括弧内は公表されている声の特徴です。「声を確認」で聴き比べてください。<br>
+      落ち着いた独り言なら <code>Achernar</code> <code>Vindemiatrix</code> <code>Callirrhoe</code> あたりが合います。
+    </p>
+    <p class="hint">
+      Gemini音声の無料枠は<b>1日あたりの生成回数がかなり少なく</b>、台本1本ぶんを賄えないことがあります。
+      上限に当たった場合は待っても同じ日のうちは空かないので、<b>「Google Cloud音声」に切り替えてください</b>（同じくらい自然で、無料枠は桁違いに大きく、スマホからも作れます）。
+      生成した音声は端末に保存されるため、同じセリフを作り直して枠を減らすことはありません。
+    </p>
+  </fieldset>
+
+  <fieldset>
+    <legend>アバターの調整</legend>
+    <div id="previewBox"><canvas id="preview" width="320" height="427"></canvas></div>
+    <div class="row" style="margin-bottom:10px">
+      <div class="fixed"><button id="btnTuneWheel">ハンドルの動きを確認</button></div>
+      <div class="fixed"><button id="btnAutoFit">自動で合わせる</button></div>
+    </div>
+    <p class="hint" style="margin-bottom:10px">
+      上が実際のワイプです。下の設定を変えると、ここにそのまま反映されます。<br>
+      <b>VRMを選んだ時点で、体格に合わせて自動で画角を決めます。</b>
+      ワイプの形や横からの角度を変えた後は「自動で合わせる」でやり直せます（手で変えた値は初期値に戻ります）。
+    </p>
+    <div class="row">
+      <div>
+        <label for="framing">画角</label>
+        <select id="framing">
+          <option value="bust">胸から上（腕を映さない）</option>
+          <option value="wheel">ハンドルまで映す（調整が要ります）</option>
+        </select>
+      </div>
+      <div>
+        <label for="camDist">寄り <span id="camDistVal">1.00</span></label>
+        <input type="range" id="camDist" min="0.55" max="2" step="0.05" value="1" style="width:100%">
+      </div>
+      <div>
+        <label for="camY">上下位置 <span id="camYVal">0.00</span></label>
+        <input type="range" id="camY" min="-0.6" max="0.6" step="0.02" value="0" style="width:100%">
+      </div>
+      <div>
+        <label for="wipeShape">ワイプの形</label>
+        <select id="wipeShape">
+          <option value="portrait">縦（3:4）</option>
+          <option value="square">正方形</option>
+          <option value="landscape">横（4:3）</option>
+          <option value="wide">横長（16:9）</option>
+        </select>
+      </div>
+      <div>
+        <label for="wipeSize">ワイプの大きさ <span id="wipeSizeVal">22</span>%</label>
+        <input type="range" id="wipeSize" min="12" max="45" step="1" value="22" style="width:100%">
+      </div>
+      <div>
+        <label for="camAngle">横からの角度 <span id="camAngleVal">40</span>°</label>
+        <input type="range" id="camAngle" min="0" max="80" step="5" value="40" style="width:100%">
+      </div>
+      <div>
+        <label for="camAim">ハンドルの入れ具合 <span id="camAimVal">0.50</span></label>
+        <input type="range" id="camAim" min="0" max="1" step="0.05" value="0.5" style="width:100%">
+      </div>
+      <div>
+        <label for="camX">左右位置 <span id="camXVal">0.00</span></label>
+        <input type="range" id="camX" min="-0.4" max="0.4" step="0.02" value="0" style="width:100%">
+      </div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div>
+        <label for="bgPreset">車内の背景</label>
+        <select id="bgPreset">
+          <option value="night">夜の車内（内蔵）</option>
+          <option value="day">昼の車内（内蔵）</option>
+          <option value="none">なし</option>
+          <option value="file">自分の写真を使う</option>
+        </select>
+      </div>
+      <div class="fixed">
+        <label style="margin:0" for="bgFile">写真を選ぶ</label>
+        <input type="file" id="bgFile" accept="image/*" style="width:auto">
+      </div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div>
+        <label for="armHeight">肘の張り出し <span id="armHeightVal">0.50</span></label>
+        <input type="range" id="armHeight" min="0" max="1" step="0.05" value="0.5" style="width:100%">
+      </div>
+      <div>
+        <label for="armSpread">手を握る位置 <span id="armSpreadVal">0.50</span></label>
+        <input type="range" id="armSpread" min="0" max="1" step="0.05" value="0.5" style="width:100%">
+      </div>
+      <div>
+        <label for="gripStrength">手の握り <span id="gripStrengthVal">0.80</span></label>
+        <input type="range" id="gripStrength" min="0" max="1" step="0.05" value="0.8" style="width:100%">
+      </div>
+      <div>
+        <label for="wheelSize">ハンドルの大きさ <span id="wheelSizeVal">1.00</span></label>
+        <input type="range" id="wheelSize" min="0.6" max="1.6" step="0.05" value="1" style="width:100%">
+      </div>
+      <div>
+        <label for="wheelTilt">ハンドルの傾き <span id="wheelTiltVal">0.40</span></label>
+        <input type="range" id="wheelTilt" min="0" max="1.2" step="0.05" value="0.4" style="width:100%">
+      </div>
+      <div>
+        <label for="wheelY">ハンドルの高さ <span id="wheelYVal">0.00</span></label>
+        <input type="range" id="wheelY" min="-0.30" max="0.30" step="0.01" value="0" style="width:100%">
+      </div>
+      <div>
+        <label for="wheelZ">ハンドルの前後 <span id="wheelZVal">0.00</span></label>
+        <input type="range" id="wheelZ" min="-0.30" max="0.30" step="0.01" value="0" style="width:100%">
+      </div>
+      <div>
+        <label for="idle">揺れの大きさ <span id="idleVal">1.00</span></label>
+        <input type="range" id="idle" min="0" max="3" step="0.1" value="1" style="width:100%">
+      </div>
+    </div>
+    <p class="hint">
+      <b>ハンドルの入れ具合</b>は、体とハンドルのどちらを画面の中心に置くかです（0で体、1でハンドル）。
+      画角は「頭＋肩」「ハンドルまで」が入る距離を自動で計算します。<b>寄り</b>は倍率（小さいほど寄る）、
+      <b>上下位置</b>は人物を画面のどこに置くかです。設定は保存されます。<br>
+      「ハンドルまで映す」を選ぶと腕とハンドルが出ます。<b>ハンドルの位置を先に決め、手はその縁を掴みにいきます</b>ので、
+      まず<b>大きさ・傾き・高さ・前後</b>でハンドルを置いてください。腕は自動で追従します。
+      <b>手を握る位置</b>は左が9時15分・中央が10時10分・右が11時5分、<b>肘の張り出し</b>は肘を外に開く量です。<br>
+      VRMを選ばない間は、動作確認用の簡易アバターが表示されます。
+    </p>
+
+    <details>
+      <summary>VRMファイルはどこで手に入れる？</summary>
+      <p style="margin:8px 0"><b>まずは配布モデルを1つ落として試すのを勧めます。</b>自作は時間がかかるので、
+      画角や動きが好みに合うか確かめてからで十分です。</p>
+
+      <table>
+        <tr>
+          <td style="width:7em"><b>配布を使う</b><br><span style="opacity:.7">5分・無料</span></td>
+          <td>
+            <a href="https://3d.nicovideo.jp/search?work_type=vrm&amp;sort=total&amp;order=1" target="_blank" rel="noopener">ニコニ立体（VRMだけに絞り、総合点が高い順）</a><br>
+            <span style="opacity:.7">MMDが大半のサイトなので、この絞り込みが要ります。
+            さらに「すべての作品」を<b>フルスクラッチ作品</b>にすると、権利者が1人で条件を読みやすくなります。</span><br>
+            <a href="https://hub.vroid.com/characters" target="_blank" rel="noopener">VRoid Hub（すべてVRM）</a><br>
+            <span style="opacity:.7">形式で外れる心配がありません。「このモデルを利用する」が有効なものを選びます。</span><br>
+            <span style="opacity:.7">落とした <code>.vrm</code> を上の「VRMファイル」で選ぶだけです。</span>
+          </td>
+        </tr>
+        <tr>
+          <td><b>買う</b><br><span style="opacity:.7">10分・有料</span></td>
+          <td><a href="https://booth.pm/ja/browse/3D%E3%83%A2%E3%83%87%E3%83%AB?q=VRM" target="_blank" rel="noopener">BOOTH（3Dモデルに絞ってVRMを検索）</a><br>
+            <span style="opacity:.7">千円〜数千円で質の高いモデルが手に入ります。</span></td>
+        </tr>
+        <tr>
+          <td><b>自作する</b><br><span style="opacity:.7">数時間・無料</span></td>
+          <td>
+            <a href="https://vroid.com/studio" target="_blank" rel="noopener">VRoid Studio</a>（ピクシブ製・無料・Windows / macOS）。
+            顔や髪をスライダーで作り、VRMとして書き出します。3Dの知識は不要です。<br>
+            <span style="opacity:.7">PCアプリなので、スマホだけでは作れません。</span>
+          </td>
+        </tr>
+      </table>
+
+      <p style="margin:8px 0"><b>選ぶときの目安</b></p>
+      <ol>
+        <li><b>軽いモデル</b>を選ぶ。ワイプは小さいので高精細は不要で、重いとiPhoneが発熱します</li>
+        <li><b>胸から上が作り込まれているもの</b>。この画角では顔と上半身しか映りません</li>
+        <li>VRM 0.x でも 1.0 でも読めます。背中を向いたら「向きを反転」で直ります</li>
+      </ol>
+
+      <p style="margin:8px 0"><b>ライセンスの見方</b></p>
+      <ol>
+        <li>配布ページの利用条件が「<b>設定されていません</b>」の場合、それは<b>許可ではなく未設定</b>です。
+            商用利用・改変・再配布は許可されていないものとして扱ってください</li>
+        <li>自宅で個人的に見るだけなら、通常はダウンロード時に同意する利用規約の範囲です</li>
+        <li><b>VRMファイルをこのリポジトリに入れない</b>こと。公開されるため再配布にあたります。
+            このアプリは端末内（IndexedDB）に保存するだけなので、そのまま使えば問題ありません</li>
+        <li>「親作品」がある二次利用モデルは、元の作者やキャラクターの権利も重なります。
+            公開する予定があるなら、条件が明記されたモデルを選ぶほうが安全です</li>
+      </ol>
+
+      <p style="margin:8px 0"><b>実写にしたい場合</b>：VRMは基本的にアニメ調です。実写寄りにするなら、
+      写真と音声から動画を作って読み込む方式が必要になります（未実装）。</p>
+    </details>
+  </fieldset>
+
+  <fieldset>
+    <legend>再生</legend>
+    <div class="row">
+      <div class="fixed">
+        <label style="margin:0"><input type="checkbox" id="useComments" style="width:auto;margin-right:6px">コメントも読む</label>
+      </div>
+      <div class="fixed">
+        <label style="margin:0" for="vrmFile">VRMファイル</label>
+        <input type="file" id="vrmFile" accept=".vrm,model/gltf-binary,application/octet-stream" style="width:auto">
+      </div>
+      <div class="fixed">
+        <label style="margin:0"><input type="checkbox" id="flipVRM" style="width:auto;margin-right:6px">向きを反転</label>
+      </div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button id="btnPrepare" class="fixed" disabled>音声をまとめて用意</button>
+      <button id="btnCancelPrepare" class="fixed" style="display:none">用意を中断</button>
+    </div>
+    <p class="hint">
+      <b>「音声をまとめて用意」</b>を先に実行すると、再生中に音声を作らないため利用上限に当たりません。
+      作った音声は端末に保存され、同じ台本の2回目以降は生成なしで再生できます。<br>
+      iPhoneでは最初の再生に画面のタップが必要です。この「再生を開始」がその操作を兼ねています。</p>
+  </fieldset>
+
+  </details>
 </main>
 
 <dialog id="dlg">
@@ -331,11 +874,11 @@
       claude.ai/code でそのリポジトリを開けば、内容の書き換えをAIに頼めます。
       実況プレイヤー側で設定済みなら、ここは空欄のままで構いません（同じ設定を共有します）。
     </p>
-    <label for="dataRepo">リポジトリ（ユーザー名/リポジトリ名）</label>
-    <input type="text" id="dataRepo" placeholder="例: yourname/drive-wipe-data（URL貼り付けも可）"
+    <label for="genDataRepo">リポジトリ（ユーザー名/リポジトリ名）</label>
+    <input type="text" id="genDataRepo" placeholder="例: yourname/drive-wipe-data（URL貼り付けも可）"
            autocapitalize="off" autocorrect="off" spellcheck="false">
-    <label for="ghPat" style="margin-top:10px">アクセストークン</label>
-    <input type="password" id="ghPat" placeholder="github_pat_..."
+    <label for="genGhPat" style="margin-top:10px">アクセストークン</label>
+    <input type="password" id="genGhPat" placeholder="github_pat_..."
            autocapitalize="off" autocorrect="off" spellcheck="false">
     <ol style="margin:10px 0 0 1.2em">
       <li><a href="https://github.com/new?name=drive-wipe-data&visibility=private" target="_blank" rel="noopener">このリンク</a>からプライベートリポジトリを作る（名前と非公開が入力済み）。既存のものを使うなら飛ばせます</li>
@@ -361,7 +904,2117 @@
   </div>
 </dialog>
 
+
 <script>
+"use strict";
+
+const LS = "drive-wipe-";
+const $ = id => document.getElementById(id);
+function lsGet(k, d = "") { try { return localStorage.getItem(LS + k) ?? d; } catch (e) { return d; } }
+function lsSet(k, v) { try { localStorage.setItem(LS + k, v); } catch (e) {} }
+
+const VOICEVOX_URL = "http://127.0.0.1:50021";
+
+let script = null;      // 読み込んだ台本
+let cues = [];          // 再生用に平坦化した発話キュー
+let player = null;      // YouTube プレイヤー
+let started = false;
+
+function status(msg, cls = "") {
+  const el = $("status");
+  el.className = cls;
+  el.textContent = msg;
+}
+
+/* ---------- 台本の読み込み ---------- */
+function fmtTime(sec) {
+  sec = Math.max(0, Math.round(sec));
+  const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+  return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(s).padStart(2, "0");
+}
+
+// 台本とコメントを、時刻順のひとつの発話列にまとめる
+function buildCues(data, withComments) {
+  const out = [];
+  for (const it of (data.items || [])) {
+    if (!it.line) continue;
+    out.push({ at: it.abs, text: it.line, kind: it.kind || "scene", act: it.act, amount: it.amount || 0 });
+  }
+  if (withComments) {
+    for (const c of (data.comments || [])) {
+      if (c.abs === undefined || c.abs === null) continue;
+      // 視聴者の投稿 → 返信 → 投稿者の返信、の順に読む
+      if (c.speak === "asis") {
+        out.push({ at: c.abs, text: c.text, kind: "chat", act: "straight", amount: 0, comment: true });
+      } else {
+        out.push({ at: c.abs, text: `${c.author} さん。${c.text}`, kind: "chat", act: "straight", amount: 0, comment: true });
+        (c.replies || []).forEach((r, i) =>
+          out.push({ at: c.abs + 0.01 * (i + 1), text: `${r.author} さん。${r.text}`, kind: "chat", act: "straight", amount: 0, comment: true }));
+        if (c.ownerReply) out.push({ at: c.abs + 0.5, text: c.ownerReply, kind: "chat", act: "straight", amount: 0, comment: true });
+      }
+    }
+  }
+  out.sort((a, b) => a.at - b.at);
+  out.forEach((c, i) => c.id = i);
+  return out;
+}
+
+function loadScript(data, remember = true) {
+  if (!data || !Array.isArray(data.items)) throw new Error("台本の形式が違います（items がありません）。");
+  if (!data.videoId) throw new Error("videoId がありません。");
+  // 開き直すたびに読み込ませるのは手間なので、端末に残す
+  if (remember) idbSet("script", data).catch(() => {});
+  script = data;
+  cues = buildCues(data, $("useComments").checked);
+  const spoken = cues.filter(c => !c.comment).length;
+  $("loaded").textContent =
+    `${data.meta?.title || data.videoId} ／ 発話 ${spoken}件` +
+    (cues.length - spoken ? ` ＋ コメント ${cues.length - spoken}件` : "") +
+    `／ ${fmtTime(data.start || 0)}〜${fmtTime(data.covered ?? data.end)}` +
+    (data.promptVersion ? ` ／ 版 ${data.promptVersion}` : "");
+  $("btnStart").disabled = false;
+  $("btnFull").disabled = false;
+  $("btnPrepare").disabled = false;
+  renderTimeline();
+  setupPlayer(data.videoId);
+  status("読み込みました。「再生を開始」を押してください。", "ok");
+}
+
+// 前回の台本を復元する。動画もそのまま出る
+async function restoreScript() {
+  try {
+    const d = await idbGet("script");
+    if (d) { loadScript(d, false); status(`前回の台本を復元しました（${d.meta?.title || d.videoId}）。`, "ok"); }
+    else status("台本のJSONを読み込んでください。");
+  } catch (e) {
+    status("台本のJSONを読み込んでください。");
+  }
+}
+
+$("file").onchange = e => {
+  const f = e.target.files?.[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => { try { loadScript(JSON.parse(r.result)); } catch (err) { status(err.message, "err"); } };
+  r.readAsText(f);
+};
+$("btnPaste").onclick = () => {
+  const t = prompt("台本のJSONを貼り付けてください");
+  if (!t) return;
+  try { loadScript(JSON.parse(t)); } catch (err) { status("読み取れませんでした: " + err.message, "err"); }
+};
+$("useComments").onchange = () => { if (script) { cues = buildCues(script, $("useComments").checked); renderTimeline(); } };
+
+/* ---------- YouTube プレイヤー ---------- */
+let ytReady = false, pendingVideo = null;
+window.onYouTubeIframeAPIReady = () => {
+  ytReady = true;
+  if (pendingVideo) { const v = pendingVideo; pendingVideo = null; setupPlayer(v); }
+};
+(function loadYT() {
+  const s = document.createElement("script");
+  s.src = "https://www.youtube.com/iframe_api";
+  s.onerror = () => status("YouTubeのプレイヤーを読み込めませんでした。通信状態を確認してください。", "err");
+  document.head.appendChild(s);
+  // 読めていない場合に黒画面のまま放置しない
+  setTimeout(() => {
+    if (!ytReady) status("YouTubeのプレイヤーがまだ読み込めていません。再読み込みしてください。", "warn");
+  }, 8000);
+})();
+
+function setupPlayer(videoId) {
+  if (!ytReady) { pendingVideo = videoId; return; }
+  if (player) { player.loadVideoById(videoId); return; }
+  if (!document.getElementById("ytplayer")) { status("動画の表示枠が見つかりません。再読み込みしてください。", "err"); return; }
+  player = new YT.Player("ytplayer", {
+    videoId,
+    width: "100%", height: "100%",
+    playerVars: { playsinline: 1, rel: 0, modestbranding: 1 },
+    events: {
+      onReady: () => status("動画を読み込みました。"),
+      onStateChange: e => {
+        if (e.data === YT.PlayerState.PLAYING) tick();
+        // 一時停止したまま喋り続けると映像とずれるので止める
+        if (e.data === YT.PlayerState.PAUSED || e.data === YT.PlayerState.ENDED) {
+          queue = [];
+          try { cancelSpeak(); } catch (err) {}
+          $("caption").textContent = "";
+        }
+      }
+    }
+  });
+}
+
+/* ---------- 音声（アダプタ） ---------- */
+// speak(text) は「読み終わるまで」を待つ Promise を返す。
+// 口の動きは amplitude() が 0〜1 を返すことで表現する。
+let amplitude = () => 0;
+let speaking = false;
+let cancelSpeak = () => {};
+
+const webspeech = {
+  voices: [],
+  async init() {
+    if (!("speechSynthesis" in window)) throw new Error("この端末はブラウザ内蔵の音声に対応していません。");
+    const load = () => speechSynthesis.getVoices().filter(v => /ja[-_]JP|Japanese/i.test(v.lang + v.name));
+    this.voices = load();
+    if (!this.voices.length) {
+      await new Promise(r => { speechSynthesis.onvoiceschanged = r; setTimeout(r, 1200); });
+      this.voices = load();
+    }
+    if (!this.voices.length) this.voices = speechSynthesis.getVoices();
+    return this.voices.map((v, i) => ({ id: String(i), name: v.name }));
+  },
+  speak(text, voiceId, rate) {
+    return new Promise(resolve => {
+      const u = new SpeechSynthesisUtterance(text);
+      const v = this.voices[+voiceId];
+      if (v) { u.voice = v; u.lang = v.lang; } else { u.lang = "ja-JP"; }
+      u.rate = rate;
+      // 内蔵音声は波形が取れないので、擬似的な口の開閉で代替する
+      let t0 = performance.now();
+      amplitude = () => 0.35 + 0.35 * Math.abs(Math.sin((performance.now() - t0) / 90));
+      const done = () => { amplitude = () => 0; resolve(); };
+      u.onend = done;
+      u.onerror = done;
+      cancelSpeak = () => { try { speechSynthesis.cancel(); } catch (e) {} done(); };
+      speechSynthesis.speak(u);
+    });
+  }
+};
+
+// エンジンごとに持つ必要はないので、AudioContextはひとつにまとめる
+let sharedCtx = null;
+function audioCtx() {
+  return sharedCtx = sharedCtx || new (window.AudioContext || window.webkitAudioContext)();
+}
+
+// 引数に配列をそのまま渡すと、長いデータでスタックが溢れるので分割する
+function b64encode(u8) {
+  let s = "";
+  for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+function b64decode(s) {
+  const bin = atob(s), u8 = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return u8;
+}
+
+// 音声は「返ってきたそのままのバイト列」で持つ。
+// デコードして持つと10倍以上に膨らみ、端末にもリポジトリにも置けなくなる
+function makeClip(enc, data, rate, ext) { return { enc, data, rate, ext }; }
+
+async function decodeClip(c, speed = 1) {
+  const ctx = audioCtx();
+  if (ctx.state === "suspended") await ctx.resume();
+  if (c.enc === "pcm16") {
+    // ヘッダなしの16bit PCM。速さはサンプリングレートの読み替えで付ける
+    const copy = c.data.slice();
+    const pcm = new Int16Array(copy.buffer, 0, copy.byteLength >> 1);
+    const buf = ctx.createBuffer(1, pcm.length, Math.max(3000, Math.round(c.rate * speed)));
+    const ch = buf.getChannelData(0);
+    for (let i = 0; i < pcm.length; i++) ch[i] = pcm[i] / 32768;
+    return buf;
+  }
+  // decodeAudioData は渡した領域を使い切るので、毎回コピーを渡す
+  return ctx.decodeAudioData(c.data.slice().buffer);
+}
+
+// 取り込んだ音声はエンジンを問わず鳴らせる。スマホに内蔵音声しかなくても再生できる
+async function playClip(c, speed) {
+  return playBuffer(audioCtx(), await decodeClip(c, speed));
+}
+
+// 波形からの口パクは共通なので、鳴らす部分をひとつにまとめる
+function playBuffer(ctx, audio) {
+  return new Promise(resolve => {
+    const src = ctx.createBufferSource();
+    const an = ctx.createAnalyser();
+    an.fftSize = 256;
+    const data = new Uint8Array(an.frequencyBinCount);
+    src.buffer = audio;
+    src.connect(an); an.connect(ctx.destination);
+    amplitude = () => {
+      an.getByteTimeDomainData(data);
+      let peak = 0;
+      for (let i = 0; i < data.length; i++) peak = Math.max(peak, Math.abs(data[i] - 128) / 128);
+      return Math.min(1, peak * 2.2);
+    };
+    const done = () => { amplitude = () => 0; resolve(); };
+    src.onended = done;
+    cancelSpeak = () => { try { src.stop(); } catch (e) {} done(); };
+    src.start();
+  });
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// 無料枠は毎分10件程度。声の確認ボタン分も見込んで、余裕を持たせた本数に抑える
+// 直近の送信時刻と、429を受けた後に送信を止める時刻。リロードしても引き継ぐ
+let lastSend = +lsGet("tts-last", "0") || 0;
+let blockedUntil = +lsGet("tts-block", "0") || 0;
+
+// まとめて投げると毎分の枠に一気に当たるので、等間隔に均して送る
+async function ttsGate(perMin = 6) {
+  const gap = Math.ceil(60000 / perMin);   // 6件/分なら10秒おき
+  for (;;) {
+    const now = Date.now();
+    if (now < blockedUntil) { await countdown(blockedUntil - now, "利用上限のため待機中"); continue; }
+    const wait = lastSend + gap - now;
+    if (wait <= 0) {
+      lastSend = now;
+      lsSet("tts-last", String(now));
+      return;
+    }
+    await countdown(wait, "送信の間隔を空けています");
+  }
+}
+
+// 429を受けたら、その間はどの処理からも送らない
+// 何分も止めると「動いていない」ようにしか見えないので、待つのは2分までにする
+function blockTts(ms) {
+  blockedUntil = Date.now() + Math.min(120000, ms);
+  lsSet("tts-block", String(blockedUntil));
+}
+
+// 待ち時間を秒数で見せる。無言で止まると失敗したように見えるため
+let cancelPrepare = false;
+async function countdown(ms, label) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    if (cancelPrepare) return;
+    status(`${label} 残り ${Math.ceil((end - Date.now()) / 1000)}秒...`, "warn");
+    await sleep(Math.min(1000, end - Date.now()));
+  }
+}
+
+// Gemini音声。台本生成と同じAPIキーを使う
+const gemini = {
+  // 公式のプリセット音声。名前だけでは選べないので、公表されている特徴を添える
+  voices: [
+    ["Achernar", "やわらかい・穏やか"],
+    ["Vindemiatrix", "おだやか・やさしい"],
+    ["Sulafat", "あたたかい"],
+    ["Callirrhoe", "気楽・リラックス"],
+    ["Zubenelgenubi", "カジュアル"],
+    ["Achird", "親しみやすい"],
+    ["Despina", "なめらか"],
+    ["Algieba", "なめらか・耳あたりがよい"],
+    ["Leda", "若々しい"],
+    ["Aoede", "軽やか"],
+    ["Autonoe", "明るい・前向き"],
+    ["Zephyr", "明るい"],
+    ["Laomedeia", "元気・軽快"],
+    ["Sadachbia", "生き生きしている"],
+    ["Puck", "陽気"],
+    ["Fenrir", "テンション高め"],
+    ["Pulcherrima", "はっきり・表情豊か"],
+    ["Kore", "しっかりした"],
+    ["Orus", "しっかりした・断定的"],
+    ["Alnilam", "力強い"],
+    ["Schedar", "落ち着いて一定"],
+    ["Gacrux", "落ち着いた大人"],
+    ["Erinome", "明瞭"],
+    ["Iapetus", "明瞭・はっきり発音"],
+    ["Charon", "説明向き"],
+    ["Rasalgethi", "説明向き・硬め"],
+    ["Sadaltager", "知的"],
+    ["Umbriel", "気楽"],
+    ["Enceladus", "息まじり・ささやき寄り"],
+    ["Algenib", "かすれ声"]
+  ],
+  async init() {
+    if (!lsGet("gemini-api-key")) throw new Error("Gemini APIキーが未設定です。台本ジェネレーターの設定で入れてください。");
+    return this.voices.map(([v, d]) => ({ id: v, name: `${v}（${d}）` }));
+  },
+  async synth(text, voiceName, rate, attempt = 0) {
+    const key = lsGet("gemini-api-key");
+    const style = $("style").value.trim();
+    const model = $("ttsModel").value || "gemini-2.5-flash-preview-tts";
+    await ttsGate();
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: (style ? style + "：\n" : "") + text }] }],
+          generationConfig: {
+            responseModalities: ["AUDIO"],
+            speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceName || "Kore" } } }
+          }
+        })
+      }
+    );
+    if (!res.ok) {
+      let d = "", body = null;
+      try { body = await res.json(); d = body?.error?.message || ""; } catch (e) {}
+      // 上限に当たったら、APIが指定する秒数だけ待って作り直す
+      const det = body?.error?.details || [];
+      const ri = det.find(x => String(x["@type"] || "").includes("RetryInfo"));
+      const vio = det.find(x => String(x["@type"] || "").includes("QuotaFailure"))?.violations?.[0];
+      const sec = parseFloat(ri?.retryDelay) || parseFloat((d.match(/retry in ([\d.]+)\s*s/i) || [])[1]);
+      // 1日あたりの上限は待っても空かない。待たせずに、次にやることまで伝える
+      if (res.status === 429 && /PerDay/i.test(vio?.quotaId || "")) {
+        const err = new Error(
+          `Gemini音声の1日あたりの上限に達しました（上限 ${vio.quotaValue || "?"}件／モデル ${vio.quotaDimensions?.model || model}）。`
+          + `上限は太平洋時間の0時（日本時間の夕方ごろ）に戻ります。それまでは「ブラウザ内蔵」かVOICEVOXに切り替えてください。`);
+        err.quota = true;
+        err.retryable = false;
+        throw err;
+      }
+      if (res.status === 404) {
+        throw new Error(`音声モデル ${model} が見つかりません。「使えるモデルを調べる」で選び直してください。`);
+      }
+      if ((res.status === 429 || res.status >= 500) && attempt < 2) {
+        const wait = sec > 0 ? Math.min(90000, sec * 1000 + 1000) : 3000 * (attempt + 1);
+        if (res.status === 429) blockTts(wait);
+        status(`音声の${res.status === 429 ? "利用上限" : "混雑"}のため ${Math.ceil(wait / 1000)}秒待って再試行します...`, "warn");
+        await sleep(wait);
+        return this.synth(text, voiceName, rate, attempt + 1);
+      }
+      const q = vio ? `（上限 ${vio.quotaValue || "?"}／${vio.quotaId || "-"}）` : "";
+      const err = new Error(`Gemini音声 ${res.status}${q}${d ? "：" + d : ""}`);
+      err.quota = res.status === 429;
+      if (res.status === 429 && sec > 0) blockTts(sec * 1000 + 1000);
+      err.retryable = res.status === 429 || res.status >= 500;
+      if (sec > 0) err.retryAfterMs = Math.round(sec * 1000);
+      throw err;
+    }
+    const j = await res.json();
+    const part = j?.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+    if (!part) throw new Error("音声が返りませんでした。");
+    // 返るのはヘッダなしのPCM。速さは鳴らすときに付ける
+    const rateHz = +(String(part.inlineData.mimeType || "").match(/rate=(\d+)/)?.[1] || 24000);
+    return makeClip("pcm16", b64decode(part.inlineData.data), rateHz, "pcm");
+  },
+  async speak(text, voiceName, rate, pre) {
+    return playClip(pre || await this.synth(text, voiceName, rate), rate);
+  }
+};
+
+// Google Cloud音声。Geminiとは別サービスで、無料枠が桁違いに大きくスマホからも作れる
+const gcloud = {
+  async init() {
+    const key = lsGet("gtts-api-key");
+    if (!key) throw new Error("Google CloudのAPIキーが未設定です。下の欄に入れて「保存して話者を取得」を押してください。");
+    const res = await fetch(
+      `https://texttospeech.googleapis.com/v1/voices?languageCode=ja-JP&key=${encodeURIComponent(key)}`);
+    if (!res.ok) throw new Error(await gcloudError(res));
+    const d = await res.json();
+    // 新しい世代ほど自然なので上に出す
+    const rank = n => /Chirp/i.test(n) ? 0 : /Neural2/i.test(n) ? 1 : /Wavenet/i.test(n) ? 2 : 3;
+    const gender = g => g === "FEMALE" ? "女性" : g === "MALE" ? "男性" : "中性";
+    const list = (d.voices || [])
+      .map(v => ({ id: v.name, name: `${v.name}（${gender(v.ssmlGender)}）`, r: rank(v.name) }))
+      .sort((a, b) => a.r - b.r || a.id.localeCompare(b.id));
+    if (!list.length) throw new Error("日本語の話者が見つかりませんでした。");
+    return list;
+  },
+  async synth(text, voiceName, rate) {
+    const key = lsGet("gtts-api-key");
+    const res = await fetch(
+      `https://texttospeech.googleapis.com/v1/text:synthesize?key=${encodeURIComponent(key)}`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          input: { text },
+          voice: { languageCode: "ja-JP", name: voiceName || "ja-JP-Neural2-B" },
+          // 速さはサーバー側で付けてもらう。こちらで読み替えると音程が変わる
+          audioConfig: { audioEncoding: "MP3", speakingRate: Math.min(4, Math.max(0.25, rate)) }
+        })
+      });
+    if (!res.ok) {
+      const err = new Error(await gcloudError(res));
+      err.quota = res.status === 429;
+      err.retryable = res.status === 429 || res.status >= 500;
+      throw err;
+    }
+    const j = await res.json();
+    if (!j.audioContent) throw new Error("音声が返りませんでした。");
+    return makeClip("file", b64decode(j.audioContent), 0, "mp3");
+  },
+  async speak(text, voiceName, rate, pre) {
+    return playClip(pre || await this.synth(text, voiceName, rate), rate);
+  }
+};
+
+// Googleのエラー文は原因が読み取りにくいので、次にやることへ翻訳する
+async function gcloudError(res) {
+  let m = "";
+  try { m = (await res.json())?.error?.message || ""; } catch (e) {}
+  if (/has not been used in project|is disabled/i.test(m))
+    return "このプロジェクトで Cloud Text-to-Speech API が有効になっていません。下のリンク①から有効化して、1〜2分待ってからやり直してください。";
+  if (/API key not valid|API_KEY_INVALID/i.test(m))
+    return "APIキーが正しくありません。リンク②で発行したキーを貼り直してください。";
+  if (/blocked|SERVICE_BLOCKED|not supported by this API/i.test(m))
+    return "このキーは Cloud Text-to-Speech に使えません。キーの「APIの制限」に Cloud Text-to-Speech API を追加するか、制限なしのキーを作ってください。";
+  if (/billing/i.test(m))
+    return "プロジェクトに請求先アカウントが紐付いていません。Cloud Consoleで紐付けてください（無料枠の内側なら請求は発生しません）。";
+  return `Google Cloud音声 ${res.status}${m ? "：" + m : ""}`;
+}
+
+const voicevox = {
+  speakers: [],
+  async init() {
+    const res = await fetch(`${VOICEVOX_URL}/speakers`);
+    if (!res.ok) throw new Error(`VOICEVOX 応答エラー ${res.status}`);
+    const list = await res.json();
+    this.speakers = [];
+    for (const sp of list) for (const st of (sp.styles || []))
+      this.speakers.push({ id: String(st.id), name: `${sp.name}（${st.name}）` });
+    return this.speakers;
+  },
+  async synth(text, speakerId, rate) {
+    const q = await fetch(`${VOICEVOX_URL}/audio_query?text=${encodeURIComponent(text)}&speaker=${speakerId}`, { method: "POST" });
+    if (!q.ok) throw new Error(`audio_query ${q.status}`);
+    const query = await q.json();
+    query.speedScale = rate;
+    // 24kHzステレオのままだと台本1本で13MBを超える。話し声は16kHzモノラルで足りる
+    query.outputSamplingRate = 16000;
+    query.outputStereo = false;
+    const s = await fetch(`${VOICEVOX_URL}/synthesis?speaker=${speakerId}`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(query)
+    });
+    if (!s.ok) throw new Error(`synthesis ${s.status}`);
+    return makeClip("file", new Uint8Array(await s.arrayBuffer()), 0, "wav");
+  },
+  async speak(text, speakerId, rate, pre) {
+    return playClip(pre || await this.synth(text, speakerId, rate), rate);
+  }
+};
+
+function engine() {
+  const v = $("engine").value;
+  return v === "voicevox" ? voicevox : v === "gemini" ? gemini : v === "gcloud" ? gcloud : webspeech;
+}
+
+// エンジンごとに要る欄だけ出す
+function syncEngineRows() {
+  const v = $("engine").value;
+  $("ttsModelRow").style.display = v === "gemini" ? "" : "none";
+  $("gttsKeyRow").style.display = v === "gcloud" ? "" : "none";
+  $("gttsHelp").style.display = v === "gcloud" ? "" : "none";
+}
+
+async function refreshVoices() {
+  const sel = $("voice");
+  sel.innerHTML = "";
+  $("engineHint").className = "hint";
+  try {
+    const list = await engine().init();
+    sel.innerHTML = list.map(v => `<option value="${v.id}">${v.name}</option>`).join("");
+    const saved = lsGet("player-voice-" + $("engine").value);
+    if (saved && list.some(v => v.id === saved)) sel.value = saved;
+    $("engineHint").textContent = `${list.length}件の話者が使えます。`;
+  } catch (e) {
+    sel.innerHTML = "";
+    $("engineHint").className = "hint err";
+    $("engineHint").textContent = $("engine").value === "gemini" || $("engine").value === "gcloud"
+      ? e.message
+      : $("engine").value === "voicevox"
+      ? `VOICEVOXに接続できませんでした（${e.message}）。VOICEVOXを起動しているか確認してください。`
+        + " このページはHTTPSなので、VOICEVOX側のCORS設定によっては拒否されます。"
+        + " その場合は起動オプションに --cors_policy_mode all を付けてください。"
+      : e.message;
+  }
+}
+$("engine").onchange = () => {
+  lsSet("player-engine", $("engine").value);
+  syncEngineRows();
+  clearAudioCache(); refreshVoices();
+};
+
+$("btnGttsSave").onclick = () => {
+  const k = $("gttsKey").value.trim();
+  if (!k) { status("APIキーを入力してください。", "err"); return; }
+  lsSet("gtts-api-key", k);
+  refreshVoices();
+};
+$("btnGttsUseYt").onclick = () => {
+  const k = lsGet("yt-api-key");
+  if (!k) { status("YouTubeのキーが未設定です。台本ジェネレーターの設定で入れてください。", "err"); return; }
+  $("gttsKey").value = k;
+  lsSet("gtts-api-key", k);
+  refreshVoices();
+};
+$("voice").onchange = () => { lsSet("player-voice-" + $("engine").value, $("voice").value); clearAudioCache(); };
+$("ttsModel").onchange = () => { lsSet("tts-model", $("ttsModel").value); clearAudioCache(); };
+
+// モデル名は入れ替わる。今そのキーで使えるものをAPIに聞く（キーの疎通確認も兼ねる）
+$("btnTtsModels").onclick = async () => {
+  const key = lsGet("gemini-api-key");
+  if (!key) { status("Gemini APIキーが未設定です。台本ジェネレーターの設定で入れてください。", "err"); return; }
+  $("btnTtsModels").disabled = true;
+  status("音声モデルを調べています...");
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}&pageSize=200`);
+    if (!res.ok) throw new Error(`取得失敗 ${res.status}`);
+    const d = await res.json();
+    const names = (d.models || [])
+      .map(m => String(m.name || "").replace(/^models\//, ""))
+      .filter(n => /tts/i.test(n))
+      .sort().reverse();
+    if (!names.length) throw new Error("このキーで使える音声モデルが見つかりませんでした。");
+    const cur = $("ttsModel").value;
+    $("ttsModel").innerHTML = names.map(n => `<option value="${n}">${n}</option>`).join("");
+    $("ttsModel").value = names.includes(cur) ? cur : names[0];
+    lsSet("tts-model", $("ttsModel").value);
+    clearAudioCache();
+    status(`音声モデルが${names.length}件見つかりました。`, "ok");
+  } catch (e) {
+    status("調べられませんでした: " + e.message, "err");
+  } finally {
+    $("btnTtsModels").disabled = false;
+  }
+};
+$("rate").oninput = () => { $("rateVal").textContent = (+$("rate").value).toFixed(2); clearAudioCache(); };
+$("style").onchange = () => lsSet("player-style", $("style").value);
+for (const [id, digits] of [["camDist", 2], ["camY", 2], ["armHeight", 2], ["armSpread", 2], ["camAim", 2], ["camX", 2], ["gripStrength", 2], ["wheelSize", 2], ["wheelTilt", 2], ["wheelY", 2], ["wheelZ", 2], ["idle", 2]]) {
+  $(id).oninput = () => {
+    $(id + "Val").textContent = (+$(id).value).toFixed(digits);
+    lsSet("player-" + id, $(id).value);
+    window.savePreset?.();
+  };
+}
+$("framing").onchange = () => lsSet("player-framing", $("framing").value);
+
+// ワイプの形と大きさ。縦横で見え方が大きく変わるので選べるようにする
+const WIPE_AR = { portrait: "3 / 4", square: "1 / 1", landscape: "4 / 3", wide: "16 / 9" };
+/* ---------- セリフのタイムライン ---------- */
+// 押した発話の時刻へ飛ぶ。tick() が2秒以上の移動をシークとして扱うので、読み上げ位置も自動で揃う
+function renderTimeline() {
+  const el = $("timeline");
+  el.innerHTML = "";
+  if (!cues.length) return;
+  const frag = document.createDocumentFragment();
+  for (const c of cues) {
+    const row = document.createElement("div");
+    row.className = "cue";
+    row.dataset.id = String(c.id);
+    row.innerHTML = `<span class="t"></span><span class="k"></span><span class="x"></span>`;
+    row.children[0].textContent = fmtTime(c.at);
+    row.children[1].textContent = c.comment ? "コメント" : c.kind === "chat" ? "雑談" : "実況";
+    row.children[2].textContent = c.text;
+    row.onclick = () => seekToCue(c);
+    frag.appendChild(row);
+  }
+  el.appendChild(frag);
+}
+
+function seekToCue(c) {
+  if (!player || !player.seekTo) { status("先に動画を読み込んでください。", "err"); return; }
+  player.seekTo(Math.max(0, c.at - 1), true);   // 1秒手前から入ると聞き逃さない
+  if (player.playVideo) player.playVideo();
+  highlightCue(c.id);
+}
+
+let lastHighlight = -1;
+function highlightCue(id) {
+  if (id === lastHighlight) return;
+  const el = $("timeline");
+  el.querySelector(".cue.now")?.classList.remove("now");
+  const row = el.querySelector(`.cue[data-id="${id}"]`);
+  if (row) {
+    row.classList.add("now");
+    // 一覧を自分でスクロールしているときに引き戻さない
+    if (document.activeElement !== el) row.scrollIntoView({ block: "nearest" });
+  }
+  lastHighlight = id;
+}
+
+/* ---------- ワイプの配置（移動・大きさ） ---------- */
+// 既定は右下だが、YouTubeの操作エリアに重なるので動かせるようにする。
+// 位置は overlay に対する割合で持つ（全画面や画面幅が変わっても同じ位置になる）
+function applyWipePos() {
+  const el = $("avatar");
+  const l = lsGet("player-wipeLeft"), t = lsGet("player-wipeTop");
+  if (l === "" || t === "") {
+    el.style.left = el.style.top = "";
+    el.style.right = "2%"; el.style.bottom = "8%";
+    return;
+  }
+  el.style.right = el.style.bottom = "";
+  el.style.left = l + "%"; el.style.top = t + "%";
+}
+
+function setupWipeDrag() {
+  const el = $("avatar"), grip = el.querySelector(".grip");
+  let mode = null, dx = 0, dy = 0, box = null;
+
+  const rect = () => $("overlay").getBoundingClientRect();
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+  el.addEventListener("pointerdown", e => {
+    if (!$("moveWipe").checked) return;
+    e.preventDefault();
+    const r = rect(), a = el.getBoundingClientRect();
+    box = r;
+    mode = e.target === grip ? "size" : "move";
+    dx = e.clientX - a.left; dy = e.clientY - a.top;
+    el.setPointerCapture(e.pointerId);   // 映像の上に出ても追い続ける
+  });
+
+  el.addEventListener("pointermove", e => {
+    if (!mode || !box) return;
+    e.preventDefault();
+    const a = el.getBoundingClientRect();
+    if (mode === "move") {
+      const left = clamp(e.clientX - dx - box.left, 0, box.width - a.width);
+      const top = clamp(e.clientY - dy - box.top, 0, box.height - a.height);
+      lsSet("player-wipeLeft", (left / box.width * 100).toFixed(2));
+      lsSet("player-wipeTop", (top / box.height * 100).toFixed(2));
+      applyWipePos();
+    } else {
+      // 縦横比はCSSが保つので、幅だけを割合で決める
+      const w = clamp((e.clientX - a.left) / box.width * 100, +$("wipeSize").min, +$("wipeSize").max);
+      $("wipeSize").value = String(Math.round(w));
+      $("wipeSizeVal").textContent = $("wipeSize").value;
+      applyWipe();
+    }
+  });
+
+  const end = e => {
+    if (!mode) return;
+    mode = null;
+    try { el.releasePointerCapture(e.pointerId); } catch (err) {}
+  };
+  el.addEventListener("pointerup", end);
+  el.addEventListener("pointercancel", end);
+}
+
+function applyWipe() {
+  const shape = $("wipeShape").value, w = +$("wipeSize").value;
+  document.documentElement.style.setProperty("--wipe-ar", WIPE_AR[shape] || "3 / 4");
+  $("previewBox").style.aspectRatio = WIPE_AR[shape] || "3 / 4";
+  document.documentElement.style.setProperty("--wipe-w", w + "%");
+  document.documentElement.style.setProperty("--wipe-w-sp", Math.min(60, Math.round(w * 1.35)) + "%");
+  // 字幕がワイプに重ならないように右の余白を合わせる
+  // 右下にいるときだけ字幕を避ける。動かしたあとは重ならないので触らない
+  $("caption").style.right = lsGet("player-wipeLeft") === "" ? (w + 5) + "%" : "3%";
+  lsSet("player-wipeShape", shape); lsSet("player-wipeSize", String(w));
+  window.dispatchEvent(new Event("resize"));
+}
+$("wipeShape").onchange = applyWipe;
+
+// 腕は角度を数値で合わせるのが難しいので、あり得る組み合わせを候補として並べる
+
+// ワイプの内容をプレビュー枠へ毎フレーム複製する。
+// 同じ絵を2箇所に出すので、調整結果がその場で分かる
+const previewCtx = $("preview").getContext("2d");
+window.copyToPreview = src => {
+  const c = $("preview");
+  const box = $("previewBox").getBoundingClientRect();
+  const w = Math.max(1, Math.round(box.width)), h = Math.max(1, Math.round(box.height));
+  if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+  try { previewCtx.clearRect(0, 0, w, h); previewCtx.drawImage(src, 0, 0, w, h); } catch (e) {}
+};
+// ハンドルの切り角を一時的に振って、腕の追従を確かめる
+$("btnTuneWheel").onclick = () => { window.__wheelDemo = performance.now(); };
+$("wipeSize").oninput = () => { $("wipeSizeVal").textContent = $("wipeSize").value; applyWipe(); };
+$("camAngle").oninput = () => { $("camAngleVal").textContent = $("camAngle").value; lsSet("player-camAngle", $("camAngle").value); };
+
+// 車内の背景。写真がなくても使えるよう、簡単な車内を描いたものを内蔵する
+function drawInterior(night) {
+  const c = document.createElement("canvas");
+  c.width = 480; c.height = 640;
+  const g = c.getContext("2d");
+  const sky = g.createLinearGradient(0, 0, 0, c.height);
+  if (night) { sky.addColorStop(0, "#0d1424"); sky.addColorStop(.55, "#16233d"); sky.addColorStop(1, "#0a0e18"); }
+  else { sky.addColorStop(0, "#9dc4e8"); sky.addColorStop(.5, "#cfe2f2"); sky.addColorStop(1, "#8fa3ae"); }
+  g.fillStyle = sky; g.fillRect(0, 0, c.width, c.height);
+
+  // 窓の外。夜は流れる光、昼は遠景のビル
+  if (night) {
+    for (let i = 0; i < 90; i++) {
+      const y = 180 + Math.random() * 260, w = 20 + Math.random() * 150;
+      g.globalAlpha = 0.10 + Math.random() * 0.35;
+      g.fillStyle = ["#ffd9a0", "#fff3d6", "#a8c8ff"][i % 3];
+      g.fillRect(Math.random() * c.width - w / 2, y, w, 1.5 + Math.random() * 2.5);
+    }
+  } else {
+    g.globalAlpha = 0.5; g.fillStyle = "#7d8fa0";
+    for (let i = 0; i < 14; i++) {
+      const w = 24 + Math.random() * 46, h = 60 + Math.random() * 150;
+      g.fillRect(Math.random() * c.width, 300 - h, w, h);
+    }
+  }
+  g.globalAlpha = 1;
+
+  // 天井とAピラー
+  g.fillStyle = night ? "#0a0a0f" : "#2a2a30";
+  g.beginPath(); g.moveTo(0, 0); g.lineTo(c.width, 0); g.lineTo(c.width, 130); g.lineTo(0, 175); g.closePath(); g.fill();
+  g.beginPath(); g.moveTo(0, 120); g.lineTo(70, 150); g.lineTo(58, c.height); g.lineTo(0, c.height); g.closePath(); g.fill();
+
+  // ヘッドレストとシート（人物の背後）
+  g.fillStyle = night ? "#20212a" : "#3b3d47";
+  g.beginPath(); g.roundRect(300, 150, 165, 200, 40); g.fill();
+  g.beginPath(); g.roundRect(285, 360, 200, 300, 30); g.fill();
+
+  // ドア内張り（下部）
+  g.fillStyle = night ? "#101018" : "#26272e";
+  g.beginPath(); g.moveTo(0, 470); g.lineTo(210, 540); g.lineTo(210, c.height); g.lineTo(0, c.height); g.closePath(); g.fill();
+  return c.toDataURL("image/png");
+}
+
+const bgCache = {};
+function applyPreset(kind) {
+  const el = $("avatar");
+  const setBg = v => { el.style.backgroundImage = v; $("previewBox").style.backgroundImage = v; };
+  if (kind === "none") { setBg(""); return; }
+  if (kind === "file") {
+    idbGet("bg").then(b => {
+      if (b) setBg(`url(${URL.createObjectURL(new Blob([b]))})`);
+      else status("写真が未設定です。「写真を選ぶ」から指定してください。", "warn");
+    }).catch(() => {});
+    return;
+  }
+  bgCache[kind] = bgCache[kind] || drawInterior(kind === "night");
+  setBg(`url(${bgCache[kind]})`);
+}
+$("bgPreset").onchange = () => { lsSet("player-bg", $("bgPreset").value); applyPreset($("bgPreset").value); };
+$("bgFile").onchange = async e => {
+  const f = e.target.files?.[0];
+  if (!f) return;
+  await idbSet("bg", await f.arrayBuffer());
+  $("bgPreset").value = "file"; lsSet("player-bg", "file");
+  applyPreset("file");
+};
+$("duck").oninput = () => { $("duckVal").textContent = $("duck").value; };
+function primeAudio() {
+  // await をまたぐと利用者の操作とみなされなくなるため、必ず同期的に呼ぶ
+  if ($("engine").value === "webspeech") {
+    try {
+      const u = new SpeechSynthesisUtterance(" ");
+      u.volume = 0; speechSynthesis.speak(u);
+    } catch (e) {}
+  }
+  // 内蔵音声を選んでいても、取り込んだ音声を鳴らすことがあるので必ず用意する
+  try { audioCtx().resume(); } catch (e) {}
+}
+
+$("btnTest").onclick = async () => {
+  primeAudio();
+  $("btnTest").disabled = true;
+  status("音声を生成しています...");
+  const TEST_LINE = "この道、久しぶりに通るなあ。";
+  try {
+    // 聴き比べのたびに枠を消費しないよう、確認用の一言も保存したものを使い回す
+    const eng = engine();
+    const hit = eng.synth ? await cacheGet(TEST_LINE) : null;
+    if (hit) {
+      await eng.speak(TEST_LINE, $("voice").value, +$("rate").value, hit);
+    } else if (eng.synth) {
+      const buf = await eng.synth(TEST_LINE, $("voice").value, +$("rate").value);
+      await cachePut(TEST_LINE, buf);
+      await eng.speak(TEST_LINE, $("voice").value, +$("rate").value, buf);
+    } else {
+      await say(TEST_LINE, null);
+    }
+    status("再生しました。", "ok");
+  } catch (e) {
+    status("再生できませんでした: " + e.message, "err");
+  } finally {
+    $("btnTest").disabled = false;
+  }
+};
+
+const audioCache = new Map();
+let prefetching = false;
+
+function clearAudioCache() { audioCache.clear(); }
+
+// 生成した音声は端末に残す。作り直さなければ利用上限にも当たらない
+function voiceKey(text) {
+  return `${$("engine").value}|${$("ttsModel").value}|${$("voice").value}|${$("rate").value}|${$("style").value}|${text}`;
+}
+// 別の端末で作って取り込んだ音声。本文で引くので、エンジンや並び順が変わっても当たる
+async function textHash(text) {
+  const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(d).slice(0, 6)].map(b => b.toString(16).padStart(2, "0")).join("");
+}
+async function cacheGet(text) {
+  try {
+    // 取り込んだ音声を優先する。スマホに内蔵音声しかなくても、PCで作った声で鳴る
+    const im = await idbGet("i:" + await textHash(text));
+    if (im) return im;
+    return (await idbGet("a:" + voiceKey(text))) || null;
+  } catch (e) { return null; }
+}
+async function cachePut(text, clip) {
+  try { if (clip) await idbSet("a:" + voiceKey(text), clip); } catch (e) {}
+}
+
+// 台本ぶんの音声をまとめて用意する。再生中に生成しないので上限に当たらない
+async function prepareAll() {
+  const eng = engine();
+  const list = cues.slice();
+  cancelPrepare = false;
+  $("btnPrepare").disabled = true;
+  $("btnCancelPrepare").style.display = "";
+  let done = 0, reused = 0;
+  try {
+    for (const c of list) {
+      const hit = await cacheGet(c.text);
+      if (hit) { audioCache.set(c.id, hit); reused++; done++; continue; }
+      if (!eng.synth) {
+        status(`このエンジンは事前生成に対応していません（内蔵音声は即時再生です）。${done}/${list.length}件は用意できています。`, "warn");
+        return;
+      }
+      status(`音声を用意しています... ${done}/${list.length}（保存済み ${reused}件）`);
+      let ok = false;
+      for (let attempt = 0; attempt < 10 && !ok && !cancelPrepare; attempt++) {
+        try {
+          const buf = await eng.synth(c.text, $("voice").value, +$("rate").value);
+          audioCache.set(c.id, buf);
+          await cachePut(c.text, buf);
+          ok = true;
+        } catch (e) {
+          if (!e.retryable) { status(`音声の用意で失敗しました（${done}/${list.length}）: ${e.message}`, "err"); return; }
+          // 枠が空くまで待って、同じ件をやり直す。1件の失敗で全体を捨てない
+          await countdown(e.retryAfterMs || 60000, `利用上限のため待機中（${done}/${list.length}）`);
+        }
+      }
+      if (cancelPrepare) { status(`中断しました。${done}/${list.length}件まで用意できています。`, "warn"); return; }
+      if (!ok) { status(`音声の用意が続けられませんでした（${done}/${list.length}）。時間をおいて再実行してください。`, "err"); return; }
+      done++;
+    }
+    status(`音声を用意しました。${list.length}件（うち保存済みの再利用 ${reused}件）`, "ok");
+  } finally {
+    $("btnPrepare").disabled = false;
+    $("btnCancelPrepare").style.display = "none";
+  }
+}
+
+// 生成に数秒かかるため、再生位置より先のぶんを裏で作っておく
+async function prefetch(t) {
+  const eng = engine();
+  if (prefetching) return;
+  const next = cues.filter(c => !fired.has(c.id) && c.at >= t && c.at < t + 60 && !audioCache.has(c.id)).slice(0, 2);
+  if (!next.length) return;
+  prefetching = true;
+  try {
+    for (const c of next) {
+      if (audioCache.has(c.id)) continue;
+      const hit = await cacheGet(c.text);
+      if (hit) { audioCache.set(c.id, hit); continue; }
+      if (!eng.synth) continue;
+      try {
+        const clip = await eng.synth(c.text, $("voice").value, +$("rate").value);
+        audioCache.set(c.id, clip);
+        await cachePut(c.text, clip);
+      } catch (e) { audioCache.set(c.id, null); }   // 失敗しても再生時に作り直す
+    }
+  } finally { prefetching = false; }
+}
+
+async function say(text, cue) {
+  speaking = true;
+  try {
+    let pre = cue ? audioCache.get(cue.id) : null;
+    if (cue) audioCache.delete(cue.id);
+    if (!pre) pre = await cacheGet(text);
+    // 取り込んだ音声があれば、選んでいるエンジンに関係なくそれを鳴らす
+    if (pre) return await playClip(pre, +$("rate").value);
+    await engine().speak(text, $("voice").value, +$("rate").value);
+  } finally {
+    speaking = false;
+  }
+}
+
+/* ---------- データリポジトリ（GitHub） ---------- */
+// PCで作った音声をスマホで鳴らすための置き場。利用者自身のprivateリポジトリに置く
+const GH = "https://api.github.com";
+function ghHeaders() {
+  return {
+    "Authorization": `Bearer ${lsGet("github-pat")}`,
+    "Accept": "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+  };
+}
+// URLを貼られても owner/repo に直す
+function repoSlug(input) {
+  return String(input || "").trim()
+    .replace(/^https?:\/\/(www\.)?github\.com\//, "").replace(/^github\.com\//, "")
+    .replace(/\.git$/, "").match(/^[\w.-]+\/[\w.-]+/)?.[0] ?? "";
+}
+function repoReady() {
+  const r = lsGet("data-repo"), p = lsGet("github-pat");
+  if (!r || !p) throw new Error("リポジトリとトークンを設定してください（下の「初回の準備」を参照）。");
+  return r;
+}
+async function ghError(res) {
+  let m = "";
+  try { m = (await res.json())?.message || ""; } catch (e) {}
+  if (res.status === 401) return "トークンが正しくありません。発行し直して貼り直してください。";
+  if (res.status === 403) return "権限が足りません。トークンの Repository permissions に Contents: Read and write が要ります。";
+  if (res.status === 404) return "リポジトリが見つかりません。名前の綴りと、トークンがそのリポジトリを選んでいるかを確認してください。";
+  if (/too large/i.test(m)) return "ファイルが大きすぎてGitHubのAPIで送れません。";
+  if (res.status === 413) return "送るデータが大きすぎます。";
+  if (res.status === 409 || res.status === 422) return "リポジトリ側が新しくなっています。もう一度押すと最新に合わせて保存します。";
+  return `GitHub ${res.status}${m ? "：" + m : ""}`;
+}
+
+// shaは親ディレクトリの一覧から取る。本文が1MBを超えると GET /contents が403になるため
+async function ghList(dir) {
+  const res = await fetch(`${GH}/repos/${repoReady()}/contents/${dir}`, { headers: ghHeaders(), cache: "no-store" });
+  if (res.status === 404) return [];
+  if (!res.ok) throw new Error(await ghError(res));
+  const j = await res.json();
+  return Array.isArray(j) ? j : [];
+}
+async function ghGetRaw(path) {
+  const res = await fetch(`${GH}/repos/${repoReady()}/contents/${path}`, {
+    headers: { ...ghHeaders(), "Accept": "application/vnd.github.raw" }, cache: "no-store"
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(await ghError(res));
+  return new Uint8Array(await res.arrayBuffer());
+}
+async function ghPut(path, bytes, message, sha) {
+  const send = s => fetch(`${GH}/repos/${repoReady()}/contents/${path}`, {
+    method: "PUT",
+    headers: { ...ghHeaders(), "content-type": "application/json" },
+    body: JSON.stringify({ message, content: b64encode(bytes), ...(s ? { sha: s } : {}) })
+  });
+  let res = await send(sha);
+  if (res.status === 409 || res.status === 422) {
+    // sha違いは最新を取り直して1回だけやり直す（後勝ち）
+    const dir = path.replace(/\/[^/]*$/, "");
+    const cur = (await ghList(dir)).find(f => f.path === path);
+    res = await send(cur?.sha);
+  }
+  if (!res.ok) throw new Error(await ghError(res));
+  return (await res.json())?.content?.sha;
+}
+
+// 台本1本ぶんの置き場所。動画IDと区間で決まる
+function scriptKey(d) {
+  return `${d.videoId}_${Math.round(d.start || 0)}-${Math.round(d.covered ?? d.end ?? 0)}`;
+}
+
+const GUIDE = `# データリポジトリ
+
+ドライブ実況ワイプ（drive-wipe）が作った台本と音声の置き場です。
+
+## 構造
+
+- \`character/persona.md\` … キャラクター設定。台本生成のプロンプトにそのまま入ります
+- \`character/interests.md\` … 興味・関心の単語と、読ませたい記事のURL
+- \`character/reads/<記事>.md\` … 貼られたURLをアプリが読んで残した記録（URL・読んだ日・要約・感想）
+- \`avatar/model.vrm\` … アバターのVRM。\`avatar/settings.json\` … 画角・腕・ワイプなどの調整値
+- \`scripts/<動画ID>_<開始>-<終了>.json\` … 台本。発話の時刻・本文・場面が入っています
+- \`audio/<同じ名前>/index.json\` … その台本の音声一覧（作った声の設定つき）
+- \`audio/<同じ名前>/<12桁>.mp3|wav\` … 発話1件ぶんの音声。ファイル名は本文のハッシュです
+
+## AIに編集を頼むときのルール
+
+### キャラクター（character/）
+- \`persona.md\` \`interests.md\` は自由に書き換えて構いません。次の台本生成から反映されます
+- \`reads/*.md\` の **「## 感想」の中身が、そのまま雑談の材料**になります。書き換えて構いません。
+  ファイルごと消すと、次に台本を作るときにそのURLを読み直します
+- \`reads/*.md\` の「## 要約」は記録用で、台本生成には渡していません
+- 感想は「詳しい説明」ではなく、ひとりごとで漏らす程度の**主観**にしてください（何が良かった・何が引っかかった）
+
+### アバター（avatar/）
+- \`settings.json\` はアプリが書き出す調整値です。手で編集しないでください
+- \`model.vrm\` はバイナリです。**再配布が許可されたモデルだけ**を置いてください（VRMの埋め込みライセンスで確認できます）
+
+### 台本（scripts/）
+- 台本の \`items[].line\` は書き換えて構いません。読み上げの本文です
+- \`items[].t\` \`abs\` は時刻です。動かすと映像とずれます
+- 本文を書き換えたら、その発話の音声は作り直しになります（ファイル名が本文のハッシュのため）
+- \`audio/\` 以下は生成物です。手で編集しないでください
+`;
+
+// 初回だけ案内ファイルを置く。既にある場合は絶対に触らない
+async function ensureGuide() {
+  try {
+    const cur = await fetch(`${GH}/repos/${repoReady()}/contents/CLAUDE.md`, { headers: ghHeaders(), cache: "no-store" });
+    if (cur.status !== 404) return false;
+    await ghPut("CLAUDE.md", new TextEncoder().encode(GUIDE), "追加: データの案内ファイル");
+    return true;
+  } catch (e) { return false; }   // 案内ファイルの失敗で保存を止めない
+}
+
+async function repoPush() {
+  if (!script) { status("先に台本を読み込んでください。", "err"); return; }
+  $("btnRepoPush").disabled = true;
+  try {
+    const key = scriptKey(script);
+    const dir = `audio/${key}`;
+    status("リポジトリの状態を確認しています...");
+    const shas = {};
+    for (const f of await ghList(dir)) shas[f.path] = f.sha;
+    for (const f of await ghList("scripts")) shas[f.path] = f.sha;
+
+    const items = [];
+    let put = 0, skip = 0;
+    for (const c of cues) {
+      const clip = audioCache.get(c.id) || await cacheGet(c.text);
+      if (!clip || !clip.data) continue;
+      const h = await textHash(c.text);
+      const path = `${dir}/${h}.${clip.ext || "bin"}`;
+      items.push({ h, ext: clip.ext, enc: clip.enc, rate: clip.rate, text: c.text });
+      if (shas[path]) { skip++; continue; }   // 同じ本文の音声は作り直さない
+      status(`音声を保存しています... ${put + 1}件目（既存 ${skip}件）`);
+      await ghPut(path, clip.data, `追加: 音声 ${key}/${h}`);
+      put++;
+    }
+    if (!items.length) { status("保存できる音声がありません。先に「音声をまとめて用意」を実行してください。", "err"); return; }
+
+    const meta = {
+      engine: $("engine").value, voice: $("voice").value,
+      rate: $("rate").value, style: $("style").value,
+      title: script.meta?.title || script.videoId, items
+    };
+    await ghPut(`${dir}/index.json`, new TextEncoder().encode(JSON.stringify(meta, null, 2)),
+                `更新: 音声一覧 ${key}`, shas[`${dir}/index.json`]);
+    await ghPut(`scripts/${key}.json`, new TextEncoder().encode(JSON.stringify(script, null, 2)),
+                `更新: 台本 ${key}`, shas[`scripts/${key}.json`]);
+    const made = await ensureGuide();
+    status(`保存しました。音声 ${put}件（既存の再利用 ${skip}件）と台本を置きました。`
+         + (made ? " リポジトリに案内ファイル（CLAUDE.md）を作成しました。" : ""), "ok");
+  } catch (e) {
+    status("保存できませんでした: " + e.message, "err");
+  } finally {
+    $("btnRepoPush").disabled = false;
+  }
+}
+
+async function repoPull() {
+  if (!script) { status("先に台本を読み込んでください。", "err"); return; }
+  $("btnRepoPull").disabled = true;
+  try {
+    const key = scriptKey(script);
+    status("音声一覧を取得しています...");
+    const idx = await ghGetRaw(`audio/${key}/index.json`);
+    if (!idx) { status(`この台本の音声はまだ保存されていません（audio/${key}）。`, "err"); return; }
+    const meta = JSON.parse(new TextDecoder().decode(idx));
+    let got = 0, have = 0;
+    for (const it of (meta.items || [])) {
+      if (await idbGet("i:" + it.h)) { have++; continue; }
+      status(`音声を取り込んでいます... ${got + have + 1}/${meta.items.length}`);
+      const bytes = await ghGetRaw(`audio/${key}/${it.h}.${it.ext}`);
+      if (!bytes) continue;
+      await idbSet("i:" + it.h, makeClip(it.enc, bytes, it.rate, it.ext));
+      got++;
+    }
+    clearAudioCache();
+    status(`取り込みました。新規 ${got}件（取り込み済み ${have}件）。`
+         + `作ったときの声は ${meta.engine} / ${meta.voice} です。このまま再生できます。`, "ok");
+  } catch (e) {
+    status("取り込めませんでした: " + e.message, "err");
+  } finally {
+    $("btnRepoPull").disabled = false;
+  }
+}
+
+async function repoListScripts() {
+  $("btnRepoList").disabled = true;
+  try {
+    status("保存済みの台本を探しています...");
+    const list = (await ghList("scripts")).filter(f => f.name.endsWith(".json"));
+    if (!list.length) { status("まだ台本が保存されていません。", "warn"); return; }
+    const name = prompt(`読み込む台本の番号を入れてください。\n\n`
+      + list.map((f, i) => `${i + 1}. ${f.name.replace(/\.json$/, "")}`).join("\n"));
+    const i = parseInt(name, 10) - 1;
+    if (!(i >= 0 && i < list.length)) return;
+    const bytes = await ghGetRaw(list[i].path);
+    loadScript(JSON.parse(new TextDecoder().decode(bytes)));
+  } catch (e) {
+    status("読み込めませんでした: " + e.message, "err");
+  } finally {
+    $("btnRepoList").disabled = false;
+  }
+}
+
+$("btnRepoSave").onclick = () => {
+  const slug = repoSlug($("dataRepo").value);
+  if (!slug) { status("リポジトリは owner/repo の形式で入れてください。", "err"); return; }
+  $("dataRepo").value = slug;
+  lsSet("data-repo", slug);
+  if ($("ghPat").value.trim()) lsSet("github-pat", $("ghPat").value.trim());
+  status(lsGet("github-pat") ? "保存しました。" : "トークンも入れてください。", lsGet("github-pat") ? "ok" : "warn");
+};
+$("btnRepoPush").onclick = repoPush;
+$("btnRepoPull").onclick = repoPull;
+$("btnRepoList").onclick = repoListScripts;
+
+/* ---------- アバター（キャンバス） ---------- */
+// VRMに差し替えられるよう、描画はここだけに閉じてある
+const face = $("face"), fx = face.getContext("2d");
+let wheel = 0, wheelTarget = 0;     // ハンドル角（-1〜1）
+let gaze = 0, gazeTarget = 0;       // 0=前方 / 1=カメラ
+let blink = 0, nextBlink = 1500;
+let lastFrame = performance.now();
+
+function setAct(act, amount) {
+  const a = Math.min(1, Math.max(0, amount || 0.5));
+  if (act === "turn_left" || act === "curve_left") wheelTarget = -a;
+  else if (act === "turn_right" || act === "curve_right") wheelTarget = a;
+  else wheelTarget = 0;
+}
+
+function drawAvatar(now) {
+  const dt = Math.min(64, now - lastFrame); lastFrame = now;
+  const W = face.width, H = face.height;
+
+  wheel += (wheelTarget - wheel) * (1 - Math.pow(0.001, dt / 1000));
+  gaze  += (gazeTarget  - gaze)  * (1 - Math.pow(0.004, dt / 1000));
+  nextBlink -= dt;
+  if (nextBlink <= 0) { blink = 1; nextBlink = 1800 + Math.random() * 3200; }
+  blink = Math.max(0, blink - dt / 90);
+
+  const t = now / 1000;
+  const sway = Math.sin(t * 0.9) * 3 + Math.sin(t * 2.7) * 1.2;   // 路面の揺れ
+  const breathe = Math.sin(t * 1.4) * 2;
+  const mouth = speaking ? amplitude() : 0;
+
+  // VRM側（module script）から読むための状態。描画方式を差し替えても共通で使う
+  window.avatarState = { wheel, gaze, mouth, blink, sway, breathe, dt };
+
+  if (window.__vrmReady) { requestAnimationFrame(drawAvatar); return; }  // VRM表示中は簡易アバターを描かない
+  fx.clearRect(0, 0, W, H);
+
+  fx.save();
+  fx.translate(W / 2 + sway * 0.6 - wheel * 10, H * 0.02 + breathe);
+  fx.rotate(wheel * 0.05);
+
+  // 上体
+  fx.fillStyle = "#3a4a63";
+  fx.beginPath();
+  fx.moveTo(-W * 0.34, H * 0.98);
+  fx.quadraticCurveTo(-W * 0.30, H * 0.60, 0, H * 0.58);
+  fx.quadraticCurveTo(W * 0.30, H * 0.60, W * 0.34, H * 0.98);
+  fx.closePath(); fx.fill();
+
+  // 首
+  fx.fillStyle = "#f0cdb4";
+  fx.fillRect(-W * 0.07, H * 0.46, W * 0.14, H * 0.16);
+
+  // 髪（後ろ）
+  fx.fillStyle = "#4a3b34";
+  fx.beginPath(); fx.ellipse(0, H * 0.30, W * 0.25, H * 0.25, 0, 0, Math.PI * 2); fx.fill();
+
+  // 顔
+  fx.fillStyle = "#f7d9c4";
+  fx.beginPath(); fx.ellipse(0, H * 0.31, W * 0.20, H * 0.22, 0, 0, Math.PI * 2); fx.fill();
+
+  // 前髪
+  fx.fillStyle = "#4a3b34";
+  fx.beginPath();
+  fx.ellipse(0, H * 0.17, W * 0.21, H * 0.10, 0, Math.PI, Math.PI * 2);
+  fx.fill();
+
+  // 目（gaze=0で前方＝やや下向き、1でカメラ正面）
+  const ex = (1 - gaze) * -W * 0.018;
+  const ey = H * 0.31 + (1 - gaze) * H * 0.012;
+  for (const sx of [-1, 1]) {
+    fx.fillStyle = "#fff";
+    fx.beginPath(); fx.ellipse(sx * W * 0.085, ey, W * 0.045, H * 0.030 * (1 - blink * 0.92), 0, 0, Math.PI * 2); fx.fill();
+    fx.fillStyle = "#2b2b33";
+    fx.beginPath(); fx.ellipse(sx * W * 0.085 + ex, ey, W * 0.022, H * 0.020 * (1 - blink * 0.92), 0, 0, Math.PI * 2); fx.fill();
+  }
+
+  // 口（喋っている間だけ開く）
+  fx.fillStyle = "#8d4a4a";
+  const mh = H * (0.008 + mouth * 0.05);
+  fx.beginPath(); fx.ellipse(0, H * 0.42, W * (0.035 + mouth * 0.02), mh, 0, 0, Math.PI * 2); fx.fill();
+
+  fx.restore();
+
+  // ハンドルと手（上体とは別に、切り角そのままで描く）
+  fx.save();
+  fx.translate(W / 2, H * 1.06);
+  fx.rotate(wheel * 0.9);
+  fx.strokeStyle = "#23232b"; fx.lineWidth = W * 0.055;
+  fx.beginPath(); fx.arc(0, 0, W * 0.34, Math.PI * 1.08, Math.PI * 1.92); fx.stroke();
+  fx.fillStyle = "#f0cdb4";
+  for (const ang of [Math.PI * 1.22, Math.PI * 1.78]) {
+    fx.beginPath();
+    fx.ellipse(Math.cos(ang) * W * 0.34, Math.sin(ang) * W * 0.34, W * 0.052, W * 0.042, ang, 0, Math.PI * 2);
+    fx.fill();
+  }
+  fx.restore();
+
+  window.copyToPreview?.(face);
+  requestAnimationFrame(drawAvatar);
+}
+requestAnimationFrame(drawAvatar);
+
+/* ---------- 同期ループ ---------- */
+let fired = new Set();
+let queue = [];
+let lastT = -1;
+let draining = false;
+
+function tick() {
+  if (!started || !player || !player.getCurrentTime) return;
+  const t = player.getCurrentTime();
+
+  // シーク検出。巻き戻したら読み直し、飛ばしたら読まずに消化済みにする
+  if (lastT < 0) {
+    // 最初の1回。開始位置より前の発話をまとめて読み上げてしまわないようにする
+    cues.filter(c => c.at <= t).forEach(c => fired.add(c.id));
+  } else if (Math.abs(t - lastT) > 2) {
+    if (t < lastT) fired = new Set(cues.filter(c => c.at < t).map(c => c.id));
+    else cues.filter(c => c.at <= t).forEach(c => fired.add(c.id));
+    queue = [];
+  }
+  lastT = t;
+
+  for (const c of cues) {
+    if (c.at > t) break;
+    if (fired.has(c.id)) continue;
+    fired.add(c.id);
+    queue.push(c);
+  }
+  drain();
+  prefetch(t);
+  const cur = cues.filter(c => c.at <= t).pop();
+  if (cur) highlightCue(cur.id);
+  requestAnimationFrame(tick);
+}
+
+async function drain() {
+  if (draining || !queue.length) return;
+  draining = true;
+  try {
+    while (queue.length) {
+      // 溜まりすぎたら古いものは捨てる（映像から離れた発話は不自然なため）
+      if (queue.length > 3) queue = queue.slice(-2);
+      const c = queue.shift();
+      // 音声が用意できていなければここで作る。字幕は鳴り始めに合わせて出す
+      const eng = engine();
+      if (!audioCache.has(c.id)) {
+        const hit = await cacheGet(c.text);
+        if (hit) audioCache.set(c.id, hit);
+        else if (eng.synth) {
+          try { audioCache.set(c.id, await eng.synth(c.text, $("voice").value, +$("rate").value)); }
+          catch (e) { audioCache.set(c.id, null); }
+        }
+      }
+      setAct(c.act, c.amount);
+      gazeTarget = c.kind === "chat" ? 1 : 0.15;   // 雑談は視聴者を見る
+      if ($("showCaption").checked) $("caption").textContent = c.text;
+      const vol = player?.getVolume ? player.getVolume() : 100;
+      try { player.setVolume(+$("duck").value); } catch (e) {}
+      try { await say(c.text, c); } catch (e) { status("音声エラー: " + e.message, "err"); }
+      try { player.setVolume(vol); } catch (e) {}
+      $("caption").textContent = "";
+      gazeTarget = 0;
+    }
+  } finally {
+    draining = false;
+  }
+}
+
+/* ---------- 起動 ---------- */
+$("btnStart").onclick = async () => {
+  if (!script) return;
+  cues = buildCues(script, $("useComments").checked);
+  fired = new Set(); queue = []; lastT = -1;
+  // iOSは利用者の操作を起点にしないと音が出せないので、ここで一度鳴らして解錠する
+  primeAudio();
+  started = true;
+  try { player.seekTo(script.start || 0, true); player.playVideo(); } catch (e) {}
+  status("再生中。", "ok");
+  tick();
+};
+
+$("btnPrepare").onclick = () => { primeAudio(); prepareAll(); };
+$("btnCancelPrepare").onclick = () => { cancelPrepare = true; };
+// ジェネレーター側から台本を受け取り、読み込んで再生まで進める
+window.__onScriptReady = data => {
+  loadScript(data);
+  $("btnStart").click();
+};
+
+// 全画面ではタイムラインと操作を隠しているので、必要なときだけ出す
+$("fsMenu").onclick = () => document.body.classList.toggle("menu-open");
+
+$("btnFull").onclick = () => {
+  $("stage").classList.add("full");
+  document.body.classList.add("full-mode");
+  if ($("stage").requestFullscreen) $("stage").requestFullscreen().catch(() => {});
+};
+$("exitFull").onclick = () => {
+  $("stage").classList.remove("full");
+  document.body.classList.remove("full-mode", "menu-open");
+  if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+};
+document.addEventListener("fullscreenchange", () => {
+  if (!document.fullscreenElement) {
+    $("stage").classList.remove("full");
+    document.body.classList.remove("full-mode");
+  }
+});
+$("showAvatar").onchange = () => $("avatar").classList.toggle("hidden", !$("showAvatar").checked);
+$("showCaption").onchange = () => { if (!$("showCaption").checked) $("caption").textContent = ""; };
+
+/* ---------- VRMファイルの保管（大きいのでIndexedDB） ---------- */
+function idbOpen() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open("drive-wipe", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("files");
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function idbSet(k, v) {
+  const db = await idbOpen();
+  return new Promise((res, rej) => {
+    const t = db.transaction("files", "readwrite");
+    t.objectStore("files").put(v, k);
+    t.oncomplete = () => res();
+    t.onerror = () => rej(t.error);
+  });
+}
+async function idbGet(k) {
+  const db = await idbOpen();
+  return new Promise((res, rej) => {
+    const t = db.transaction("files", "readonly");
+    const q = t.objectStore("files").get(k);
+    q.onsuccess = () => res(q.result);
+    q.onerror = () => rej(q.error);
+  });
+}
+
+/* ---------- アバターと調整値のリポジトリ保存 ---------- */
+// PCで詰めた画角・腕・ワイプの調整を、別の端末でやり直さずに済ませるための置き場
+const AVATAR_MODEL = "avatar/model.vrm";
+const AVATAR_SETTINGS = "avatar/settings.json";
+const AVATAR_MAX_MB = 40;   // contents API は50MB前後で弾かれるため手前で止める
+
+// player- で始まる設定を全部集める。項目が増えても拾い漏らさない
+function playerSettings() {
+  const o = {};
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(LS + "player-")) o[k.slice(LS.length)] = localStorage.getItem(k);
+    }
+  } catch (e) {}
+  return o;
+}
+
+async function avatarPush() {
+  const shas = {};
+  for (const f of await ghList("avatar")) shas[f.path] = f.sha;
+
+  const settings = playerSettings();
+  await ghPut(AVATAR_SETTINGS, new TextEncoder().encode(JSON.stringify(settings, null, 2)),
+              "更新: アバターの調整値", shas[AVATAR_SETTINGS]);
+
+  const vrm = await idbGet("vrm");
+  if (!vrm) { status("調整値だけ保存しました（VRMがまだ読み込まれていません）。", "ok"); return; }
+  const mb = vrm.byteLength / 1024 / 1024;
+  if (mb > AVATAR_MAX_MB) {
+    status(`調整値は保存しました。VRMは${mb.toFixed(0)}MBあり、GitHubのAPIで送れる大きさ（${AVATAR_MAX_MB}MB）を超えています。`, "err");
+    return;
+  }
+  status(`VRMを送っています（${mb.toFixed(1)}MB）…`);
+  await ghPut(AVATAR_MODEL, new Uint8Array(vrm), "更新: アバターのVRM", shas[AVATAR_MODEL]);
+  status(`アバターと調整値を保存しました（${mb.toFixed(1)}MB）。`, "ok");
+}
+
+async function avatarPull() {
+  const raw = await ghGetRaw(AVATAR_SETTINGS);
+  let n = 0;
+  if (raw) {
+    const settings = JSON.parse(new TextDecoder().decode(raw));
+    for (const [k, v] of Object.entries(settings)) { lsSet(k, v); n++; }
+  }
+  status("VRMを取り込んでいます…");
+  const vrm = await ghGetRaw(AVATAR_MODEL);
+  if (vrm) await idbSet("vrm", vrm.buffer);
+  if (!raw && !vrm) { status("リポジトリに avatar/ がまだありません。先に「アバターと調整値を保存」を実行してください。", "err"); return; }
+  // 調整値の反映は init() が全部やっているので、読み直すのが確実
+  status(`取り込みました（調整値${n}件${vrm ? "・VRM" : ""}）。画面を読み込み直します…`, "ok");
+  setTimeout(() => location.reload(), 800);
+}
+
+$("btnAvatarPush").onclick = async () => {
+  $("btnAvatarPush").disabled = true;
+  status("保存しています…");
+  try { await avatarPush(); } catch (e) { status(e.message, "err"); }
+  finally { $("btnAvatarPush").disabled = false; }
+};
+$("btnAvatarPull").onclick = async () => {
+  $("btnAvatarPull").disabled = true;
+  status("取り込んでいます…");
+  try { await avatarPull(); } catch (e) { status(e.message, "err"); }
+  finally { $("btnAvatarPull").disabled = false; }
+};
+
+$("vrmFile").onchange = async e => {
+  const f = e.target.files?.[0];
+  if (!f) return;
+  status("VRMを読み込んでいます...");
+  try {
+    const buf = await f.arrayBuffer();
+    window.__vrmFile = f.name + ":" + buf.byteLength;   // 別のモデルかどうかの判定に使う
+    await idbSet("vrm", buf);
+    await window.loadVRM?.(buf);
+  } catch (err) {
+    status("VRMを読み込めませんでした: " + err.message, "err");
+  }
+};
+
+(function init() {
+  const e = lsGet("player-engine");
+  if (e) $("engine").value = e;
+  const tm = lsGet("tts-model");
+  if (tm && tm !== $("ttsModel").value) {
+    $("ttsModel").insertAdjacentHTML("afterbegin", `<option value="${tm}">${tm}</option>`);
+    $("ttsModel").value = tm;
+  }
+  $("gttsKey").value = lsGet("gtts-api-key");
+  $("dataRepo").value = lsGet("data-repo");
+  $("ghPat").value = lsGet("github-pat");
+  syncEngineRows();
+  $("rateVal").textContent = (+$("rate").value).toFixed(2);
+  if (lsGet("player-style")) $("style").value = lsGet("player-style");
+  if (lsGet("player-framing")) $("framing").value = lsGet("player-framing");
+  for (const id of ["camDist", "camY", "camAim", "camX", "armHeight", "armSpread", "gripStrength", "wheelSize", "wheelTilt", "wheelY", "wheelZ", "idle"]) {
+    if (lsGet("player-" + id)) $(id).value = lsGet("player-" + id);
+    $(id + "Val").textContent = (+$(id).value).toFixed(2);
+  }
+  if (lsGet("player-camAngle")) $("camAngle").value = lsGet("player-camAngle");
+  $("camAngleVal").textContent = $("camAngle").value;
+  $("wipeShape").value = lsGet("player-wipeShape", "portrait");
+  $("wipeSize").value = lsGet("player-wipeSize", "22");
+  $("wipeSizeVal").textContent = $("wipeSize").value;
+  applyWipe();
+  applyWipePos();
+  setupWipeDrag();
+  $("moveWipe").onchange = () => $("avatar").classList.toggle("movable", $("moveWipe").checked);
+  $("btnWipeReset").onclick = () => {
+    lsSet("player-wipeLeft", ""); lsSet("player-wipeTop", "");
+    $("wipeSize").value = "22"; $("wipeSizeVal").textContent = "22";
+    applyWipe(); applyWipePos();
+    status("ワイプの位置と大きさを戻しました。", "ok");
+  };
+  $("bgPreset").value = lsGet("player-bg", "night");
+  applyPreset($("bgPreset").value);
+  $("duckVal").textContent = $("duck").value;
+  refreshVoices();
+  restoreScript();
+})();
+</script>
+
+<script type="module">
+// VRM表示。読み込みに失敗してもキャンバス描画のままにする（ページ全体を落とさない）
+const $ = id => document.getElementById(id);
+const setStatus = (m, c) => { const el = $("status"); el.className = c || ""; el.textContent = m; };
+
+let THREE, VRMLoaderPlugin, VRMUtils, GLTFLoader;
+try {
+  THREE = await import("three");
+  ({ GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js"));
+  ({ VRMLoaderPlugin, VRMUtils } = await import("@pixiv/three-vrm"));
+} catch (e) {
+  setStatus("VRMの表示機能を読み込めませんでした（簡易アバターのまま動きます）: " + e.message, "warn");
+}
+
+if (THREE && VRMLoaderPlugin) {
+  const canvas = $("vrm");
+  const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+  renderer.setClearAlpha(0);
+  const scene = new THREE.Scene();
+  const FOV = 34;
+  const camera = new THREE.PerspectiveCamera(FOV, 3 / 4, 0.05, 20);
+  scene.add(new THREE.AmbientLight(0xffffff, 1.6));
+  const key = new THREE.DirectionalLight(0xffffff, 1.4);
+  key.position.set(0.6, 1.4, 1.2);
+  scene.add(key);
+
+  // ハンドル。腕を映すときだけ出す
+  const wheelMesh = new THREE.Mesh(
+    new THREE.TorusGeometry(0.17, 0.017, 10, 40),
+    new THREE.MeshStandardMaterial({ color: 0x1e1e24, roughness: 0.7 })
+  );
+  wheelMesh.visible = false;
+  scene.add(wheelMesh);   // VRM読み込み時にモデルの子へ付け替える
+
+  let vrm = null, lookTarget = null;
+  // モデルの骨格から実測した基準の高さ（体格差を吸収するため）
+  let headY = 1.35, topY = 1.63, shoulderY = 1.10, hipsY = 0.70;
+
+  // 前がどちらかはモデルによって違う。つま先の向きから割り出す
+  let fwdSign = 1;
+  const _a = new THREE.Vector3(), _b = new THREE.Vector3();
+  function deriveForward() {
+    const h = vrm.humanoid;
+    const foot = h?.getNormalizedBoneNode("leftFoot"), toes = h?.getNormalizedBoneNode("leftToes");
+    if (foot && toes) {
+      foot.getWorldPosition(_a); toes.getWorldPosition(_b);
+      const dz = _b.z - _a.z;
+      if (Math.abs(dz) > 1e-4) { fwdSign = Math.sign(dz); return; }
+    }
+    fwdSign = 1;   // つま先がなければ規格どおり +Z を前とする
+  }
+
+  // 静止姿勢からの向きの差を回転として与える。軸の正負を推測しなくて済む
+  const _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion();
+  const _rest = new THREE.Vector3(), _want = new THREE.Vector3();
+  function pointBone(bone, childBone, wantDir) {
+    if (!bone || !childBone) return;
+    bone.getWorldPosition(_a); childBone.getWorldPosition(_b);
+    _rest.subVectors(_b, _a);
+    if (_rest.lengthSq() < 1e-8) return;
+    _rest.normalize();
+    _want.copy(wantDir).normalize();
+    _qa.setFromUnitVectors(_rest, _want);
+    bone.parent.getWorldQuaternion(_qb);
+    bone.quaternion.premultiply(_qb.clone().invert().multiply(_qa).multiply(_qb));
+    bone.updateMatrixWorld(true);
+  }
+
+  // 先端（子でなくてもよい）が目標点の方を向くように回す。
+  // 骨の長さは変わらないので、先端から目標までの距離が骨の長さと等しければぴたりと届く
+  const _tipA = new THREE.Vector3(), _tipB = new THREE.Vector3();
+  function pointBoneTo(bone, tip, target) {
+    if (!bone || !tip) return;
+    bone.getWorldPosition(_tipA); tip.getWorldPosition(_tipB);
+    _rest.subVectors(_tipB, _tipA);
+    _want.subVectors(target, _tipA);
+    if (_rest.lengthSq() < 1e-10 || _want.lengthSq() < 1e-10) return;
+    _rest.normalize(); _want.normalize();
+    _qa.setFromUnitVectors(_rest, _want);
+    bone.parent.getWorldQuaternion(_qb);
+    bone.quaternion.premultiply(_qb.clone().invert().multiply(_qa).multiply(_qb));
+    bone.updateMatrixWorld(true);
+  }
+
+  // 肩・肘の2本で手を目標点へ届かせる。肘の向きは pole で決める
+  const _S = new THREE.Vector3(), _dir = new THREE.Vector3(), _pole = new THREE.Vector3();
+  const _perp = new THREE.Vector3(), _E = new THREE.Vector3();
+  const _p1 = new THREE.Vector3(), _p2 = new THREE.Vector3(), _p3 = new THREE.Vector3();
+  function armIK(side, sx, target, elbowOut) {
+    const h = vrm.humanoid;
+    const ua = h.getNormalizedBoneNode(side + "UpperArm");
+    const la = h.getNormalizedBoneNode(side + "LowerArm");
+    const hd = h.getNormalizedBoneNode(side + "Hand");
+    if (!ua || !la || !hd) return;
+    // 手のひら（中指の付け根）を輪に乗せる。手首を乗せると輪が手前にずれる
+    const tip = h.getNormalizedBoneNode(side + "MiddleProximal")
+             || h.getNormalizedBoneNode(side + "IndexProximal") || hd;
+    ua.quaternion.identity(); la.quaternion.identity(); hd.quaternion.identity();
+    ua.updateMatrixWorld(true);
+    ua.getWorldPosition(_p1); la.getWorldPosition(_p2); tip.getWorldPosition(_p3);
+    const lenU = _p1.distanceTo(_p2), lenL = _p2.distanceTo(_p3);
+    if (lenU < 1e-4 || lenL < 1e-4) return;
+
+    _S.copy(_p1);
+    _dir.subVectors(target, _S);
+    let d = _dir.length();
+    if (d < 1e-5) return;
+    _dir.divideScalar(d);
+    // 届かない・近すぎる位置でも破綻しないよう、可動範囲に丸める
+    d = Math.min(Math.max(d, Math.abs(lenU - lenL) + 1e-3), (lenU + lenL) * 0.999);
+    const along = (lenU * lenU + d * d - lenL * lenL) / (2 * d);
+    const rad = Math.sqrt(Math.max(0, lenU * lenU - along * along));
+    // 肘は外・下・やや後ろへ。人の運転姿勢がそうなっている
+    _pole.set(sx * (0.25 + elbowOut * 0.75), -1, -fwdSign * 0.35).normalize();
+    _perp.copy(_pole).addScaledVector(_dir, -_pole.dot(_dir));
+    if (_perp.lengthSq() < 1e-8) _perp.set(0, -1, 0).addScaledVector(_dir, _dir.y);
+    _perp.normalize();
+    _E.copy(_S).addScaledVector(_dir, along).addScaledVector(_perp, rad);
+    pointBoneTo(ua, la, _E);
+    pointBoneTo(la, tip, target);
+  }
+
+  // 決め打ちの数値だと体格の違うモデルで破綻するので、骨の位置から測る
+  // 静止姿勢での腕の向きと長さ。回転軸の向き方はモデル任せにせず実測する
+  const arm = { left: null, right: null };
+  let armLen = 0.55;   // 肩から手先まで。ハンドルの大きさ・置き場所の基準にする
+  function measureArms() {
+    const h = vrm.humanoid;
+    for (const side of ["left", "right"]) {
+      const u = h?.getNormalizedBoneNode(side + "UpperArm");
+      const l = h?.getNormalizedBoneNode(side + "LowerArm");
+      const w = h?.getNormalizedBoneNode(side + "Hand");
+      if (!u || !l || !w) { arm[side] = null; continue; }
+      const pu = u.getWorldPosition(new THREE.Vector3());
+      const pl = l.getWorldPosition(new THREE.Vector3());
+      const pw = w.getWorldPosition(new THREE.Vector3());
+      arm[side] = {
+        upper: u, lower: l,
+        lenU: Math.max(0.05, pu.distanceTo(pl)),
+        lenL: Math.max(0.05, pl.distanceTo(pw)),
+        restU: pl.clone().sub(pu).normalize(),   // 肩→肘の静止方向
+        restL: pw.clone().sub(pl).normalize()    // 肘→手首の静止方向
+      };
+    }
+    const a = arm.left || arm.right;
+    if (a) armLen = a.lenU + a.lenL * 1.15;   // 手のひらのぶんを足す
+  }
+
+  function measure() {
+    const h = vrm.humanoid;
+    // 腕の目標位置と同じ座標系で測る必要があるため、正規化ボーンに統一する
+    const wp = name => {
+      const n = h?.getNormalizedBoneNode(name) || h?.getRawBoneNode(name);
+      return n ? n.getWorldPosition(new THREE.Vector3()).y : null;
+    };
+    headY = wp("head") ?? 1.35;
+    const lu = wp("leftUpperArm"), ru = wp("rightUpperArm");
+    shoulderY = (lu != null && ru != null) ? (lu + ru) / 2 : headY - 0.25;
+    hipsY = wp("hips") ?? headY - 0.65;
+
+    // 頭頂は見た目の上端から取る。ただし長い髪や帽子で極端にならないよう頭上0.3mで打ち切る
+    const box = new THREE.Box3().setFromObject(vrm.scene);
+    topY = Math.min(box.max.y, headY + 0.30) + 0.03;
+
+    deriveForward();
+    measureArms();
+    setStatus(`VRMを表示しています（頭 ${headY.toFixed(2)}m / 肩 ${shoulderY.toFixed(2)}m / 腰 ${hipsY.toFixed(2)}m）`, "ok");
+  }
+
+  // モデルによっては背中を向けるので、利用者が反転できるようにしておく
+  // 画角。写したい範囲を骨格から決め、そこから距離を逆算する
+  function frame() {
+    const wheelShot = $("framing").value === "wheel";
+    const zoom = +$("camDist").value;                   // 寄り（1.0で標準）
+    const pan = +$("camY").value;                       // 上下位置（メートル）
+    const ang = +$("camAngle").value * Math.PI / 180;   // 助手席側から見た角度
+    const bottom = wheelShot ? hipsY + 0.05 : shoulderY - 0.10;
+    const cover = Math.max(0.15, (topY - bottom)) * zoom;
+    const dist = cover / (2 * Math.tan(FOV * Math.PI / 360));
+    const center = (topY + bottom) / 2 + pan;
+    camera.position.set(Math.sin(ang) * dist, center, Math.cos(ang) * dist);
+    camera.lookAt(0, center, 0);
+    frameCenterY = center;
+    wheelMesh.visible = wheelShot;
+  }
+  let frameCenterY = 1.3;
+  for (const id of ["framing", "camDist", "camY", "camAngle"])
+    $(id).addEventListener("input", () => { if (vrm) frame(); });
+  $("framing").addEventListener("change", () => { if (vrm) frame(); });
+
+  // 斜めから撮ると、体の中心を狙うだけではハンドルが画面の端に寄る。
+  // 体とハンドルの中間を狙い、両方が収まるようにする
+  function aimCamera() {
+    if (wheelMesh.visible && wheelCenter.lengthSq() > 0) {
+      const mix = +$("camAim").value;
+      lookAtV.set(wheelCenter.x * mix + (+$("camX").value), frameCenterY, wheelCenter.z * mix);
+      camera.lookAt(lookAtV);
+    }
+  }
+
+  /* ---------- 読み込んだモデルに合わせて自動で画角を決める ---------- */
+  // 体格ごとに手で合わせ直すのは無理があるので、実際に画面へ投影して収まる値を探す
+  const FIT_DEFAULTS = [["camDist", 1], ["camY", 0], ["camX", 0], ["camAim", 0.5],
+                        ["armHeight", 0.5], ["armSpread", 0.5], ["gripStrength", 0.8],
+                        ["wheelSize", 1], ["wheelTilt", 0.4], ["wheelY", 0], ["wheelZ", 0]];
+  const _pj = new THREE.Vector3();
+
+  // スライダーは step 刻みに丸められるので、実際に入った値を返す
+  function setSlider(id, v) {
+    const el = $(id);
+    el.value = String(Math.min(+el.max, Math.max(+el.min, v)));
+    el.dispatchEvent(new Event("input"));
+    return +el.value;
+  }
+
+  // 画面に必ず入れたい点。頭の上・腰・ハンドルの輪・手
+  function fitPoints() {
+    const h = vrm.humanoid;
+    const pts = [new THREE.Vector3(0, topY, 0)];
+    for (const n of ["head", "leftUpperArm", "rightUpperArm", "hips"]) {
+      const b = h?.getNormalizedBoneNode(n);
+      if (b) pts.push(b.getWorldPosition(new THREE.Vector3()));
+    }
+    if (wheelMesh.visible) {
+      for (let d = 0; d < 360; d += 45) pts.push(rimPoint(d, new THREE.Vector3()));
+      for (const s of ["left", "right"]) {
+        const b = h?.getNormalizedBoneNode(s + "Hand");
+        if (b) pts.push(b.getWorldPosition(new THREE.Vector3()));
+      }
+    }
+    return pts;
+  }
+
+  // 画面内での位置と広がり（-1〜1。1を超えるとはみ出している）
+  function extent(pts) {
+    camera.updateMatrixWorld(true);
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (const p of pts) {
+      _pj.copy(p).project(camera);
+      x0 = Math.min(x0, _pj.x); x1 = Math.max(x1, _pj.x);
+      y0 = Math.min(y0, _pj.y); y1 = Math.max(y1, _pj.y);
+    }
+    return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, r: Math.max((x1 - x0) / 2, (y1 - y0) / 2) };
+  }
+
+  // モデルごとの調整値。別のモデルに変えても、そのモデルで詰めた値に戻れるようにする。
+  // 初めてのモデルは、最後に触った調整値を初期値にする（既定値から詰め直さずに済む）
+  function loadPresets() { try { return JSON.parse(lsGet("player-presets", "{}")); } catch (e) { return {}; } }
+  function savePreset() {
+    const key = window.__vrmFile;
+    if (!key || window.__fitting) return;
+    const all = loadPresets();
+    const values = {};
+    for (const [id] of FIT_DEFAULTS) values[id] = $(id).value;
+    all[key] = { updatedAt: Date.now(), values };
+    lsSet("player-presets", JSON.stringify(all));
+  }
+  // 保存済みのうち最後に触ったもの。無ければ既定値
+  function baseValues(key) {
+    const all = loadPresets();
+    if (all[key]?.values) return all[key].values;
+    const latest = Object.values(all).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
+    return latest?.values || Object.fromEntries(FIT_DEFAULTS);
+  }
+
+  // 測り直しの間はスライダーが何度も動くので、保存は終わってから1回だけにする
+  function withFit(fn) {
+    window.__fitting = true;
+    try { fn(); } finally { window.__fitting = false; savePreset(); }
+  }
+
+  function autoFit(base) {
+    if (!vrm || !vrm.humanoid) return;
+    const v0 = base || Object.fromEntries(FIT_DEFAULTS);
+    for (const [id, dflt] of FIT_DEFAULTS) setSlider(id, v0[id] !== undefined ? +v0[id] : dflt);
+    frame();
+    if (wheelMesh.visible && !poseDriving(0)) return;
+    const pts = fitPoints();
+    const look = () => { frame(); aimCamera(); };
+    const TARGET = 0.90;   // 画面の9割まで使い、少し余白を残す
+    // ずらした量と画面の動きから傾きを測って寄せる。式で解くより体格差に強い
+    for (let pass = 0; pass < 8; pass++) {
+      look();
+      const e = extent(pts);
+      if (e.r > 1e-4) setSlider("camDist", +$("camDist").value * (e.r / TARGET));
+
+      look();
+      const by = extent(pts).cy, y0 = +$("camY").value;
+      const dy = setSlider("camY", y0 + 0.06) - y0;
+      look();
+      const slopeY = dy !== 0 ? (extent(pts).cy - by) / dy : 0;
+      setSlider("camY", Math.abs(slopeY) > 1e-3 ? y0 - by / slopeY : y0);
+
+      if (wheelMesh.visible) {
+        look();
+        const bx = extent(pts).cx, x0 = +$("camX").value;
+        const dx = setSlider("camX", x0 + 0.06) - x0;
+        look();
+        const slopeX = dx !== 0 ? (extent(pts).cx - bx) / dx : 0;
+        setSlider("camX", Math.abs(slopeX) > 1e-3 ? x0 - bx / slopeX : x0);
+      }
+    }
+    look();
+    const fin = extent(pts);
+    setStatus(fin.r > 1.0
+      ? "画角を自動で合わせました（一部が画面からはみ出しています。横からの角度を小さくすると収まります）"
+      : "画角を自動で合わせました。", fin.r > 1.0 ? "warn" : "ok");
+  }
+  $("btnAutoFit").onclick = () => withFit(() => autoFit());
+  window.savePreset = savePreset;
+
+  // モデルによっては背中を向けるので、利用者が反転できるようにしておく
+  function applyFlip() {
+    if (vrm) vrm.scene.rotation.y += $("flipVRM").checked ? Math.PI : 0;
+  }
+  $("flipVRM").onchange = () => {
+    if (!vrm) return;
+    vrm.scene.rotation.y += Math.PI;
+    vrm.scene.updateMatrixWorld(true);
+    deriveForward();   // 前後が入れ替わるので、ハンドルの置き場所も測り直す
+  };
+
+  function resize() {
+    const r = canvas.getBoundingClientRect();
+    const w = Math.max(1, Math.round(r.width)), h = Math.max(1, Math.round(r.height));
+    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+  window.addEventListener("resize", resize);
+
+  window.loadVRM = async function (buf) {
+    const loader = new GLTFLoader();
+    loader.register(p => new VRMLoaderPlugin(p));
+    const blob = new Blob([buf], { type: "application/octet-stream" });
+    const url = URL.createObjectURL(blob);
+    try {
+      const gltf = await loader.loadAsync(url);
+      const v = gltf.userData.vrm;
+      if (!v) throw new Error("VRMとして読めませんでした");
+      if (vrm) { scene.remove(vrm.scene); VRMUtils.deepDispose?.(vrm.scene); }
+      VRMUtils.removeUnnecessaryVertices(gltf.scene);
+      VRMUtils.combineSkeletons(gltf.scene);
+      VRMUtils.rotateVRM0(v);                // VRM0.x なら正面を合わせる
+      scene.add(v.scene);
+      // ハンドルは世界座標に置く。VRM0.x はモデル内の前後が逆なので、
+      // モデルの子にすると前に置いたつもりが背後に回る
+      scene.add(wheelMesh);
+      vrm = v;
+      applyFlip();
+      v.scene.updateMatrixWorld(true);
+
+      measure();
+      frame();
+
+      if (!lookTarget) { lookTarget = new THREE.Object3D(); scene.add(lookTarget); }
+      if (vrm.lookAt) vrm.lookAt.target = lookTarget;
+
+      $("face").classList.add("off");
+      canvas.classList.remove("off");
+      window.__vrmReady = true;
+      resize();   // 画角を測る前に、ワイプの縦横比を確定させておく
+
+      // 前のモデルに合わせた値が残っていると姿勢が崩れる。
+      // 別のモデルを選んだときだけ、体格に合わせて測り直す
+      if (window.__vrmFile !== window.__vrmFileLast) {
+        window.__vrmFileLast = window.__vrmFile;
+        const all = loadPresets();
+        if (all[window.__vrmFile]?.values) {
+          // このモデルで詰めた値があるなら、測り直さずそれに戻す
+          withFit(() => {
+            for (const [id, dflt] of FIT_DEFAULTS) {
+              const v = all[window.__vrmFile].values[id];
+              setSlider(id, v !== undefined ? +v : dflt);
+            }
+            frame(); aimCamera();
+          });
+          setStatus("このモデルの前回の調整値に戻しました。", "ok");
+        } else {
+          // 初めてのモデルは、最後に触った調整値を出発点にして画角だけ測り直す
+          withFit(() => autoFit(baseValues(window.__vrmFile)));
+        }
+      }
+
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  // 口の開きから、うなずきの角度をゆっくり追従させる
+  let nodPhase = 0;
+  function speakingNod(mouth) {
+    nodPhase = nodPhase * 0.92 + mouth * 0.08;
+    return -nodPhase * 0.10;
+  }
+
+  const clock = new THREE.Clock();
+  const euler = new THREE.Euler();
+  const fwdPoint = new THREE.Vector3();
+  const wheelCenter = new THREE.Vector3();   // 直前フレームのハンドル中心（指を曲げる向きに使う）
+  const _fd = new THREE.Vector3(), _fc = new THREE.Vector3();
+  const lookAtV = new THREE.Vector3();
+
+  // 指を輪のパイプへ巻きつけて曲げる。回転軸の正負を推測せずに握らせられる。
+  // 中心（ハブ）へ向けると、輪をつかまず内側を指した平手になってしまう
+  const _rn = new THREE.Vector3();
+  function rimNearest(p, out) {
+    out.copy(p);
+    wheelMesh.worldToLocal(out);         // 輪の面での座標。輪は半径0.17の円
+    out.z = 0;
+    const len = Math.hypot(out.x, out.y);
+    if (len < 1e-6) out.set(0.17, 0, 0); else out.multiplyScalar(0.17 / len);
+    return wheelMesh.localToWorld(out);
+  }
+
+  const FINGERS = ["Index", "Middle", "Ring", "Little"];
+  function gripHand(side, strength) {
+    const h = vrm.humanoid;
+    if (!h || strength <= 0) return;
+    const segs = [["Proximal", "Intermediate", 0.55], ["Intermediate", "Distal", 0.75]];
+    for (const f of [...FINGERS, "Thumb"]) {
+      const isThumb = f === "Thumb";
+      for (const [a, b, k] of segs) {
+        const bone = h.getNormalizedBoneNode(side + f + a);
+        const child = h.getNormalizedBoneNode(side + f + b);
+        if (!bone || !child) continue;
+        bone.quaternion.identity();
+        bone.updateMatrixWorld(true);
+        bone.getWorldPosition(_a); child.getWorldPosition(_b);
+        _fd.subVectors(_b, _a);
+        if (_fd.lengthSq() < 1e-9) continue;
+        _fd.normalize();
+        _fc.subVectors(rimNearest(_a, _rn), _a);
+        if (_fc.lengthSq() < 1e-9) continue;   // 指の付け根が輪の芯と重なっている
+        _fc.normalize();
+        const amt = k * strength * (isThumb ? 0.45 : 1);
+        pointBone(bone, child, _fd.lerp(_fc, Math.min(0.95, amt)));
+      }
+    }
+  }
+  const _v3 = new THREE.Vector3();
+  const rimL = new THREE.Vector3(), rimR = new THREE.Vector3(), _shoulder = new THREE.Vector3();
+
+  // ハンドルは体格から置く。手に合わせて置くと、腕がずれた分だけ輪までずれていく
+  function placeWheel(steer) {
+    const h = vrm.humanoid;
+    const lu = h.getNormalizedBoneNode("leftUpperArm"), ru = h.getNormalizedBoneNode("rightUpperArm");
+    if (!lu || !ru) return false;
+    lu.getWorldPosition(_p1); ru.getWorldPosition(_p2);
+    _shoulder.addVectors(_p1, _p2).multiplyScalar(0.5);   // 肩の中点（世界座標）
+    const radius = armLen * 0.32 * (+$("wheelSize").value);
+    const tilt = (+$("wheelTilt").value) * -fwdSign;   // 上端が運転者側へ倒れる
+    wheelMesh.rotation.set(tilt, 0, -steer * fwdSign);
+    wheelMesh.position.set(
+      _shoulder.x,
+      // 肩からの下げ幅・前後は、肘が軽く曲がる運転姿勢（腕の長さの75%ほどの距離）になる値
+      _shoulder.y - armLen * 0.62 + (+$("wheelY").value),
+      _shoulder.z + fwdSign * (armLen * 0.65 + (+$("wheelZ").value)));
+    wheelMesh.scale.setScalar(radius / 0.17);
+    wheelMesh.updateMatrixWorld(true);
+    wheelMesh.getWorldPosition(wheelCenter);   // 指を曲げる向きに使う
+    return true;
+  }
+
+  // 輪の上の点。切り角ぶんの回転も輪の姿勢に含まれるので、手もいっしょに回る
+  function rimPoint(deg, out) {
+    const a = deg * Math.PI / 180;
+    out.set(0.17 * Math.cos(a), 0.17 * Math.sin(a), 0);
+    return wheelMesh.localToWorld(out);
+  }
+
+  // ハンドルを先に置き、手はその縁を掴みにいく。
+  // 逆にすると腕のずれがそのままハンドルのずれになり、輪と手が離れてしまう
+  function poseDriving(steer) {
+    if (!vrm?.humanoid || !placeWheel(steer)) return false;
+    const half = 90 - (+$("armSpread").value) * 60;   // 上端からの角度。60度で10時10分
+    const elbow = +$("armHeight").value;
+    armIK("left", fwdSign, rimPoint(90 - half * fwdSign, rimL), elbow);
+    armIK("right", -fwdSign, rimPoint(90 + half * fwdSign, rimR), elbow);
+    gripHand("left", +$("gripStrength").value);
+    gripHand("right", +$("gripStrength").value);
+    return true;
+  }
+
+  // 揺れだけだと棒立ちに見えるので、運転中らしい仕草をときどき挟む
+  const GESTURES = [
+    { name: "mirror_left",  dur: 1.6, yaw: 0.55, pitch: 0.02 },   // 左ミラー
+    { name: "mirror_right", dur: 1.6, yaw: -0.55, pitch: 0.02 },  // 右ミラー
+    { name: "rearview",     dur: 1.2, yaw: -0.20, pitch: -0.22 }, // ルームミラー
+    { name: "meter",        dur: 0.9, yaw: 0.10, pitch: 0.30 },   // メーター確認
+    { name: "glance_side",  dur: 1.1, yaw: 0.35, pitch: 0.10 },   // 窓の外をちらり
+  ];
+  let gesture = null, gestureT = 0, nextGesture = 4 + Math.random() * 6;
+
+  // 0→1→0 の山。仕草の出入りをなめらかにする
+  const ease = u => 0.5 - 0.5 * Math.cos(Math.min(1, Math.max(0, u)) * Math.PI * 2);
+
+  function updateGesture(dt, idle) {
+    if (gesture) {
+      gestureT += dt;
+      if (gestureT >= gesture.dur) { gesture = null; nextGesture = 5 + Math.random() * 8; }
+    } else {
+      nextGesture -= dt;
+      if (nextGesture <= 0 && idle > 0) {
+        gesture = GESTURES[Math.floor(Math.random() * GESTURES.length)];
+        gestureT = 0;
+      }
+    }
+    if (!gesture) return { yaw: 0, pitch: 0 };
+    const k = ease(gestureT / gesture.dur) * idle;
+    return { yaw: gesture.yaw * k, pitch: gesture.pitch * k };
+  }
+  function loop() {
+    requestAnimationFrame(loop);
+    const dt = clock.getDelta();
+    if (!vrm) return;
+    const s = window.avatarState || { wheel: 0, gaze: 0, mouth: 0, blink: 0, sway: 0, breathe: 0 };
+    // 「ハンドルの見え方を確認」中は切り角を往復させ、腕の追従を目で見られるようにする
+    if (window.__wheelDemo) {
+      const el = (performance.now() - window.__wheelDemo) / 1000;
+      if (el > 12) window.__wheelDemo = 0; else s.wheel = Math.sin(el * 1.2) * 0.8;
+    }
+
+    // 口
+    const ex = vrm.expressionManager;
+    if (ex) {
+      ex.setValue("aa", Math.min(1, s.mouth * 1.1));
+      ex.setValue("blink", Math.min(1, s.blink));
+    }
+    // 視線：基本は進行方向（道路）。雑談のときだけカメラの方を向く
+    if (lookTarget) {
+      fwdPoint.set(0, headY - 0.02, 4);
+      lookTarget.position.lerpVectors(fwdPoint, camera.position, Math.min(1, s.gaze));
+    }
+
+    // 上体と首。ハンドルの切り角で軽く傾け、路面の揺れを乗せる
+    const h = vrm.humanoid;
+    if (h) {
+      const spine = h.getNormalizedBoneNode("spine");
+      const neck = h.getNormalizedBoneNode("neck");
+      const headB = h.getNormalizedBoneNode("head");
+      const t = performance.now() / 1000;
+      // 路面の揺れ・呼吸・首の遊び。小さすぎると止まって見えるので、はっきりめに付ける
+      const idle = +$("idle").value;
+      const g = updateGesture(dt, idle);
+      const roll = (Math.sin(t * 0.9) * 0.020 + Math.sin(t * 2.3) * 0.008) * idle;
+      const bob = (Math.sin(t * 1.3) * 0.014) * idle;
+      // 喋っている間は音量に合わせて小さくうなずく
+      const nod = speakingNod(s.mouth) * idle;
+      if (spine) { euler.set(bob, -s.wheel * 0.10 + g.yaw * 0.15, roll); spine.rotation.copy(euler); }
+      if (neck) { euler.set(Math.sin(t * 0.6) * 0.03 * idle + g.pitch * 0.35, -s.wheel * 0.12 + g.yaw * 0.35, -roll * 0.6); neck.rotation.copy(euler); }
+      if (headB) {
+        euler.set(Math.sin(t * 1.1) * 0.025 * idle + g.pitch * 0.65 + nod,
+                  -s.wheel * 0.18 + Math.sin(t * 0.37) * 0.10 * idle + g.yaw * 0.65,
+                  Math.sin(t * 0.83) * 0.02 * idle);
+        headB.rotation.copy(euler);
+      }
+
+      // 上体を回した結果を先に確定させる。肩の位置がずれたままハンドルを置かないように
+      vrm.scene.updateMatrixWorld(true);
+
+      // ハンドルを先に置き、手はその縁を掴みにいく。
+      // 逆にすると腕のずれがそのままハンドルのずれになり、輪と手が離れてしまう
+      if ($("framing").value === "wheel") poseDriving(s.wheel);
+
+      // 座らせる。角度を直打ちすると膝が逆に曲がるモデルがあるので、向きで指定する
+      for (const [side, sx] of [["left", 1], ["right", -1]]) {
+        const ul = h.getNormalizedBoneNode(side + "UpperLeg");
+        const ll = h.getNormalizedBoneNode(side + "LowerLeg");
+        const ft = h.getNormalizedBoneNode(side + "Foot");
+        ul?.quaternion.identity(); ll?.quaternion.identity(); ft?.quaternion.identity();
+        ul?.updateMatrixWorld(true);
+        // 太ももは前へ水平、すねは真下、足首はやや前
+        pointBone(ul, ll, _v3.set(sx * 0.06, -0.12, fwdSign * 0.99));
+        pointBone(ll, ft, _v3.set(0, -1, fwdSign * 0.08));
+        const toes = h.getNormalizedBoneNode(side + "Toes");
+        if (toes) pointBone(ft, toes, _v3.set(0, -0.35, fwdSign * 0.94));
+      }
+
+    }
+    aimCamera();
+    vrm.update(dt);
+    renderer.render(scene, camera);
+    window.copyToPreview?.(canvas);
+  }
+  loop();
+  resize();
+
+  // 前回選んだVRMがあれば自動で復元する
+  try {
+    const saved = await (async () => {
+      const db = await new Promise((res, rej) => {
+        const r = indexedDB.open("drive-wipe", 1);
+        r.onupgradeneeded = () => r.result.createObjectStore("files");
+        r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+      });
+      return new Promise(res => {
+        const q = db.transaction("files", "readonly").objectStore("files").get("vrm");
+        q.onsuccess = () => res(q.result); q.onerror = () => res(null);
+      });
+    })();
+    if (saved) await window.loadVRM(saved);
+  } catch (e) { /* 復元できなければ簡易アバターのまま */ }
+}
+</script>
+<script>
+(function(){
+
 "use strict";
 
 const LS = "drive-wipe-";  // localStorageは同一オリジンで全アプリ共有のためプレフィックス必須
@@ -798,7 +3451,7 @@ async function run() {
     const videoId = parseVideoId($("url").value);
     if (!videoId) throw new Error("YouTube URL を認識できませんでした。");
 
-    const useComments = $("useComments").checked;
+    const useComments = $("genUseComments").checked;
     if (useComments && !ytApiKey()) { $("dlg").showModal(); throw new Error("コメント取得には APIキーが必要です。"); }
 
     // 区間を決める。書き間違いを黙って 0:00 扱いにすると無駄に長く回ってしまう
@@ -989,6 +3642,8 @@ ${cmtList}` }], ASSIGN_SCHEMA);
       meta, chapters, items, comments
     };
     render(lastResult);
+    // できあがったらそのまま再生に入る。音声は走りながら作られる
+    try { window.__onScriptReady?.(lastResult); } catch (e) { log("再生を始められませんでした: " + e.message, "err"); }
     $("btnDownload").disabled = false;
     $("btnRepoSaveScript").disabled = false;
     $("btnCopy").disabled = false;
@@ -1511,11 +4166,11 @@ $("btnSave").onclick = () => {
   lsSet("gemini-api-key", $("geminiKey").value.trim());
   lsSet("yt-api-key", $("ytKey").value.trim());
   lsSet("model", $("model").value.trim() || "gemini-3.6-flash");
-  const slug = repoSlug($("dataRepo").value);
-  if ($("dataRepo").value.trim() && !slug) { alert("リポジトリは ユーザー名/リポジトリ名 の形式で入れてください。"); return; }
+  const slug = repoSlug($("genDataRepo").value);
+  if ($("genDataRepo").value.trim() && !slug) { alert("リポジトリは ユーザー名/リポジトリ名 の形式で入れてください。"); return; }
   lsSet("data-repo", slug);
-  $("dataRepo").value = slug;
-  lsSet("github-pat", $("ghPat").value.trim());
+  $("genDataRepo").value = slug;
+  lsSet("github-pat", $("genGhPat").value.trim());
   $("dlg").close();
 };
 $("btnReadUrls").onclick = async () => {
@@ -1544,6 +4199,8 @@ $("btnCharPush").onclick = async () => {
 $("densityScene").oninput = () => { $("densitySceneVal").textContent = $("densityScene").value; };
 $("densityChat").oninput  = () => { $("densityChatVal").textContent  = $("densityChat").value; };
 $("btnRun").onclick = run;
+$("btnGo").onclick = run;
+$("url").addEventListener("keydown", e => { if (e.key === "Enter") run(); });
 $("btnRepoSaveScript").onclick = async () => {
   const btn = $("btnRepoSaveScript");
   btn.disabled = true;
@@ -1587,8 +4244,8 @@ $("btnCopy").onclick = async () => {
   $("persona").onchange = () => lsSet("persona", $("persona").value);
   $("interests").value = lsGet("interests");
   $("interests").onchange = () => lsSet("interests", $("interests").value);
-  $("dataRepo").value = lsGet("data-repo");
-  $("ghPat").value = lsGet("github-pat");
+  $("genDataRepo").value = lsGet("data-repo");
+  $("genGhPat").value = lsGet("github-pat");
   $("url").value = lsGet("last-url");
   $("url").onchange = () => lsSet("last-url", $("url").value.trim());
   if (!lsGet("gemini-api-key")) $("dlg").showModal();
@@ -1596,6 +4253,8 @@ $("btnCopy").onclick = async () => {
   if (lsGet("data-repo") && lsGet("github-pat")) {
     charPull(true).catch(e => charStatus(`リポジトリから読み込めませんでした（${e.message}）。この端末の内容を使います。`, "err"));
   }
+})();
+
 })();
 </script>
 </body>

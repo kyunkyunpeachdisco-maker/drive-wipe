@@ -478,6 +478,7 @@
 
   <div class="row" style="margin-bottom:16px">
     <button id="btnRun" class="primary fixed">台本を生成</button>
+    <button id="btnRegenChat" class="fixed">雑談だけ作り直す</button>
     <button id="btnRepoSaveScript" class="fixed" disabled>リポジトリに保存</button>
     <button id="btnDownload" class="fixed" disabled>JSONを保存</button>
     <button id="btnCopy" class="fixed" disabled>JSONをコピー</button>
@@ -4476,6 +4477,92 @@ async function charPush() {
   charStatus("リポジトリに保存しました（character/）。", "ok");
 }
 
+
+/* ---------- 雑談だけ作り直す ---------- */
+// 実況は映像に紐づくので、同じ動画なら作り直しても大きくは変わらない。
+// 雑談は映像に直接依存しないため、動画を解析し直さずテキストだけで作れる（無料枠の動画解析を使わない）
+const CHAT_SCHEMA = {
+  type: "object",
+  properties: {
+    items: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: { t: { type: "string" }, line: { type: "string" } },
+        required: ["t", "line"], propertyOrdering: ["t", "line"]
+      }
+    }
+  },
+  required: ["items"], propertyOrdering: ["items"]
+};
+
+function buildChatPrompt({ persona, interests, chatDensity, scenes, meta, chapters, from, to }) {
+  return `あなたは車載カメラのドライブ動画に、後から実況音声を付ける放送作家です。
+実況のセリフは既にできています。**その合間に入る「雑談」だけ**を作ってください。
+
+# キャラクター
+${persona}
+${interests ? `
+# キャラクターの興味・関心
+${interests}
+` : ""}${meta?.title ? `
+# 動画の情報
+タイトル: ${meta.title}${meta.descriptionExcerpt ? `\n概要:\n${meta.descriptionExcerpt}` : ""}
+` : ""}${chapters?.length ? `
+# 章立て
+${chapters.map(c => `${fmtTime(c.t)} ${c.label}`).join("\n")}
+` : ""}
+# できている実況（${fmtTime(from)}〜${fmtTime(to)}）
+${scenes.length ? scenes.map(x => `${fmtTime(x.abs)} ${x.line}`).join("\n") : "（この区間に実況はありません）"}
+
+# 作るもの
+- 雑談（chat）のセリフだけ。1分あたり**最大${chatDensity}回**
+- 時刻 t は \`m:ss\` 形式。**${fmtTime(from)}〜${fmtTime(to)} の範囲内**にすること
+- 上の実況と**同じ時刻には置かない**。実況と実況の間の、空いている時間に置く
+- 映っているものに直接依存しない発話にする（独り言・連想・興味の話題）
+- **実況の内容を言い換えただけの発話にしない**
+- 上の実況を読んで、その場の状況に合う内容にする
+- 興味・関心は、語ることがなさそうな区間で使う。連続させない
+- ひとことの感想にとどめる。解説や紹介にしない。確かでないことは言わない
+- 見どころが続いていそうな区間には差し込まない`;
+}
+
+async function regenerateChat(onProgress = () => {}) {
+  const data = script;   // プレイヤーが読み込んでいる台本
+  if (!data || !Array.isArray(data.items)) throw new Error("先に台本を読み込んでください。");
+  if (!lsGet("gemini-api-key")) throw new Error("Gemini APIキーが未設定です。設定から入れてください。");
+
+  const persona = $("persona").value.trim();
+  const interests = await prepareInterests(persona, m => onProgress(m));
+  const chatDensity = +$("densityChat").value;
+  const from = data.start || 0, to = data.covered ?? data.end ?? 0;
+  const chunkSec = Math.max(60, (data.chunkMin || 10) * 60);
+
+  const scenes = data.items.filter(x => x.kind !== "chat" && x.line);
+  const made = [];
+  for (let s0 = from; s0 < to; s0 += chunkSec) {
+    const s1 = Math.min(to, s0 + chunkSec);
+    onProgress(`雑談を作っています ${fmtTime(s0)}〜${fmtTime(s1)}`);
+    const inChunk = scenes.filter(x => x.abs >= s0 && x.abs < s1);
+    const prompt = buildChatPrompt({
+      persona, interests, chatDensity, scenes: inChunk,
+      meta: data.meta, chapters: data.chapters, from: s0, to: s1
+    });
+    const out = await gemini([{ text: prompt }], CHAT_SCHEMA);
+    for (const it of (out.items || [])) {
+      const abs = parseTime(it.t);
+      if (abs === null || !it.line) continue;
+      if (abs < s0 || abs >= s1) continue;   // 範囲外はプロンプト違反なので捨てる
+      made.push({ t: it.t, abs, line: it.line, kind: "chat", act: "straight", amount: 0, scene: "", place: "" });
+    }
+  }
+
+  const items = [...scenes, ...made].sort((a, b) => a.abs - b.abs);
+  lastResult = { ...data, items, chatRegeneratedAt: new Date().toISOString(), promptVersion: PROMPT_VERSION };
+  onProgress(`雑談を ${made.length}件に入れ替えました（実況 ${scenes.length}件はそのまま）。`);
+  return lastResult;
+}
+
 /* ---------- 初期化 ---------- */
 $("btnSettings").onclick = () => $("dlg").showModal();
 $("btnClose").onclick = () => $("dlg").close();
@@ -4543,6 +4630,21 @@ $("densityChat").oninput  = () => { $("densityChatVal").textContent  = $("densit
 $("btnRun").onclick = run;
 $("btnGo").onclick = run;
 $("url").addEventListener("keydown", e => { if (e.key === "Enter") run(); });
+$("btnRegenChat").onclick = async () => {
+  const btn = $("btnRegenChat");
+  btn.disabled = true;
+  log("雑談だけ作り直しています...");
+  try {
+    const data = await regenerateChat(m => log("  " + m));
+    $("btnDownload").disabled = false;
+    $("btnRepoSaveScript").disabled = false;
+    window.__onScriptReady?.(data);
+  } catch (e) {
+    log("作り直せませんでした: " + e.message, "err");
+  } finally {
+    btn.disabled = false;
+  }
+};
 $("btnRepoSaveScript").onclick = async () => {
   const btn = $("btnRepoSaveScript");
   btn.disabled = true;

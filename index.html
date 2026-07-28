@@ -1,0 +1,1567 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ドライブ実況台本ジェネレーター（検証版）</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1a1a1a; --sub: #666; --line: #e0e0e0;
+    --panel: #f7f7f8; --accent: #5D5CDE; --warn: #b45309; --err: #c0392b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16161a; --fg: #eaeaea; --sub: #9a9aa0; --line: #33333a;
+      --panel: #1e1e24; --accent: #8b8aff; --warn: #e0a458; --err: #ff7b6b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN", sans-serif;
+    font-size: 15px; line-height: 1.7;
+  }
+  header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 16px; border-bottom: 1px solid var(--line);
+    position: sticky; top: 0; background: var(--bg); z-index: 10;
+  }
+  header h1 { font-size: 16px; margin: 0; flex: 1; }
+  main { max-width: 900px; margin: 0 auto; padding: 16px; }
+  fieldset { border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin: 0 0 16px; }
+  legend { font-size: 13px; color: var(--sub); padding: 0 6px; }
+  label { display: block; font-size: 13px; color: var(--sub); margin: 10px 0 4px; }
+  input, textarea, select, button {
+    font-family: inherit; font-size: 16px; /* iOSの自動ズーム防止のため16px以上 */
+  }
+  input[type=text], input[type=password], textarea, select {
+    width: 100%; padding: 9px 11px; border: 1px solid var(--line);
+    border-radius: 8px; background: var(--bg); color: var(--fg);
+  }
+  textarea { resize: vertical; min-height: 90px; }
+  button {
+    padding: 9px 16px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--panel); color: var(--fg); cursor: pointer;
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button:disabled { opacity: .5; cursor: default; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+  .row > * { flex: 1; min-width: 120px; }
+  .row > .fixed { flex: 0 0 auto; min-width: 0; }
+  .hint { font-size: 12px; color: var(--sub); margin: 4px 0 0; }
+  .hint a { color: var(--accent); }
+  #log {
+    font-size: 13px; white-space: pre-wrap; background: var(--panel);
+    border-radius: 8px; padding: 10px 12px; max-height: 180px; overflow-y: auto;
+    -webkit-overflow-scrolling: touch; margin-bottom: 16px; display: none;
+  }
+  #log.on { display: block; }
+  .err { color: var(--err); }
+  .warn { color: var(--warn); }
+  .item {
+    display: grid; grid-template-columns: 62px 1fr; gap: 10px;
+    padding: 10px 0; border-top: 1px solid var(--line);
+  }
+  .item .t { font-variant-numeric: tabular-nums; color: var(--sub); font-size: 13px; }
+  .item .line { font-weight: 600; }
+  .item .line.silent { font-weight: 400; color: var(--sub); font-style: italic; }
+  .item .scene { font-size: 12px; color: var(--sub); }
+  .tag {
+    display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 20px;
+    border: 1px solid var(--line); color: var(--sub); margin-right: 5px;
+  }
+  .cmt { font-size: 13px; background: var(--panel); border-radius: 8px; padding: 6px 10px; margin-top: 6px; }
+  .cmt b { font-weight: 600; }
+  dialog {
+    border: 1px solid var(--line); border-radius: 12px; background: var(--bg);
+    color: var(--fg); max-width: 520px; width: calc(100% - 32px); padding: 20px;
+    /* iPhoneで内容がはみ出すと保存ボタンに届かなくなるため */
+    max-height: 85dvh; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  }
+  dialog::backdrop { background: rgba(0,0,0,.5); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  td { padding: 3px 8px 3px 0; vertical-align: top; }
+  .step { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 18px; }
+  .step:first-of-type { border-top: 0; padding-top: 0; margin-top: 0; }
+  .step h3 { font-size: 14px; margin: 0 0 8px; }
+  .step h3 .num {
+    display: inline-block; min-width: 20px; height: 20px; line-height: 20px;
+    text-align: center; border-radius: 50%; background: var(--accent); color: #fff;
+    font-size: 12px; margin-right: 7px;
+  }
+  .step ol { margin: 0 0 8px; padding-left: 1.3em; font-size: 13px; color: var(--sub); }
+  .step ol li { margin-bottom: 5px; }
+  .step ol a { color: var(--accent); }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+    background: var(--panel); padding: 1px 5px; border-radius: 4px;
+  }
+  details { font-size: 13px; color: var(--sub); margin-top: 8px; }
+  summary { cursor: pointer; color: var(--accent); }
+  #ytTestResult { white-space: pre-line; }
+  .ok { color: #2e7d32; }
+  @media (prefers-color-scheme: dark) { .ok { color: #7cc47f; } }
+  @media (max-width: 680px) {
+    .row > * { min-width: 100%; }
+    .row > .fixed { min-width: 0; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>ドライブ実況台本ジェネレーター<span style="color:var(--sub);font-weight:400"> 検証版</span></h1>
+  <a href="./player.html" style="color:var(--accent);font-size:13px;white-space:nowrap">再生する</a>
+  <button id="btnSettings" class="fixed">設定</button>
+</header>
+
+<main>
+  <fieldset>
+    <legend>動画</legend>
+    <label for="url">YouTube URL</label>
+    <input type="text" id="url" placeholder="https://www.youtube.com/watch?v=..."
+           inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <p class="hint">公開動画のみ対応します（限定公開・非公開はGemini側が受け付けません）。</p>
+
+    <div class="row">
+      <div>
+        <label for="startAt">開始</label>
+        <input type="text" id="startAt" placeholder="0:00">
+      </div>
+      <div>
+        <label for="endAt">終了</label>
+        <input type="text" id="endAt" placeholder="10:00">
+      </div>
+      <div>
+        <label for="chunkMin">分割単位（分）</label>
+        <input type="text" id="chunkMin" value="10" inputmode="numeric">
+      </div>
+    </div>
+    <p class="hint">まずは10分程度で試すのを勧めます。長時間を一度に投げると無料枠（1日8時間）をすぐ使い切ります。</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>実況</legend>
+    <label for="persona">キャラクター設定</label>
+    <textarea id="persona">20代の女性ドライバー。テンションは高すぎず、友達に話すくらいの自然な口調。
+車や道路の知識はほどほどだが、空の色・天気・光の加減・路面や周りの車の様子にはよく気づく。
+たまに個人的な連想や独り言（そろそろ休憩したい、この時間の空好きだな、あと何キロだろ、等）が混じる。
+語尾は自然な口語。視聴者に語りかけすぎず、半分ひとりごとくらいの距離感。</textarea>
+
+    <label for="interests">興味・関心（任意）</label>
+    <textarea id="interests" style="min-height:60px"
+      placeholder="例：建築、コーヒー、カメラ、猫、football、古い喫茶店"></textarea>
+    <p class="hint">
+      <b>景色に変化がなく、語ることがない区間</b>で、間を持たせる独り言として使われます。<br>
+      見どころが続く区間では差し込みません。頻度は区間あたり1〜2回までです。
+    </p>
+
+    <div class="row" style="margin-top:10px">
+      <div class="fixed"><button id="btnReadUrls">URLを読んで感想を作る</button></div>
+      <div class="fixed"><button id="btnCharPull">リポジトリから読み込む</button></div>
+      <div class="fixed"><button id="btnCharPush">リポジトリに保存</button></div>
+      <div><p class="hint" id="charStatus" style="margin:0"></p></div>
+    </div>
+    <p class="hint">
+      興味・関心に<b>noteなどのURLを貼っておくと、その記事を読んで感想を作り、欄に書き足します</b>。
+      以降はその感想が雑談の材料になります。読むのはGeminiで、1つのURLにつき1回だけです。
+      台本生成の前にも自動で走ります。<br>
+      キャラクター設定と興味・関心は<b>データリポジトリの <code>character/</code></b> に置けます（設定のステップ4）。
+      置いておくと claude.ai/code でリポジトリを開いて書き換えられ、作られた感想もそこへ残ります。
+    </p>
+
+    <div class="row">
+      <div>
+        <label for="densityScene">実況の密度（1分あたり）<span id="densitySceneVal">3</span>回</label>
+        <input type="range" id="densityScene" min="0" max="10" value="3" style="width:100%">
+      </div>
+      <div>
+        <label for="densityChat">雑談の密度（1分あたり）<span id="densityChatVal">1</span>回</label>
+        <input type="range" id="densityChat" min="0" max="10" value="1" style="width:100%">
+      </div>
+    </div>
+    <p class="hint">
+      <b>実況</b>＝目の前のもの・標識・場所についての発話。<b>雑談</b>＝独り言や連想など、映っているものに依らない発話。<br>
+      上限であり<b>目安</b>でもあります。上げると細かい対象（歩行者・看板の文字・空の色・音）まで拾い、下げると大きな変化だけに絞ります。<br>
+      見どころが続く区間では雑談が減り、何もない区間では実況が減って雑談が埋めます。<br>
+      信号での停止・発進は、その操作自体を<b>実況しません</b>。ただし信号待ちは雑談に向くので、独り言は入りえます。
+    </p>
+  </fieldset>
+
+  <fieldset>
+    <legend>コメント欄（任意）</legend>
+    <div class="row">
+      <div class="fixed">
+        <label style="margin:0">
+          <input type="checkbox" id="useComments" style="width:auto;margin-right:6px">
+          コメントを取得して場面に割り当てる
+        </label>
+      </div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <div>
+        <label for="maxReplies">1スレッドで読み上げる返信の上限</label>
+        <input type="text" id="maxReplies" value="3" inputmode="numeric">
+      </div>
+    </div>
+    <p class="hint">
+      <b>YouTube用のAPIキー</b>が必要です（設定のステップ3）。日本語コメントのみ抽出します。<br>
+      視聴者同士のやり取りは、上限まで読み上げてから<b>スレッド全体に1回だけ反応</b>します。超えた分は省略されます。
+    </p>
+  </fieldset>
+
+  <div class="row" style="margin-bottom:16px">
+    <button id="btnRun" class="primary fixed">台本を生成</button>
+    <button id="btnDownload" class="fixed" disabled>JSONを保存</button>
+    <button id="btnCopy" class="fixed" disabled>JSONをコピー</button>
+  </div>
+
+  <div id="log"></div>
+  <div id="out"></div>
+</main>
+
+<dialog id="dlg">
+  <h2 style="margin-top:0;font-size:17px">セットアップ</h2>
+  <p class="hint" style="margin-bottom:16px">
+    キーはこの端末のブラウザ内（localStorage）にのみ保存されます。送信先はGoogleのAPIだけです。
+  </p>
+
+  <section class="step">
+    <h3><span class="num">1</span>Gemini APIキー<span style="color:var(--err)">（必須）</span></h3>
+    <ol>
+      <li><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio のAPIキー画面</a>を開く<br>
+          <span style="font-size:12px">https://aistudio.google.com/apikey</span></li>
+      <li>「APIキーを作成」を押す</li>
+      <li>プロジェクトを選ぶ画面が出たら <b>新しいプロジェクトで作成</b> を選ぶ<br>
+          <span style="font-size:12px">既に使っているCloudプロジェクトがあればそれでも構いません。迷ったら新規で。</span></li>
+      <li>表示された <code>AIza…</code> をコピーして下に貼る</li>
+    </ol>
+    <input type="password" id="geminiKey" placeholder="AIza..."
+           autocapitalize="off" autocorrect="off" spellcheck="false">
+    <p class="hint">
+      無料枠あり・カード登録不要。ただし<b>動画の解析は1日8時間まで</b>です。<br>
+      キーは後からでも同じ画面で再表示できるので、控えを取り損ねても大丈夫です。
+    </p>
+    <details>
+      <summary>新規と既存、どちらを選ぶべきか</summary>
+      <p style="margin:8px 0">
+        <b>新規を勧めます。</b>無料枠はプロジェクト単位なので、専用にしておけば他の用途と枠を食い合いません。
+        不要になったらプロジェクトごと消せますし、有効化するAPIもこのアプリの分だけで済みます。
+      </p>
+      <p style="margin:8px 0">
+        新規で作ると <code>gen-lang-client-0123456789</code> のような自動生成の名前が付きます。
+        <b>ステップ3でこの名前を選ぶ必要がある</b>ので、控えておいてください。
+      </p>
+    </details>
+  </section>
+
+  <section class="step">
+    <h3><span class="num">2</span>モデルを選ぶ</h3>
+    <div class="row">
+      <input type="text" id="model" value="gemini-3.6-flash"
+             autocapitalize="off" autocorrect="off" spellcheck="false">
+      <button id="btnModels" class="fixed">一覧を取得</button>
+    </div>
+    <select id="modelList" style="display:none;margin-top:8px"></select>
+    <p class="hint">
+      既定のまま試して動けばそれでOKです。<br>
+      モデル名は頻繁に入れ替わります。エラーが出たら「一覧を取得」で、<b>あなたのキーで今使えるもの</b>を確認できます（キーの疎通確認も兼ねます）。
+    </p>
+    <details>
+      <summary>どれを選べばいいか</summary>
+      <p style="margin:8px 0">
+        <b>Flash系を勧めます。</b>ドライブ動画は尺が長く、映像は1秒あたり数百トークンを消費するため、
+        Pro系だと解析コストが跳ね上がります。台本の面白さは主にキャラクター設定で決まるので、
+        まずFlashで試して、物足りなければ上位を試す順番が無駄がありません。
+      </p>
+      <p style="margin:8px 0">
+        一覧には<b>動画を扱えないモデルも混ざります</b>（埋め込み・画像生成・音声など）。
+        <code>gemini-…-flash</code> か <code>gemini-…-pro</code> の名前のものを選んでください。
+      </p>
+    </details>
+  </section>
+
+  <section class="step">
+    <h3><span class="num">3</span>YouTubeのコメント取得<span style="color:var(--sub)">（使うときだけ）</span></h3>
+    <p class="hint" style="margin-top:0">
+      <b>YouTube専用のAPIキーを作ってください。</b>
+      AI Studioで作ったキーは Generative Language API 専用に発行されることが多く、
+      YouTube Data API を有効化しても、キーの「APIの制限」に追加できないため兼用できません。
+    </p>
+    <ol>
+      <li><a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener">プロジェクトを作成する</a>（名前は何でもよい。既存のものでも可）</li>
+      <li><a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" rel="noopener">YouTube Data API v3 を有効にする</a><br>
+          ※<b>画面上部のプロジェクト選択</b>が1のものになっているか確認</li>
+      <li><a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">認証情報</a>で「認証情報を作成」→「APIキー」<br>
+          ※<b>「サービスアカウントを介してAPI呼び出しを認証する」はチェックしない</b>（チェックすると使えなくなります）</li>
+      <li>できた <code>AIza…</code> を下に貼って「接続テスト」</li>
+    </ol>
+    <div class="row" style="margin-bottom:8px">
+      <button id="btnTestYt" class="fixed">接続テスト</button>
+      <button id="btnUseGemini" class="fixed">Geminiのキーを貼る</button>
+    </div>
+    <input type="password" id="ytKey" placeholder="空欄ならGeminiのキーを使います"
+           autocapitalize="off" autocorrect="off" spellcheck="false">
+    <p class="hint" id="ytTestResult"></p>
+
+    <details>
+      <summary>Geminiのキーを兼用したい場合</summary>
+      <p style="margin:8px 0">
+        <b>多くの場合できません。</b>AI Studioのキーは Cloud Console の認証情報一覧に現れないか、
+        現れても「APIの制限」に YouTube Data API v3 を追加できません。試すなら、
+        キーのプロジェクトで YouTube Data API v3 を有効化したうえで、
+        認証情報からそのキーの制限に追加できるか確認してください。追加できなければ諦めて上の手順で作ってください。
+      </p>
+      <p style="margin:8px 0">
+        Cloud Console にプロジェクトが出てこないときは、<b>ログイン中のGoogleアカウントが違う</b>か、
+        プロジェクト選択ダイアログで<b>「すべて」タブを見ていない</b>のが原因のことが多いです。
+      </p>
+    </details>
+    <p class="hint">無料枠は1日10,000ユニット。コメント取得は1回1ユニットなので、通常は使い切りません。</p>
+  </section>
+
+  <section class="step">
+    <h3><span class="num">4</span>データリポジトリ<span style="color:var(--sub)">（任意）</span></h3>
+    <p class="hint" style="margin-bottom:10px">
+      キャラクター設定と興味・関心を、自分のプライベートリポジトリに置いて使うための設定です。
+      claude.ai/code でそのリポジトリを開けば、内容の書き換えをAIに頼めます。
+      実況プレイヤー側で設定済みなら、ここは空欄のままで構いません（同じ設定を共有します）。
+    </p>
+    <label for="dataRepo">リポジトリ（ユーザー名/リポジトリ名）</label>
+    <input type="text" id="dataRepo" placeholder="例: yourname/drive-wipe-data（URL貼り付けも可）"
+           autocapitalize="off" autocorrect="off" spellcheck="false">
+    <label for="ghPat" style="margin-top:10px">アクセストークン</label>
+    <input type="password" id="ghPat" placeholder="github_pat_..."
+           autocapitalize="off" autocorrect="off" spellcheck="false">
+    <ol style="margin:10px 0 0 1.2em">
+      <li><a href="https://github.com/new?name=drive-wipe-data&visibility=private" target="_blank" rel="noopener">このリンク</a>からプライベートリポジトリを作る（名前と非公開が入力済み）。既存のものを使うなら飛ばせます</li>
+      <li><a href="https://github.com/settings/personal-access-tokens/new?name=drive-wipe" target="_blank" rel="noopener">このリンク</a>から Fine-grained トークンを発行する。Token name の例は <code>drive-wipe</code> です
+        <ul style="margin:4px 0 0 0">
+          <li>Expiration：<code>90 days</code> か <code>Custom→1年後</code></li>
+          <li>Repository access：<code>Only select repositories</code> → 1で作ったリポジトリ</li>
+          <li>Repository permissions：<code>Contents: Read and write</code> だけ</li>
+        </ul>
+      </li>
+      <li>表示された <code>github_pat_…</code> を上に貼って「保存」<br>
+        <b>この画面を閉じるとトークンは二度と表示されません。</b></li>
+    </ol>
+    <p class="hint">
+      設定すると、次回このページを開いたときに <code>character/</code> の内容を自動で読み込みます。
+      読み込めなかった場合は、この端末に保存されている内容をそのまま使います。
+    </p>
+  </section>
+
+  <div class="row" style="margin-top:20px">
+    <button id="btnSave" class="primary fixed">保存</button>
+    <button id="btnClose" class="fixed">閉じる</button>
+  </div>
+</dialog>
+
+<script>
+"use strict";
+
+const LS = "drive-wipe-";  // localStorageは同一オリジンで全アプリ共有のためプレフィックス必須
+// プロンプトを変えたら更新する。どの版で作った台本かを出力に残して比較できるようにするため
+const PROMPT_VERSION = "2026-07-28g";
+const $ = id => document.getElementById(id);
+
+/* ---------- localStorage ---------- */
+let warnedStorage = false;
+function lsGet(k, d = "") {
+  try { return localStorage.getItem(LS + k) ?? d; } catch (e) { return d; }
+}
+function lsSet(k, v) {
+  try { localStorage.setItem(LS + k, v); }
+  catch (e) {
+    if (!warnedStorage) { warnedStorage = true; alert("設定を保存できませんでした（プライベートモード等）。今回のセッションのみ有効です。"); }
+  }
+}
+
+/* ---------- 時刻ユーティリティ ---------- */
+function parseTime(s) {
+  if (!s) return null;
+  const m = String(s).trim().match(/^(?:(\d+):)?(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  return (+(m[1] || 0)) * 3600 + (+m[2]) * 60 + (+m[3]);
+}
+function fmtTime(sec) {
+  sec = Math.max(0, Math.round(sec));
+  const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+  const mm = h ? String(m).padStart(2, "0") : String(m);
+  return (h ? h + ":" : "") + mm + ":" + String(s).padStart(2, "0");
+}
+function parseVideoId(u) {
+  const m = String(u).match(/(?:v=|youtu\.be\/|\/live\/|\/shorts\/|\/embed\/)([\w-]{11})/);
+  return m ? m[1] : null;
+}
+// ISO 8601 duration (PT1H2M3S) → 秒
+function parseISODuration(d) {
+  const m = String(d).match(/^P(?:.*T)?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/);
+  if (!m) return null;
+  return (+(m[1] || 0)) * 3600 + (+(m[2] || 0)) * 60 + (+(m[3] || 0));
+}
+
+/* ---------- ログ ---------- */
+function log(msg, cls = "") {
+  const el = $("log");
+  el.classList.add("on");
+  const div = document.createElement("div");
+  if (cls) div.className = cls;
+  div.textContent = msg;
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+}
+
+/* ---------- Gemini ---------- */
+const ACTS = ["straight", "turn_left", "turn_right", "curve_left", "curve_right",
+              "stop", "start", "check_left", "check_right", "check_mirror", "bump"];
+
+const SCRIPT_SCHEMA = {
+  type: "object",
+  properties: {
+    viewType: { type: "string", enum: ["pov", "person", "other"] },
+    summary: { type: "string" },
+    items: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          t:      { type: "string" },
+          scene:  { type: "string" },
+          line:   { type: "string" },
+          kind:   { type: "string", enum: ["scene", "chat", "none"] },
+          act:    { type: "string", enum: ACTS },
+          amount: { type: "number" },
+          place:  { type: "string" }
+        },
+        required: ["t", "scene", "line", "kind", "act", "amount", "place"],
+        propertyOrdering: ["t", "scene", "line", "kind", "act", "amount", "place"]
+      }
+    }
+  },
+  required: ["viewType", "summary", "items"],
+  propertyOrdering: ["viewType", "summary", "items"]
+};
+
+const ASSIGN_SCHEMA = {
+  type: "object",
+  properties: {
+    assignments: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          t:  { type: "string" }
+        },
+        required: ["id", "t"],
+        propertyOrdering: ["id", "t"]
+      }
+    }
+  },
+  required: ["assignments"],
+  propertyOrdering: ["assignments"]
+};
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+// 混雑（5xx）と利用上限（429）はどちらも待てば通るが、待つべき長さが違う
+const RETRYABLE = new Set([429, 500, 502, 503, 504]);
+
+async function gemini(parts, schema, maxRetries = 4) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await geminiOnce(parts, schema);
+    } catch (e) {
+      if (!e.retryable || attempt >= maxRetries) throw e;
+      // APIが待つべき秒数を返してくる場合はそれに従う。指数バックオフでは足りないことがある
+      const wait = e.retryAfterMs
+        ? Math.min(90000, e.retryAfterMs + 1000)
+        : 2000 * Math.pow(2, attempt);
+      log(`  ${e.quota ? "利用上限に達したため" : "混雑のため"} ${Math.round(wait / 1000)}秒待って再試行します（${attempt + 1}/${maxRetries}）`, "warn");
+      await sleep(wait);
+    }
+  }
+}
+
+async function geminiOnce(parts, schema) {
+  const key = lsGet("gemini-api-key");
+  const model = lsGet("model", "gemini-3.6-flash");
+  let res;
+  try {
+    res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts }],
+          generationConfig: { responseMimeType: "application/json", responseSchema: schema }
+        })
+      }
+    );
+  } catch (e) {
+    const err = new Error("通信に失敗しました: " + e.message);
+    err.retryable = true;   // 一時的なネットワーク断も粘る
+    throw err;
+  }
+  if (!res.ok) {
+    let detail = "", body = null;
+    try { body = await res.json(); detail = body?.error?.message || ""; } catch (e) {}
+    const err = new Error(`Gemini API ${res.status}${detail ? "：" + detail : ""}`);
+    err.retryable = RETRYABLE.has(res.status);
+    err.quota = res.status === 429;
+    // RetryInfo（"23s" 形式）か、本文中の "retry in 23.02s" から待ち時間を拾う
+    const ri = body?.error?.details?.find(d => String(d["@type"] || "").includes("RetryInfo"));
+    const sec = parseFloat(ri?.retryDelay) || parseFloat((detail.match(/retry in ([\d.]+)\s*s/i) || [])[1]);
+    if (sec > 0) err.retryAfterMs = Math.round(sec * 1000);
+    throw err;
+  }
+  const data = await res.json();
+  const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text).filter(Boolean).join("");
+  if (!text) {
+    const reason = data?.candidates?.[0]?.finishReason || data?.promptFeedback?.blockReason || "不明";
+    throw new Error(`応答が空でした（理由: ${reason}）`);
+  }
+  return JSON.parse(text);
+}
+
+function buildPrompt({ persona, sceneDensity, chatDensity, chunkSec, context, spoken, meta, chapters, isOpening, interests }) {
+  // 独り言らしさを壊さないよう、頻度と踏み込みを明示的に抑える
+  const interestBlock = interests ? `
+# キャラクターの興味・関心
+${interests}
+これは chat（雑談）の引き出しです。話題を増やすためではなく、**間が持たないときのため**に使います。
+- **景色に変化がなく、目の前に語ることがない区間でこそ使う**。手持ち無沙汰なときの独り言として出す
+- 逆に、見どころや標識が続いている区間では差し込まない（そちらを優先する）
+- 映っているものから連想して入るのが自然だが、何もない直線なら脈絡なく思い出しても構わない
+- この区間全体で**多くても1〜2回**。連続させない
+- 解説や紹介にならないよう、ひとことの感想にとどめる（詳しく語らない）
+- 確かでないことは言わない。知識を披露しない
+- URLや見出し記号が混ざっていても、それ自体は読み上げない。**書かれている感想や中身のほうを使う**
+` : "";
+
+  const metaBlock = (meta && (meta.title || meta.description)) ? `
+# 動画の情報
+タイトル: ${meta.title}${meta.channelTitle ? `\nチャンネル: ${meta.channelTitle}` : ""}${meta.tags?.length ? `\nタグ: ${meta.tags.join("、")}` : ""}${meta.descriptionExcerpt ? `\n概要:\n${meta.descriptionExcerpt}` : ""}
+ここに書かれている地名・道路名・時間帯・天候は、映像から読み取れなくても事実として使ってよい。
+ただし、ここにも映像にも無い固有名詞は出さないこと。
+` : "";
+
+  const chapterBlock = (chapters && chapters.length) ? `
+# この区間の章立て（投稿者本人による申告）
+${chapters.map(c => `${fmtTime(c.t)} ${c.label}`).join("\n")}
+章の切れ目は走行環境が変わるタイミングです。話題の切り替え位置として使ってください。
+` : "";
+
+  return `あなたは車載カメラのドライブ動画に、後から実況音声を付ける放送作家です。
+渡された区間の映像を見て、実況台本を作ってください。
+
+# キャラクター
+${persona}
+${metaBlock}${chapterBlock}${interestBlock}${isOpening ? `
+# 冒頭
+この区間は動画の先頭です。0:00〜0:15 のあたりに、これから走る道についての導入のセリフを1つ入れてください。
+動画の情報が分かっている場合はそれを踏まえた一言にすること。
+` : ""}
+# セリフにしないこと（最優先で守ること）
+あなたが作るのは運転の実況中継ではなく、運転しながらの雑談です。
+次の内容は act に記録するだけにして、**line は必ず空文字**にしてください。
+- 信号で止まった／青になって発進した、という報告
+  （「赤信号なので停止します」「青になったので進みます」「発進します」の類は一切書かない）
+- 曲がる／曲がったという操作そのものの報告（「ここを右折します」だけの一言は書かない）
+- 安全確認・車間距離・徐行・後方確認などの運転解説。教習所の指導のような言い回しは使わない
+
+具体的には：
+- act が stop / start の項目に **kind: "scene" を付けてはいけない**。
+  停止・発進そのものを説明する実況は禁止です。
+  ただし**信号待ちは雑談に向いた時間**なので、kind: "chat" の独り言を入れるのは構いません
+  （「あ、そういえば」「お腹すいたな」など、止まっていること自体に触れないもの）
+- act が turn_left / turn_right / curve_* の項目は、行き先や場所に意味があるときだけ一言添える
+  （「元町通りに入ります」は可。「右折します」は不可）
+
+# 発話の2種類と、その配分
+line には性質の違う2種類があり、それぞれ別の上限を設けます。
+- **scene（実況）**：いま見えているもの・標識・場所・天候についての発話。1分あたり**最大${sceneDensity}回**
+- **chat（雑談）**：独り言・連想・興味の話題など、映っているものに直接依存しない発話。1分あたり**最大${chatDensity}回**
+
+配分の原則（重要）：
+- 見どころ・標識・地名が続く区間は **scene を優先し、chat は減らす**（0でよい）
+- 景色に変化がなく語ることがない区間は **scene を無理に作らず、chat で間を持たせる**
+- 実況と雑談を1つの line に詰め込まない。どちらか一方の性質にする
+
+拾う細かさの調整（重要）：
+上の回数は上限であると同時に**目安**です。出力がその目安を大きく下回りそうなときは、
+黙るのではなく**拾う対象を細かくして目安に近づけてください**。
+- 粗い段階：交差点、標識、地名、大きな景色の変化
+- 中くらい：街路樹、対向車やバス、建物の様子、光の当たり方、路面や車線
+- 細かい段階：歩行者、自転車、看板の文字、空の色の変化、聞こえてくる音、車内の温度感
+目安が高いほど下の段階まで降りて拾います。逆に目安が低ければ粗い段階だけに絞ります。
+ただし**映っていないことを作って埋めるのは禁止**です。細かくしても足りなければ下回って構いません。
+
+# 出力ルール
+- タイムスタンプ t は、この区間の先頭を 0:00 とした MM:SS 形式で出力する（区間長は約${Math.round(chunkSec / 60)}分）
+- 景色・道路種別・天候・交通状況・標識が「変わった瞬間」を拾う。
+  ただし上の目安に届いていない場合は、大きな変化がなくても細部を見つけて発話を作ってよい
+- kind は line の種類。line が空の項目は必ず "none" にする
+- **音声で読み上げる文章**なので、耳で聞いて自然な日本語で書く。造語や不自然な言い回しを使わない
+  （例：「落ちはらって」のような辞書にない表現は避け、「すっかり落ちて」と書く）
+- 季節・時間帯・天候は、最初に判断したものを最後まで変えない
+  （「冬らしい」と言った後で紅葉を秋の景色として語らない。同じ季節の中で矛盾しない表現にする）
+- scene には、その時点の映像を後から特定できる程度に具体的に書く（例：「片側2車線、前方にトンネル入口、夕暮れ」）
+- 標識・案内板・地名が読み取れたら place に書く。読めなければ空文字にする
+- act はその時点の運転操作。ウインカーの点滅音が聞こえたら曲がる予兆として使ってよい
+- amount は turn_left / turn_right / curve_left / curve_right のときのハンドル切り量（0.0〜1.0）。それ以外は 0
+- 実在しない地名・施設・道路名を創作しない。映像から読み取れた文字と、明らかに視認できる事実だけを根拠にする
+
+# 話題は映っている環境に合わせる
+走行環境によって、そこに「あるもの」は変わります。**映っていないものを話題にしないでください**
+（例：高速道路の区間で、店やカフェの話を持ち出さない）。
+- 高速・自動車専用道：SA/PA、残り距離の標識、車線変更、追い越し、トラック、渋滞、トンネル、料金所、合流
+- 市街地：信号、店や看板、歩行者や自転車、道幅、路上駐車
+- 郊外・田園：畑や山並み、空の広さ、対向車の少なさ、直線の長さ
+- 峠・山道：連続するカーブ、勾配、見晴らし、路面状況、落石注意などの標識
+- 夜間・悪天候：対向車のライト、街灯、路面の反射、ワイパー、視界の悪さ
+環境が変わったらそれ自体が良い話題になる。逆に同じ環境が続くなら、無理に話題を増やさず黙ること。
+
+# 繰り返しを避ける（最重要）
+長時間の映像は似た景色が続くため、油断すると同じことを言い続けます。次を守ってください。
+- 同じ言い回し・同じ語彙を再使用しない。特に「すごい」「きれい」「いい感じ」のような中身のない感想を続けない
+- 一度出した話題（店、天気、道路の種類、思い出話など）を、切り口を変えずに再登場させない
+- 発話の"種類"を意図的に散らす：情景描写／独り言／疑問／気づき／雑学／過去の連想。同じ種類を3回続けない
+- 似た景色が続く区間では、無理にセリフを作らず line を空にする。黙るほうが自然
+${context ? `\n# 直前の区間までの流れ\n${context}\n` : ""}${spoken ? `\n# すでに話した内容（これらと重複させないこと）\n${spoken}\n` : ""}
+- summary には、次の区間に引き継ぐための「ここまでの流れ」「すでに扱った話題」「季節・時間帯・天候の判断」を4行以内で書く
+- viewType には映像の種類を入れる
+  - "pov"：前方の道路を映した車載視点。運転者は映らず、話し声も入っていない
+  - "person"：運転者や同乗者が画面に映っている、または人の話し声が入っている
+  - "other"：それ以外（地図画面のみ、静止画など）`;
+}
+
+// 文字bigramのJaccard係数。言い回しの使い回しを機械的に拾うための簡易判定
+function similarity(a, b) {
+  const norm = s => String(s).replace(/[\s、。！？!?…「」ー]/g, "");
+  const grams = s => {
+    const t = norm(s), g = new Set();
+    for (let i = 0; i < t.length - 1; i++) g.add(t.slice(i, i + 2));
+    return g;
+  };
+  const A = grams(a), B = grams(b);
+  if (!A.size || !B.size) return 0;
+  let inter = 0;
+  for (const g of A) if (B.has(g)) inter++;
+  return inter / (A.size + B.size - inter);
+}
+
+// 似すぎているセリフの組を洗い出す
+function findRepeats(items, threshold = 0.5) {
+  const lines = items.filter(it => it.line);
+  const pairs = [];
+  for (let i = 0; i < lines.length; i++) {
+    for (let j = i + 1; j < lines.length; j++) {
+      const s = similarity(lines[i].line, lines[j].line);
+      if (s >= threshold) pairs.push({ a: lines[i], b: lines[j], score: s });
+    }
+  }
+  return pairs.sort((x, y) => y.score - x.score);
+}
+
+/* ---------- YouTube Data API ---------- */
+// 1本で兼用したいので、専用キーが未設定ならGeminiのキーを使う
+function ytApiKey() {
+  return lsGet("yt-api-key") || lsGet("gemini-api-key");
+}
+
+async function ytFetch(path, params) {
+  const key = ytApiKey();
+  const q = new URLSearchParams({ ...params, key });
+  const res = await fetch(`https://www.googleapis.com/youtube/v3/${path}?${q}`);
+  if (!res.ok) {
+    let detail = "";
+    try { detail = (await res.json())?.error?.message || ""; } catch (e) {}
+    throw new Error(`YouTube API ${res.status}${detail ? "：" + detail : ""}`);
+  }
+  return res.json();
+}
+
+// 長さ・投稿者ID・タイトル・概要欄を一度に取る（追加のAPI呼び出しは不要）
+async function fetchVideoMeta(videoId) {
+  const d = await ytFetch("videos", { part: "contentDetails,snippet", id: videoId });
+  const v = d?.items?.[0];
+  const sn = v?.snippet || {};
+  return {
+    duration: parseISODuration(v?.contentDetails?.duration || ""),
+    ownerChannelId: sn.channelId || "",
+    title: sn.title || "",
+    channelTitle: sn.channelTitle || "",
+    description: sn.description || "",
+    tags: (sn.tags || []).slice(0, 15)
+  };
+}
+
+// 概要欄のチャプター行（"0:00 出発" 形式）を拾う。区間の切れ目として使う
+function parseChapters(desc) {
+  const found = [];
+  for (const raw of String(desc).split(/\r?\n/)) {
+    const m = raw.match(/^\s*[[(（]?(\d{1,3}:\d{2}(?::\d{2})?)[\])）]?\s*(.+?)\s*$/);
+    if (!m) continue;
+    const t = parseTime(m[1]);
+    const label = m[2].replace(/^[-–—~〜:：・\s]+/, "").trim();
+    if (t === null || !label) continue;
+    found.push({ t, label: label.slice(0, 60) });
+  }
+  // 時刻が昇順に並んでいるものだけを章立てとみなす（値段表などの誤検出を避ける）
+  const asc = [];
+  for (const c of found) if (!asc.length || c.t > asc[asc.length - 1].t) asc.push(c);
+  return asc.length >= 2 ? asc : [];
+}
+
+// 概要欄はリンクや定型文が多いので、チャプター行とURLを除いて先頭だけ使う
+function cleanDescription(desc) {
+  return String(desc)
+    .split(/\r?\n/).filter(l => !/^\s*[[(（]?\d{1,3}:\d{2}/.test(l)).join("\n")
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, 600);
+}
+
+// ひらがな・カタカナを含むものを日本語とみなす（漢字のみだと中国語が混ざる）
+const isJa = s => /[ぁ-んァ-ヴー]/.test(s);
+
+async function fetchComments(videoId, ownerChannelId, maxReplies = 3, maxPages = 3) {
+  const out = [];
+  let pageToken = "";
+  const isOwner = s => !!ownerChannelId && s?.authorChannelId?.value === ownerChannelId;
+  for (let i = 0; i < maxPages; i++) {
+    // replies も取る。投稿者の返信と、視聴者同士のやり取りを分けて扱うため
+    const params = { part: "snippet,replies", videoId, maxResults: "100", order: "relevance", textFormat: "plainText" };
+    if (pageToken) params.pageToken = pageToken;
+    const d = await ytFetch("commentThreads", params);
+    for (const it of (d.items || [])) {
+      const sn = it?.snippet?.topLevelComment?.snippet;
+      if (!sn) continue;
+
+      // APIは返信を古い順で返す。会話として読ませたいので順序は保ったまま先頭から採る
+      const all = (it?.replies?.comments || [])
+        .map(r => r.snippet)
+        .filter(s => (s?.textOriginal || "").trim() && isJa(s.textOriginal));
+      const viewerReplies = all.filter(s => !isOwner(s));
+      // 投稿者の返信は本人の言葉なので、AIに反応を作らせず原文を喋らせる
+      const ownerReply = all.filter(isOwner).map(s => s.textOriginal.trim())[0] || null;
+
+      out.push({
+        id: it.id,
+        author: sn.authorDisplayName || "",
+        text: (sn.textOriginal || "").trim(),
+        likes: sn.likeCount || 0,
+        role: isOwner(sn) ? "owner" : "viewer",
+        replies: viewerReplies.slice(0, maxReplies).map(s => ({
+          author: s.authorDisplayName || "",
+          text: s.textOriginal.trim()
+        })),
+        omitted: Math.max(0, viewerReplies.length - maxReplies),
+        ownerReply
+      });
+    }
+    pageToken = d.nextPageToken || "";
+    if (!pageToken) break;
+  }
+  return out;
+}
+
+// コメント本文の先頭付近にあるタイムスタンプを拾う
+function extractStamp(text) {
+  const m = text.match(/(?:^|\s|[（(])(\d{1,3}):([0-5]\d)(?::([0-5]\d))?/);
+  if (!m) return null;
+  return m[3] !== undefined
+    ? (+m[1]) * 3600 + (+m[2]) * 60 + (+m[3])
+    : (+m[1]) * 60 + (+m[2]);
+}
+
+/* ---------- 実行 ---------- */
+let lastResult = null;
+
+async function run() {
+  $("log").innerHTML = "";
+  $("out").innerHTML = "";
+  $("btnRun").disabled = true;
+  $("btnDownload").disabled = true;
+  lastResult = null;
+
+  try {
+    if (!lsGet("gemini-api-key")) { $("dlg").showModal(); throw new Error("Gemini APIキーを設定してください。"); }
+
+    const videoId = parseVideoId($("url").value);
+    if (!videoId) throw new Error("YouTube URL を認識できませんでした。");
+
+    const useComments = $("useComments").checked;
+    if (useComments && !ytApiKey()) { $("dlg").showModal(); throw new Error("コメント取得には APIキーが必要です。"); }
+
+    // 区間を決める。書き間違いを黙って 0:00 扱いにすると無駄に長く回ってしまう
+    const rawStart = $("startAt").value.trim();
+    const rawEnd = $("endAt").value.trim();
+    if (rawStart && parseTime(rawStart) === null) throw new Error(`開始「${rawStart}」を時刻として読めません。0:00 / 12:34 / 1:02:03 の形式で入れてください（秒は2桁）。`);
+    if (rawEnd && parseTime(rawEnd) === null) throw new Error(`終了「${rawEnd}」を時刻として読めません。0:00 / 12:34 / 1:02:03 の形式で入れてください（秒は2桁）。`);
+    let start = parseTime(rawStart) ?? 0;
+    let end = parseTime(rawEnd);
+    let ownerChannelId = "";
+    let meta = null, chapters = [];
+    if (ytApiKey()) {
+      try {
+        meta = await fetchVideoMeta(videoId);
+        ownerChannelId = meta.ownerChannelId;
+        chapters = parseChapters(meta.description);
+        meta.descriptionExcerpt = cleanDescription(meta.description);
+        if (meta.title) log(`タイトル: ${meta.title}`);
+        log(chapters.length ? `章立て ${chapters.length}件を検出` : "概要欄に章立てなし");
+        if (end === null && meta.duration) { end = meta.duration; log(`動画の長さ: ${fmtTime(meta.duration)}`); }
+      } catch (e) { log("動画情報の取得に失敗（終了時刻を手入力してください）: " + e.message, "warn"); }
+    }
+    if (end === null) { end = start + 600; log(`終了時刻が未指定のため ${fmtTime(end)} までを対象にします。`, "warn"); }
+    if (end <= start) throw new Error("終了時刻は開始時刻より後にしてください。");
+
+    const chunkSec = Math.max(1, parseInt($("chunkMin").value, 10) || 10) * 60;
+    const persona = $("persona").value.trim();
+    const sceneDensity = +$("densityScene").value;
+    const chatDensity = +$("densityChat").value;
+    // 未読のURLがあれば先に読ませる。台本の材料を揃えてから本編に入る
+    const interests = await prepareInterests(persona, m => log("  " + m));
+
+    // チャンクごとに台本を生成
+    const items = [];
+    let context = "";
+    let covered = start;   // 実際に台本を作れた終端（打ち切り時はここまで）
+    let viewType = "";     // 映像の種類（pov / person / other）
+    const nChunks = Math.ceil((end - start) / chunkSec);
+    for (let i = 0; i < nChunks; i++) {
+      const s = start + i * chunkSec;
+      const e = Math.min(end, s + chunkSec);
+      log(`[${i + 1}/${nChunks}] ${fmtTime(s)} 〜 ${fmtTime(e)} を解析中...`);
+      const t0 = performance.now();
+
+      let r;
+      try {
+        r = await gemini([
+          {
+            fileData: { fileUri: `https://www.youtube.com/watch?v=${videoId}`, mimeType: "video/*" },
+            videoMetadata: { startOffset: `${s}s`, endOffset: `${e}s` }
+          },
+          { text: buildPrompt({
+              persona, sceneDensity, chatDensity, chunkSec: e - s, context, meta, interests,
+              // 直前チャンクのセリフを渡さないと、区間をまたいで同じことを言い出す
+              spoken: items.filter(it => it.line).slice(-25).map(it => "- " + it.line).join("\n"),
+              // 章立ては絶対時刻なので、この区間に入るものだけを区間内の相対時刻に直して渡す
+              chapters: chapters.filter(c => c.t >= s && c.t < e).map(c => ({ ...c, t: c.t - s })),
+              isOpening: s === 0
+            }) }
+        ], SCRIPT_SCHEMA);
+      } catch (e2) {
+        // ここで投げると生成済みのチャンクまで捨てることになるので、打ち切って先へ進む
+        log(`  ${e2.message}`, "err");
+        if (items.length) {
+          log(`${fmtTime(s)} 以降を打ち切りました。${fmtTime(s)} までの台本は下に残ります。`, "warn");
+          log(`続きは「開始」に ${fmtTime(s)} を入れて再実行してください。`, "warn");
+        }
+        if (e2.quota) {
+          log("無料枠の上限です。しばらく待つか、設定でモデルを変えると通ることがあります。", "warn");
+          log("1回の呼び出しで扱う範囲を広げる（分割単位を大きくする）と、呼び出し回数を減らせます。", "warn");
+        }
+        covered = s;
+        break;
+      }
+
+      covered = e;
+      for (const it of (r.items || [])) {
+        const rel = parseTime(it.t);
+        if (rel === null) continue;
+        // 区間先頭を0:00として出させているので、こちらで絶対時刻に直す
+        items.push({ ...it, abs: s + rel, t: fmtTime(s + rel) });
+      }
+      // 最初の区間で映像の種類を判定し、想定外なら止める（枠を無駄に使わないため）
+      if (i === 0) {
+        viewType = r.viewType || "pov";
+        if (viewType === "person") {
+          log("この動画には運転者や同乗者が映っている（または話し声が入っている）ようです。", "warn");
+          log("このツールは前方視点の無言のドライブ動画を前提にしています。", "warn");
+          log("人が映る動画に実況を重ねると、画面内に運転者が2人いる状態になり、話し声とも重なります。", "warn");
+          log("続けても構いませんが、意図した結果にはなりにくいです。", "warn");
+        } else if (viewType === "other") {
+          log("前方視点の走行映像として認識できませんでした。台本の質は期待できません。", "warn");
+        }
+      }
+      context = r.summary || context;
+      // 生成が再生に追いつけるかの判断材料（区間長に対して何倍速で作れているか）
+      const sec = (performance.now() - t0) / 1000;
+      log(`  → ${(r.items || []).length}件 / ${sec.toFixed(1)}秒（区間長の ${((e - s) / sec).toFixed(0)}倍速）`);
+    }
+    items.sort((a, b) => a.abs - b.abs);
+    const spoken = items.filter(it => it.line);
+    if (!items.length) throw new Error("台本を1件も作れませんでした。上のエラーを確認してから、やり直してください。");
+    log(`台本 合計 ${items.length}件（発話 ${spoken.length}件 / 無言 ${items.length - spoken.length}件・${Math.round((items.length - spoken.length) / items.length * 100)}%）`);
+    // 前回の失敗（セリフの4割が信号の実況）を毎回測れるようにしておく
+    const filler = spoken.filter(it => /信号|青になっ|青になり|赤信号|ストップ|停止し|停車し|発進し|スタートし/.test(it.line)).length;
+    const lecture = spoken.filter(it => /安全|確認し|車間|慎重に|しっかり/.test(it.line)).length;
+    if (spoken.length) {
+      log(`  信号・発停の実況 ${filler}件（${Math.round(filler / spoken.length * 100)}%）／運転解説 ${lecture}件（${Math.round(lecture / spoken.length * 100)}%）`,
+          filler / spoken.length > 0.15 ? "warn" : "");
+      const mins = (covered - start) / 60 || 1;
+      const nScene = spoken.filter(it => it.kind === "scene").length;
+      const nChat = spoken.filter(it => it.kind === "chat").length;
+      log(`  実況 ${nScene}件（${(nScene / mins).toFixed(1)}回/分・上限${sceneDensity}）／雑談 ${nChat}件（${(nChat / mins).toFixed(1)}回/分・上限${chatDensity}）`);
+    }
+    const repeats = findRepeats(items);
+    log(repeats.length ? `似ているセリフ ${repeats.length}組（下に表示）` : "似すぎているセリフはなし", repeats.length ? "warn" : "");
+
+    // コメントの取得と割り当て
+    let comments = [];
+    if (useComments) {
+      log("コメントを取得中...");
+      if (!ownerChannelId) log("  投稿者のチャンネルIDが取れず、本人の返信を判別できません。", "warn");
+      const maxReplies = Math.max(0, parseInt($("maxReplies").value, 10) || 0);
+      const all = await fetchComments(videoId, ownerChannelId, maxReplies);
+      comments = all.filter(c => c.text && isJa(c.text));
+      // 読み上げ方針：投稿者本人の言葉は原文のまま、視聴者のやり取りはまとめて1回反応
+      for (const c of comments) {
+        c.speak = c.role === "owner" ? "asis"
+                : c.ownerReply ? "reply"   // 本人の返信があるなら、それを反応の代わりに使う
+                : "react";
+      }
+      const nAsis = comments.filter(c => c.speak === "asis").length;
+      const nReply = comments.filter(c => c.speak === "reply").length;
+      const nThread = comments.filter(c => c.replies.length).length;
+      const nOmitted = comments.reduce((s, c) => s + c.omitted, 0);
+      log(`  取得 ${all.length}件 → 日本語 ${comments.length}件`);
+      log(`  うち投稿者本人 ${nAsis}件 / 本人の返信あり ${nReply}件 → これらはAIに反応を作らせません`);
+      log(`  視聴者同士のやり取りあり ${nThread}件` + (nOmitted ? `（上限超過で ${nOmitted}件の返信を省略）` : ""));
+
+      for (const c of comments) {
+        const st = extractStamp(c.text);
+        if (st !== null && st >= start && st <= end) { c.abs = st; c.by = "stamp"; }
+      }
+      const stamped = comments.filter(c => c.by === "stamp").length;
+      log(`  タイムスタンプ付き ${stamped}件`);
+
+      const rest = comments.filter(c => c.by !== "stamp").slice(0, 60);
+      if (rest.length && items.length) {
+        log(`  残り ${rest.length}件を場面に割り当て中...`);
+        const sceneList = items.map(it => `${it.t}\t${it.scene}${it.place ? "（" + it.place + "）" : ""}`).join("\n");
+        const cmtList = rest.map(c => `${c.id}\t${c.text.replace(/\s+/g, " ").slice(0, 120)}`).join("\n");
+        const r = await gemini([{ text:
+`以下は、あるドライブ動画のシーン一覧と、その動画に付いた日本語コメントです。
+各コメントが「どの場面について言っているか」を判断し、最も近いシーンのタイムスタンプを割り当ててください。
+
+# 判断基準
+- 地名・道路名・施設名がコメントに含まれ、シーン側の記述と一致するならそれを最優先する
+- 「ここの合流」「この交差点」のような指示語だけの場合は、特徴が一致するシーンを選ぶ
+- 動画全体への感想（「作業用に最高」「お疲れ様です」等）は t を空文字にする
+- 確信が持てないものは、無理に割り当てず t を空文字にする
+
+# シーン一覧（タイムスタンプ／説明）
+${sceneList}
+
+# コメント（ID／本文）
+${cmtList}` }], ASSIGN_SCHEMA);
+
+        const byId = new Map(rest.map(c => [c.id, c]));
+        let n = 0;
+        for (const a of (r.assignments || [])) {
+          const c = byId.get(a.id);
+          const abs = parseTime(a.t);
+          if (c && abs !== null) { c.abs = abs; c.by = "ai"; n++; }
+        }
+        log(`  → ${n}件を割り当て`);
+      }
+    }
+
+    lastResult = {
+      // どの条件で作った台本かを残す（設定を変えて回した結果を後から比較するため）
+      promptVersion: PROMPT_VERSION,
+      generatedAt: new Date().toISOString(),
+      model: lsGet("model", "gemini-3.6-flash"),
+      videoId, start, end, covered, viewType,
+      chunkMin: chunkSec / 60,
+      persona, sceneDensity, chatDensity, interests,
+      useComments, maxReplies: useComments ? Math.max(0, parseInt($("maxReplies").value, 10) || 0) : null,
+      meta, chapters, items, comments
+    };
+    render(lastResult);
+    $("btnDownload").disabled = false;
+    $("btnCopy").disabled = false;
+    log("完了", "");
+  } catch (e) {
+    log(e.message, "err");
+  } finally {
+    $("btnRun").disabled = false;
+  }
+}
+
+/* ---------- 表示 ---------- */
+function render(r) {
+  const out = $("out");
+  out.innerHTML = "";
+
+  // コメントの時刻がどう決まったかの内訳（紐づけ精度を判断するための材料）
+  if (r.comments.length) {
+    const byStamp = r.comments.filter(c => c.by === "stamp").length;
+    const byAi = r.comments.filter(c => c.by === "ai").length;
+    const none = r.comments.filter(c => c.abs === undefined).length;
+    const s = document.createElement("fieldset");
+    s.innerHTML = "<legend>コメントの内訳</legend><table>" +
+      `<tr><td style="width:12em">本文に時刻が書かれていた</td><td>${byStamp}件<span class="tag" style="margin-left:8px">確実</span></td></tr>` +
+      `<tr><td>AIが場面を推測した</td><td>${byAi}件<span class="tag" style="margin-left:8px">要確認</span></td></tr>` +
+      `<tr><td>紐づかなかった</td><td>${none}件</td></tr>` +
+      "</table>";
+    out.appendChild(s);
+  }
+
+  // 似すぎているセリフ＝聞いていて飽きる原因。最初に出す
+  const repeats = findRepeats(r.items);
+  if (repeats.length) {
+    const rp = document.createElement("fieldset");
+    rp.innerHTML = `<legend>似ているセリフ（${repeats.length}組）</legend>` +
+      `<p class="hint" style="margin:0 0 8px">言い回しの重複です。多いようならキャラクター設定を厚くするか、セリフ密度を下げてください。</p>` +
+      repeats.slice(0, 15).map(p =>
+        `<div class="cmt"><span class="tag">${Math.round(p.score * 100)}%</span>` +
+        `${p.a.t} ${escapeHtml(p.a.line)}<br>${p.b.t} ${escapeHtml(p.b.line)}</div>`
+      ).join("");
+    out.appendChild(rp);
+  }
+
+  // コメントが集中している時刻＝見どころ
+  const buckets = new Map();
+  for (const c of r.comments) {
+    if (c.abs === undefined) continue;
+    const k = Math.floor(c.abs / 30) * 30;
+    buckets.set(k, (buckets.get(k) || 0) + 1);
+  }
+  const hot = [...buckets.entries()].filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  if (hot.length) {
+    const h = document.createElement("fieldset");
+    h.innerHTML = "<legend>見どころ（コメントが集中している時刻）</legend><table>" +
+      hot.map(([t, n]) => `<tr><td style="width:70px">${fmtTime(t)}</td><td>${n}件</td></tr>`).join("") +
+      "</table>";
+    out.appendChild(h);
+  }
+
+  const byTime = new Map();
+  for (const c of r.comments) {
+    if (c.abs === undefined) continue;
+    // 各コメントを、直前の台本項目にぶら下げる
+    let target = null;
+    for (const it of r.items) { if (it.abs <= c.abs + 15) target = it; else break; }
+    if (!target) continue;
+    if (!byTime.has(target)) byTime.set(target, []);
+    byTime.get(target).push(c);
+  }
+
+  const wrap = document.createElement("fieldset");
+  wrap.innerHTML = "<legend>台本</legend>";
+  for (const it of r.items) {
+    const div = document.createElement("div");
+    div.className = "item";
+    const silent = !it.line;
+    // act はスキーマのenumで縛っているが、モデル出力を無加工で埋めない
+    const tags = (it.kind === "chat" ? `<span class="tag">雑談</span>` : "") +
+                 `<span class="tag">${escapeHtml(it.act)}${it.amount ? " " + Number(it.amount) : ""}</span>` +
+                 (it.place ? `<span class="tag">${escapeHtml(it.place)}</span>` : "");
+    const cmts = (byTime.get(it) || []).map(c =>
+      `<div class="cmt">${speakTag(c)}<b>${escapeHtml(c.author)}</b>${c.by === "stamp" ? "（時刻指定）" : ""}: ${escapeHtml(c.text.slice(0, 140))}` +
+      threadHtml(c) + `</div>`
+    ).join("");
+    div.innerHTML =
+      `<div class="t">${it.t}</div>` +
+      `<div><div class="line${silent ? " silent" : ""}">${silent ? "（無言）" : escapeHtml(it.line)}</div>` +
+      `<div class="scene">${tags}${escapeHtml(it.scene)}</div>${cmts}</div>`;
+    wrap.appendChild(div);
+  }
+  out.appendChild(wrap);
+
+  const unassigned = r.comments.filter(c => c.abs === undefined);
+  if (unassigned.length) {
+    const u = document.createElement("fieldset");
+    u.innerHTML = `<legend>全体への感想（場面に紐づかなかった ${unassigned.length}件）</legend>` +
+      unassigned.slice(0, 20).map(c =>
+        `<div class="cmt">${speakTag(c)}<b>${escapeHtml(c.author)}</b>: ${escapeHtml(c.text.slice(0, 140))}</div>`
+      ).join("");
+    out.appendChild(u);
+  }
+}
+
+// 読み上げ順（視聴者のやり取り → 投稿者の返信）をそのまま縦に並べる
+function threadHtml(c) {
+  const box = s => `<div style="margin-top:5px;padding-left:10px;border-left:2px solid var(--line)">${s}</div>`;
+  let h = (c.replies || []).map(r =>
+    box(`<b>${escapeHtml(r.author)}</b>: ${escapeHtml(r.text.slice(0, 140))}`)).join("");
+  if (c.omitted) h += box(`<span style="color:var(--sub)">…他 ${c.omitted}件は上限のため省略</span>`);
+  if (c.ownerReply) {
+    h += `<div style="margin-top:5px;padding-left:10px;border-left:2px solid var(--accent)">` +
+         `<span class="tag">投稿者の返信・原文のまま読む</span>${escapeHtml(c.ownerReply.slice(0, 140))}</div>`;
+  }
+  return h;
+}
+
+function speakTag(c) {
+  const t = (c.replies && c.replies.length) ? `<span class="tag">やり取り${c.replies.length + 1}件・まとめて反応</span>` : "";
+  if (c.speak === "asis")  return t + `<span class="tag">投稿者本人・原文のまま読む</span>`;
+  if (c.speak === "reply") return t + `<span class="tag">投稿者の返信で締める・AI反応なし</span>`;
+  return t;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, ch =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+}
+
+/* ---------- 設定 ---------- */
+async function loadModels() {
+  const key = lsGet("gemini-api-key") || $("geminiKey").value.trim();
+  if (!key) { alert("先にGemini APIキーを入力してください。"); return; }
+  $("btnModels").disabled = true;
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}&pageSize=200`);
+    if (!res.ok) throw new Error(`取得失敗 ${res.status}`);
+    const d = await res.json();
+    // generateContent対応だけでは埋め込み・画像生成・音声系も残るので、名前でも絞る
+    const NOT_VIDEO = /embedding|imagen|image|veo|tts|audio|live|aqa|thinking-exp/i;
+    const names = (d.models || [])
+      .filter(m => (m.supportedGenerationMethods || []).includes("generateContent"))
+      .map(m => m.name.replace(/^models\//, ""))
+      .filter(n => /^gemini-/.test(n) && !NOT_VIDEO.test(n))
+      .sort()
+      .reverse();  // 新しいバージョンが上に来るように
+    if (!names.length) throw new Error("動画を扱えそうなモデルが見つかりませんでした。");
+    const sel = $("modelList");
+    sel.innerHTML = names.map(n => `<option value="${n}">${n}</option>`).join("");
+    sel.style.display = "block";
+    sel.onchange = () => { $("model").value = sel.value; };
+    $("model").value = names[0];
+  } catch (e) {
+    alert(e.message);
+  } finally {
+    $("btnModels").disabled = false;
+  }
+}
+
+// Googleのエラー文は原因が読み取りにくいので、次にやることへ翻訳する
+function ytErrorHint(msg) {
+  if (/API keys are not supported|blocked|SERVICE_BLOCKED/i.test(msg)) {
+    return "このキーは YouTube に使えません（Generative Language API 専用に絞られています）。"
+         + "上の手順3で、キーの「APIの制限」に YouTube Data API v3 を追加してください。"
+         + "キーが一覧に出てこない場合は兼用できないので、折りたたみの手順で別キーを作ってください。";
+  }
+  // 「disabled comments」が下の accessNotConfigured 判定に食われるので先に見る
+  if (/disabled comments|commentsDisabled/i.test(msg)) {
+    return "この動画はコメントが無効です。キー自体は有効なので、別の動画で試してください。";
+  }
+  if (/has not been used in project|accessNotConfigured|it is disabled/i.test(msg)) {
+    return "プロジェクトで YouTube Data API v3 が有効になっていません。下の手順1〜2を実行してください。";
+  }
+  if (/quota|exceeded/i.test(msg)) {
+    return "今日の無料枠を使い切っています。日付が変わるまで待ってください。";
+  }
+  return "下の手順を開いてください。";
+}
+
+// 実際に使う commentThreads で試す（URL未入力なら1ユニットで叩ける i18nLanguages にフォールバック）
+async function testYtKey() {
+  // 空欄なら兼用（ステップ1のキー）を試す
+  const usingGemini = !$("ytKey").value.trim();
+  const key = $("ytKey").value.trim() || $("geminiKey").value.trim() || lsGet("gemini-api-key");
+  const el = $("ytTestResult");
+  if (!key) { el.className = "hint err"; el.textContent = "ステップ1のキーを入力するか、この欄にYouTube用のキーを入れてください。"; return; }
+  $("btnTestYt").disabled = true;
+  el.className = "hint"; el.textContent = "確認中...";
+  try {
+    const vid = parseVideoId($("url").value);
+    const url = vid
+      ? `https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&maxResults=1&videoId=${vid}&key=${encodeURIComponent(key)}`
+      : `https://www.googleapis.com/youtube/v3/i18nLanguages?part=snippet&key=${encodeURIComponent(key)}`;
+    const res = await fetch(url);
+    if (res.ok) {
+      el.className = "hint ok";
+      el.textContent = (usingGemini ? "ステップ1のキーで兼用できています。" : "このキーで取得できます。")
+        + (vid ? "いま入力中の動画のコメントが取得できました。"
+               : "（動画URLを入れてから押すと、その動画で実際に確認できます）");
+    } else {
+      let msg = `HTTP ${res.status}`;
+      try { msg = (await res.json())?.error?.message || msg; } catch (e) {}
+      el.className = "hint err";
+      el.textContent = ytErrorHint(msg) + "\n\n返ってきたエラー: " + msg;
+    }
+  } catch (e) {
+    el.className = "hint err";
+    el.textContent = "通信に失敗しました: " + e.message;
+  } finally {
+    $("btnTestYt").disabled = false;
+  }
+}
+
+/* ---------- データリポジトリ（GitHub） ---------- */
+// キャラクター設定と興味・関心の置き場。利用者自身のprivateリポジトリに置き、claude.ai/codeから編集できるようにする。
+// 案内ファイル（CLAUDE.md）の作成は player.html 側が受け持つ（二重に持たない）
+const GH = "https://api.github.com";
+const CHAR_FILES = {
+  persona:   { path: "character/persona.md",   label: "キャラクター設定" },
+  interests: { path: "character/interests.md", label: "興味・関心" },
+};
+
+function ghHeaders() {
+  return {
+    "Authorization": `Bearer ${lsGet("github-pat")}`,
+    "Accept": "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+  };
+}
+// URLを貼られても owner/repo に直す
+function repoSlug(input) {
+  return String(input || "").trim()
+    .replace(/^https?:\/\/(www\.)?github\.com\//, "").replace(/^github\.com\//, "")
+    .replace(/\.git$/, "").match(/^[\w.-]+\/[\w.-]+/)?.[0] ?? "";
+}
+function repoReady() {
+  const r = lsGet("data-repo"), p = lsGet("github-pat");
+  if (!r || !p) throw new Error("設定のステップ4でリポジトリとトークンを入れてください。");
+  return r;
+}
+async function ghError(res) {
+  let m = "";
+  try { m = (await res.json())?.message || ""; } catch (e) {}
+  if (res.status === 401) return "トークンが正しくありません。発行し直して貼り直してください。";
+  if (res.status === 403) return "権限が足りません。トークンの Repository permissions に Contents: Read and write が要ります。";
+  if (res.status === 404) return "リポジトリが見つかりません。名前の綴りと、トークンがそのリポジトリを選んでいるかを確認してください。";
+  return `GitHub ${res.status}${m ? "：" + m : ""}`;
+}
+function b64encode(u8) {
+  let s = "";
+  for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+// shaは親ディレクトリの一覧から取る（本文が1MBを超えると GET /contents が403になるため）
+async function ghList(dir) {
+  const res = await fetch(`${GH}/repos/${repoReady()}/contents/${dir}`, { headers: ghHeaders() });
+  if (res.status === 404) return [];
+  if (!res.ok) throw new Error(await ghError(res));
+  const j = await res.json();
+  return Array.isArray(j) ? j : [];
+}
+async function ghGetText(path) {
+  const res = await fetch(`${GH}/repos/${repoReady()}/contents/${path}`, {
+    headers: { ...ghHeaders(), "Accept": "application/vnd.github.raw" }
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(await ghError(res));
+  return new TextDecoder().decode(await res.arrayBuffer());
+}
+async function ghPutText(path, text, message, sha) {
+  const bytes = new TextEncoder().encode(text);
+  const send = s => fetch(`${GH}/repos/${repoReady()}/contents/${path}`, {
+    method: "PUT",
+    headers: { ...ghHeaders(), "content-type": "application/json" },
+    body: JSON.stringify({ message, content: b64encode(bytes), ...(s ? { sha: s } : {}) })
+  });
+  let res = await send(sha);
+  if (res.status === 409 || res.status === 422) {
+    // sha違いは最新を取り直して1回だけやり直す（後勝ち）
+    const cur = (await ghList(path.replace(/\/[^/]*$/, ""))).find(f => f.path === path);
+    res = await send(cur?.sha);
+  }
+  if (!res.ok) throw new Error(await ghError(res));
+}
+
+/* ---------- 興味・関心のURLを読ませる ---------- */
+// ブラウザからは他所のページを取りに行けない（CORS）。Geminiの url_context ツールに読ませて感想を作らせる。
+// 作った感想は興味・関心の欄に書き足すので、あとから手でもclaude.ai/codeからも直せる
+const URL_RE = /https?:\/\/[^\s<>"'）)]+/g;
+const READS_DIR = "character/reads";
+let lastRead = { ok: 0, ng: 0 };   // 直前の読み込み結果（ボタンの表示用）
+
+function urlNotes() {
+  try { return JSON.parse(lsGet("url-notes", "{}")); } catch (e) { return {}; }
+}
+
+// ファイル名にする。URLごとに1ファイルなので、同じドメインで衝突しないよう末尾に短いハッシュを付ける
+function readSlug(url) {
+  let h = 0;
+  for (let i = 0; i < url.length; i++) h = (h * 31 + url.charCodeAt(i)) >>> 0;
+  const base = url.replace(/^https?:\/\//, "").replace(/[?#].*$/, "").replace(/\/+$/, "")
+    .replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
+  return `${base || "page"}-${h.toString(36)}`;
+}
+
+// 「# タイトル」「## 要約」「## 感想」の3節に分ける。構造化出力はurl_contextと併用すると取得が落ちることがあるため使わない
+function parseRead(text) {
+  const pick = (re) => (text.match(re) || [])[1]?.trim() || "";
+  return {
+    title:   pick(/^#\s*タイトル\s*\n([\s\S]*?)(?=\n##\s|\n#\s|$)/m),
+    summary: pick(/^##\s*要約\s*\n([\s\S]*?)(?=\n##\s|\n#\s|$)/m),
+    note:    pick(/^##\s*感想\s*\n([\s\S]*?)(?=\n##\s|\n#\s|$)/m),
+  };
+}
+
+async function geminiReadUrl(url, persona) {
+  const key = lsGet("gemini-api-key");
+  const model = lsGet("model", "gemini-3.6-flash");
+  const prompt = `次のページを読んで、下の形式で答えてください。
+
+${url}
+
+# キャラクター
+${persona}
+
+# 出力の形式（この見出しをそのまま使うこと）
+# タイトル
+（記事のタイトル）
+
+## 要約
+（何が書かれていたか。5行以内。事実だけ）
+
+## 感想
+（上のキャラクターが後で雑談のときに漏らす程度の感想）
+
+# 感想の書き方
+- 3行以内。要約や説明ではなく主観（何が良かった・何が引っかかった・何を思い出したか）
+- 固有名詞は多くても1つ。数字や引用は使わない
+- ひとりごとの口調で。相手に説明しない
+
+ページを読めなかったときは「読めませんでした」とだけ書いてください。`;
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      // 構造化出力は使わない。url_context と併用すると取得結果が落ちることがあるため
+      body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], tools: [{ url_context: {} }] })
+    }
+  );
+  if (!res.ok) {
+    let d = "";
+    try { d = (await res.json())?.error?.message || ""; } catch (e) {}
+    throw new Error(`Gemini API ${res.status}${d ? "：" + d : ""}`);
+  }
+  const data = await res.json();
+  // 実際にページを取れたかはメタデータで判定する。取れていないのに感想が返ることがあるため
+  const meta = data?.candidates?.[0]?.urlContextMetadata?.urlMetadata
+            ?? data?.candidates?.[0]?.url_context_metadata?.url_metadata ?? [];
+  const status = meta.map(m => m.urlRetrievalStatus || m.url_retrieval_status || "");
+  if (status.length && !status.some(s => /SUCCESS/i.test(s))) {
+    throw new Error("ページを取得できませんでした（非公開・ログイン必須・JavaScriptで描画、のいずれか）。");
+  }
+  const text = (data?.candidates?.[0]?.content?.parts || []).map(p => p.text).filter(Boolean).join("").trim();
+  if (!text) throw new Error("感想が返りませんでした。");
+  if (/読めませんでした/.test(text)) throw new Error("ページを読めませんでした。");
+  const r = parseRead(text);
+  if (!r.note) throw new Error("感想を取り出せませんでした。");
+  return r;
+}
+
+// 記事1本ぶんの記録。要約と感想を分けて残し、claude.ai/codeから直せるようにする
+function readFileBody(url, r) {
+  return `# ${r.title || url}
+
+- URL: ${url}
+- 読んだ日: ${new Date().toISOString().slice(0, 10)}
+
+## 要約
+
+${r.summary || "（取れませんでした）"}
+
+## 感想
+
+${r.note}
+`;
+}
+
+// URL行の直後に感想を差し込む。読み込み済みのURLは触らないので、繰り返し実行しても増えない
+function insertNotes(text, notes) {
+  const out = [];
+  for (const line of text.split("\n")) {
+    out.push(line);
+    for (const u of (line.match(URL_RE) || [])) if (notes[u]) out.push(notes[u]);
+  }
+  return out.join("\n");
+}
+
+// character/reads/ の記録を集める。URL→感想 と、上書き用のsha
+async function collectReads() {
+  const files = (await ghList(READS_DIR)).filter(f => f.name?.endsWith(".md"));
+  const notes = {}, shas = {};
+  for (const f of files) {
+    shas[f.path] = f.sha;
+    const body = await ghGetText(f.path);
+    if (!body) continue;
+    const url = (body.match(/^-\s*URL:\s*(\S+)/m) || [])[1];
+    const note = (body.match(/^##\s*感想\s*\n([\s\S]*?)(?=\n##\s|\n#\s|$)/m) || [])[1]?.trim();
+    if (url && note) notes[url] = note;
+  }
+  return { notes, shas };
+}
+
+// 未読のURLだけ読ませる。戻り値はプロンプトに渡すテキスト
+// リポジトリを使っているときは character/reads/ が感想の正。使っていないときは欄に書き足す
+async function prepareInterests(persona, onProgress = () => {}) {
+  const text = $("interests").value;
+  const useRepo = !!(lsGet("data-repo") && lsGet("github-pat"));
+  const cache = urlNotes();
+  const urls = [...new Set(text.match(URL_RE) || [])];
+
+  let notes = {}, shas = {};
+  if (useRepo && urls.length) {
+    try { ({ notes, shas } = await collectReads()); }
+    catch (e) { onProgress(`記録を読めませんでした（${e.message}）。この端末の控えを使います。`); }
+  }
+
+  const made = {};
+  lastRead = { ok: 0, ng: 0 };
+  for (const u of urls.filter(u => !(useRepo ? notes[u] : cache[u]))) {
+    onProgress(`ページを読んでいます: ${u}`);
+    try {
+      const r = await geminiReadUrl(u, persona);
+      made[u] = cache[u] = r.note;
+      if (useRepo) {
+        const path = `${READS_DIR}/${readSlug(u)}.md`;
+        await ghPutText(path, readFileBody(u, r), `追加: 記事の要約と感想（${r.title || u}）`, shas[path]);
+        notes[u] = r.note;
+      }
+      lastRead.ok++;
+    } catch (e) {
+      // 読めなかったURLは感想を作らない。次に生成するときにまた試みる
+      lastRead.ng++;
+      onProgress(`読めませんでした（${e.message}）`);
+    }
+  }
+  lsSet("url-notes", JSON.stringify(cache));
+
+  if (useRepo) {
+    const list = urls.map(u => notes[u]).filter(Boolean);
+    if (!list.length) return text.trim();
+    return `${text.trim()}\n\n# 読んだものの感想\n${list.join("\n\n")}`;
+  }
+  if (Object.keys(made).length) {
+    $("interests").value = insertNotes(text, made);
+    lsSet("interests", $("interests").value);
+  }
+  return $("interests").value.trim();
+}
+
+function charStatus(msg, cls = "") {
+  const el = $("charStatus");
+  el.textContent = msg;
+  el.style.color = cls === "err" ? "var(--err)" : cls === "ok" ? "" : "var(--sub)";
+}
+
+// リポジトリの character/ を手元に反映する。無いファイルは手元の値を残す
+async function charPull(quiet = false) {
+  const got = [];
+  for (const [id, f] of Object.entries(CHAR_FILES)) {
+    const text = await ghGetText(f.path);
+    if (text === null) continue;
+    $(id).value = text.trim();
+    lsSet(id === "persona" ? "persona" : "interests", $(id).value);
+    got.push(f.label);
+  }
+  if (got.length) charStatus(`リポジトリから読み込みました（${got.join("・")}）。`, "ok");
+  else if (!quiet) charStatus("リポジトリに character/ がまだありません。「リポジトリに保存」で作れます。");
+  return got.length;
+}
+
+// 手元の内容をリポジトリへ書き戻す
+async function charPush() {
+  const shas = {};
+  for (const f of await ghList("character")) shas[f.path] = f.sha;
+  for (const [id, f] of Object.entries(CHAR_FILES)) {
+    await ghPutText(f.path, $(id).value.trim() + "\n", `更新: ${f.label}`, shas[f.path]);
+  }
+  charStatus("リポジトリに保存しました（character/）。", "ok");
+}
+
+/* ---------- 初期化 ---------- */
+$("btnSettings").onclick = () => $("dlg").showModal();
+$("btnClose").onclick = () => $("dlg").close();
+$("btnModels").onclick = loadModels;
+$("btnTestYt").onclick = testYtKey;
+$("btnUseGemini").onclick = () => {
+  const k = $("geminiKey").value.trim();
+  if (!k) { alert("先にステップ1のGemini APIキーを入力してください。"); return; }
+  $("ytKey").value = k;
+  testYtKey();
+};
+$("btnSave").onclick = () => {
+  lsSet("gemini-api-key", $("geminiKey").value.trim());
+  lsSet("yt-api-key", $("ytKey").value.trim());
+  lsSet("model", $("model").value.trim() || "gemini-3.6-flash");
+  const slug = repoSlug($("dataRepo").value);
+  if ($("dataRepo").value.trim() && !slug) { alert("リポジトリは ユーザー名/リポジトリ名 の形式で入れてください。"); return; }
+  lsSet("data-repo", slug);
+  $("dataRepo").value = slug;
+  lsSet("github-pat", $("ghPat").value.trim());
+  $("dlg").close();
+};
+$("btnReadUrls").onclick = async () => {
+  const btn = $("btnReadUrls");
+  btn.disabled = true;
+  try {
+    await prepareInterests($("persona").value.trim(), m => charStatus(m));
+    const { ok, ng } = lastRead;
+    charStatus(
+      ok || ng ? `${ok}件を読みました${ng ? `（${ng}件は読めませんでした）` : ""}。` : "新しく読むURLはありませんでした。",
+      ng && !ok ? "err" : "ok");
+  } catch (e) {
+    charStatus(e.message, "err");
+  } finally {
+    btn.disabled = false;
+  }
+};
+$("btnCharPull").onclick = async () => {
+  charStatus("読み込んでいます…");
+  try { await charPull(); } catch (e) { charStatus(e.message, "err"); }
+};
+$("btnCharPush").onclick = async () => {
+  charStatus("保存しています…");
+  try { await charPush(); } catch (e) { charStatus(e.message, "err"); }
+};
+$("densityScene").oninput = () => { $("densitySceneVal").textContent = $("densityScene").value; };
+$("densityChat").oninput  = () => { $("densityChatVal").textContent  = $("densityChat").value; };
+$("btnRun").onclick = run;
+$("btnDownload").onclick = () => {
+  if (!lastResult) return;
+  const blob = new Blob([JSON.stringify(lastResult, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `drive-wipe-script-${lastResult.videoId}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+// iOSではBlobダウンロードが新規タブで開くだけになることがあるため、コピーも用意する
+$("btnCopy").onclick = async () => {
+  if (!lastResult) return;
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(lastResult, null, 2));
+    $("btnCopy").textContent = "コピーしました";
+    setTimeout(() => { $("btnCopy").textContent = "JSONをコピー"; }, 1500);
+  } catch (e) {
+    alert("コピーできませんでした: " + e.message);
+  }
+};
+
+(function init() {
+  $("geminiKey").value = lsGet("gemini-api-key");
+  $("ytKey").value = lsGet("yt-api-key");
+  $("model").value = lsGet("model", "gemini-3.6-flash");
+  // キャラクター設定はHTMLの既定文をそのまま初期値にする（保存済みがあればそちら）
+  $("persona").value = lsGet("persona", $("persona").value);
+  $("persona").onchange = () => lsSet("persona", $("persona").value);
+  $("interests").value = lsGet("interests");
+  $("interests").onchange = () => lsSet("interests", $("interests").value);
+  $("dataRepo").value = lsGet("data-repo");
+  $("ghPat").value = lsGet("github-pat");
+  $("url").value = lsGet("last-url");
+  $("url").onchange = () => lsSet("last-url", $("url").value.trim());
+  if (!lsGet("gemini-api-key")) $("dlg").showModal();
+  // リポジトリ側を正とする。取れなければ手元の値のまま黙って続ける
+  if (lsGet("data-repo") && lsGet("github-pat")) {
+    charPull(true).catch(e => charStatus(`リポジトリから読み込めませんでした（${e.message}）。この端末の内容を使います。`, "err"));
+  }
+})();
+</script>
+</body>
+</html>

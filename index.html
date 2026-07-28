@@ -107,6 +107,9 @@
   }
   body.full-mode #timeline { display: none; }
   @media (max-width: 680px) {
+    /* 入力欄を1行占有させる。ボタンと並べると見出しが縦に折り返す */
+    #quick > .grow { flex: 1 1 100%; }
+    #quick button { flex: 1 1 auto; }
     #playArea { display: block; }
     #tlWrap { position: static; }
     #timeline { position: static; margin-top: 10px; max-height: 260px; }
@@ -176,9 +179,10 @@
   #pickList .pick:first-child { border-top: 0; }
   #pickList .pick:hover { background: var(--panel); }
   /* ---- 統合UI ---- */
-  #quick { display: flex; gap: 8px; align-items: flex-end; margin-bottom: 10px; }
-  #quick > .grow { flex: 1 1 auto; min-width: 0; }
+  #quick { display: flex; gap: 8px; align-items: flex-end; margin-bottom: 10px; flex-wrap: wrap; }
+  #quick > .grow { flex: 1 1 320px; min-width: 0; }
   #quick button { flex: 0 0 auto; }
+  #quick label { white-space: nowrap; }
   #stageBar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 8px 0 16px; }
   #stageBar label { margin: 0; font-size: 13px; }
   #detailPanel { margin-top: 8px; }

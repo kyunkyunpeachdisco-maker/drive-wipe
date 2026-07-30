@@ -1798,8 +1798,10 @@ function importTag() { return script ? lsGet("import-voice:" + scriptKey(script)
 
 async function cacheGet(text) {
   try {
-    // 取り込んだ音声を優先する。スマホに内蔵音声しかなくても、PCで作った声で鳴る
     const tag = importTag();
+    // 「その場で生成」を選んでいるときは、取り込み済みを使わない
+    if (tag === "__generate") return (await idbGet("a:" + voiceKey(text))) || null;
+    // 取り込んだ音声を優先する。スマホに内蔵音声しかなくても、PCで作った声で鳴る
     if (tag) {
       const im = await idbGet(`i:${tag}:` + await textHash(text));
       if (im) return im;
@@ -1979,7 +1981,10 @@ const GUIDE = `# データリポジトリ
 - \`scripts/<動画ID>_<開始>-<終了>.json\` … 台本。発話の時刻・本文・場面が入っています
 - \`audio/<同じ名前>/<声>/index.json\` … その声の音声一覧（エンジン・話者・表示名つき）
 - \`audio/<同じ名前>/<声>/<12桁>.mp3|wav\` … 発話1件ぶんの音声。ファイル名は本文のハッシュです
-- 声のフォルダは \`voicevox-102\` のように「エンジン-話者ID」。**声を変えても前の声は消えず**、アプリで選べます
+- 声のフォルダは \`voicevox-102\` のように「エンジン-話者ID」。作り直しは \`voicevox-102_2\` のように後ろに付け足します
+- **声を変えたり作り直したりしても前のものは消えず**、アプリのプルダウンで選べます
+- 同じ声が複数あるとき、アプリの既定は**フォルダ名の降順で最初のもの**（＝いちばん新しい取り置き）です。
+  古いほうを正にしたいときは、新しいフォルダを消すか、名前を入れ替えてください（このリポジトリの整理はAIに頼めます）
 
 ## AIに編集を頼むときのルール
 
@@ -2044,7 +2049,7 @@ async function repoPushCore() {
     const voiceName = $("voice").selectedOptions[0]?.textContent || $("voice").value;
     const meta = {
       engine: $("engine").value, voice: $("voice").value,
-      label: voiceName,
+      label: voiceName, createdAt: new Date().toISOString(),
       rate: $("rate").value, style: $("style").value,
       title: script.meta?.title || script.videoId, items
     };
@@ -2070,9 +2075,13 @@ async function listVoices(key) {
       const idx = await ghGetRaw(`audio/${key}/${f.name}/index.json`);
       if (!idx) continue;
       const meta = JSON.parse(new TextDecoder().decode(idx));
-      out.push({ tag: f.name, label: meta.label || `${meta.engine} / ${meta.voice}`, meta });
+      const d = meta.createdAt ? `・${meta.createdAt.slice(5, 10).replace("-", "/")}` : "";
+      out.push({ tag: f.name, label: (meta.label || `${meta.engine} / ${meta.voice}`) + d, meta });
     } catch (e) {}
   }
+  // 同じ声を作り直した場合はフォルダ名の降順で新しいほうが先に来る。
+  // 「どれを正にするか」はリポジトリのフォルダ整理（削除・改名）で決められる
+  out.sort((a, b) => b.tag.localeCompare(a.tag));
   return out;
 }
 
@@ -2081,13 +2090,13 @@ async function refreshImportVoices(data) {
   const key = scriptKey(data);
   const voices = await listVoices(key);
   const sel = $("importVoice");
-  sel.innerHTML = voices.length
-    ? voices.map(v => `<option value="${v.tag}">${v.label}</option>`).join("")
-    : `<option value="">（この台本の保存済み音声はまだありません）</option>`;
-  sel.disabled = !voices.length;
-  if (!voices.length) return null;
+  sel.innerHTML = voices.map(v => `<option value="${v.tag}">${v.label}</option>`).join("")
+    + `<option value="__generate">その場で生成（取り込まない）</option>`;
+  sel.disabled = false;
   const saved = lsGet("import-voice:" + key);
-  const chosen = voices.find(v => v.tag === saved) || voices[0];
+  if (saved === "__generate") { sel.value = "__generate"; return null; }
+  if (!voices.length) { sel.value = "__generate"; return null; }
+  const chosen = voices.find(v => v.tag === saved) || voices[0];   // 既定＝一番新しい取り置き
   sel.value = chosen.tag;
   lsSet("import-voice:" + key, chosen.tag);
   return chosen;
@@ -2129,6 +2138,11 @@ $("importVoice").onchange = async () => {
   const key = scriptKey(script), tag = $("importVoice").value;
   if (!tag) return;
   lsSet("import-voice:" + key, tag);
+  if (tag === "__generate") {
+    clearAudioCache();
+    status("この台本は取り込みを使わず、その場で生成します（音声タブのエンジンと話者の設定で鳴ります）。", "ok");
+    return;
+  }
   try {
     const voices = await listVoices(key);
     const v = voices.find(x => x.tag === tag);

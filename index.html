@@ -510,6 +510,10 @@
         <select id="voice"></select>
       </div>
       <div class="fixed"><button id="btnTest">声を確認</button></div>
+      <div>
+        <label for="importVoice">この台本の保存済みの声</label>
+        <select id="importVoice" disabled><option value="">（台本を読み込むと出ます）</option></select>
+      </div>
     </div>
     <div class="row" style="margin-top:8px" id="vvUrlRow">
       <div>
@@ -1789,11 +1793,20 @@ async function textHash(text) {
   const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return [...new Uint8Array(d).slice(0, 6)].map(b => b.toString(16).padStart(2, "0")).join("");
 }
+// いま選ばれている「保存済みの声」。台本ごとに覚える
+function importTag() { return script ? lsGet("import-voice:" + scriptKey(script)) : ""; }
+
 async function cacheGet(text) {
   try {
     // 取り込んだ音声を優先する。スマホに内蔵音声しかなくても、PCで作った声で鳴る
-    const im = await idbGet("i:" + await textHash(text));
-    if (im) return im;
+    const tag = importTag();
+    if (tag) {
+      const im = await idbGet(`i:${tag}:` + await textHash(text));
+      if (im) return im;
+    }
+    // 旧形式（声のフォルダ分けより前）の取り込みぶん
+    const legacy = await idbGet("i:" + await textHash(text));
+    if (legacy) return legacy;
     return (await idbGet("a:" + voiceKey(text))) || null;
   } catch (e) { return null; }
 }
@@ -1964,8 +1977,9 @@ const GUIDE = `# データリポジトリ
 - \`character/reads/<記事>.md\` … 貼られたURLをアプリが読んで残した記録（URL・読んだ日・要約・感想）
 - \`avatar/model.vrm\` … アバターのVRM。\`avatar/settings.json\` … 画角・腕・ワイプなどの調整値
 - \`scripts/<動画ID>_<開始>-<終了>.json\` … 台本。発話の時刻・本文・場面が入っています
-- \`audio/<同じ名前>/index.json\` … その台本の音声一覧（作った声の設定つき）
-- \`audio/<同じ名前>/<12桁>.mp3|wav\` … 発話1件ぶんの音声。ファイル名は本文のハッシュです
+- \`audio/<同じ名前>/<声>/index.json\` … その声の音声一覧（エンジン・話者・表示名つき）
+- \`audio/<同じ名前>/<声>/<12桁>.mp3|wav\` … 発話1件ぶんの音声。ファイル名は本文のハッシュです
+- 声のフォルダは \`voicevox-102\` のように「エンジン-話者ID」。**声を変えても前の声は消えず**、アプリで選べます
 
 ## AIに編集を頼むときのルール
 
@@ -2000,7 +2014,9 @@ async function ensureGuide() {
 async function repoPushCore() {
   if (!script) throw new Error("台本が読み込まれていません。");
   const key = scriptKey(script);
-  const dir = `audio/${key}`;
+  // 声を混ぜないよう、エンジンと話者ごとのフォルダに分けて置く
+  const tag = `${$("engine").value}-${$("voice").value}`.replace(/[^\w.-]+/g, "_");
+  const dir = `audio/${key}/${tag}`;
   status("リポジトリの状態を確認しています...");
   const shas = {};
   for (const f of await ghList(dir)) shas[f.path] = f.sha;
@@ -2025,8 +2041,10 @@ async function repoPushCore() {
               `更新: 台本 ${key}`, shas[`scripts/${key}.json`]);
   await window.__noteScriptSaved?.(script);
   if (items.length) {
+    const voiceName = $("voice").selectedOptions[0]?.textContent || $("voice").value;
     const meta = {
       engine: $("engine").value, voice: $("voice").value,
+      label: voiceName,
       rate: $("rate").value, style: $("style").value,
       title: script.meta?.title || script.videoId, items
     };
@@ -2043,33 +2061,85 @@ async function repoPushCore() {
 // 台本を読み込んだら、その台本の音声も自動で取り込む。
 // 取り込み済みは飛ばすので、2回目以降は一覧を1回取るだけで終わる
 let autoPullKey = "";
+// audio/<key>/ 配下の声フォルダを列挙する（声ごとに index.json を持つ）
+async function listVoices(key) {
+  const out = [];
+  for (const f of await ghList(`audio/${key}`)) {
+    if (f.type !== "dir") continue;
+    try {
+      const idx = await ghGetRaw(`audio/${key}/${f.name}/index.json`);
+      if (!idx) continue;
+      const meta = JSON.parse(new TextDecoder().decode(idx));
+      out.push({ tag: f.name, label: meta.label || `${meta.engine} / ${meta.voice}`, meta });
+    } catch (e) {}
+  }
+  return out;
+}
+
+// 声セレクトを埋めて、選ばれている声を取り込む
+async function refreshImportVoices(data) {
+  const key = scriptKey(data);
+  const voices = await listVoices(key);
+  const sel = $("importVoice");
+  sel.innerHTML = voices.length
+    ? voices.map(v => `<option value="${v.tag}">${v.label}</option>`).join("")
+    : `<option value="">（この台本の保存済み音声はまだありません）</option>`;
+  sel.disabled = !voices.length;
+  if (!voices.length) return null;
+  const saved = lsGet("import-voice:" + key);
+  const chosen = voices.find(v => v.tag === saved) || voices[0];
+  sel.value = chosen.tag;
+  lsSet("import-voice:" + key, chosen.tag);
+  return chosen;
+}
+
+async function pullVoice(key, tag, meta) {
+  const items = meta.items || [];
+  let got = 0, have = 0;
+  for (const it of items) {
+    if (await idbGet(`i:${tag}:` + it.h)) { have++; continue; }
+    status(`保存済みの音声を取り込んでいます... ${got + have + 1}/${items.length}`);
+    const bytes = await ghGetRaw(`audio/${key}/${tag}/${it.h}.${it.ext}`);
+    if (!bytes) continue;
+    await idbSet(`i:${tag}:` + it.h, makeClip(it.enc, bytes, it.rate, it.ext));
+    got++;
+  }
+  if (got) clearAudioCache();
+  return { got, have };
+}
+
 async function autoPullAudio(data) {
   if (!lsGet("data-repo") || !lsGet("github-pat")) return;
   const key = scriptKey(data);
   if (autoPullKey === key) return;   // 同じ台本で何度も走らせない
   autoPullKey = key;
   try {
-    const idx = await ghGetRaw(`audio/${key}/index.json`);
-    if (!idx) return;                // 音声が無い台本なら黙って何もしない
-    const meta = JSON.parse(new TextDecoder().decode(idx));
-    const items = meta.items || [];
-    let got = 0, have = 0;
-    for (const it of items) {
-      if (await idbGet("i:" + it.h)) { have++; continue; }
-      status(`保存済みの音声を取り込んでいます... ${got + have + 1}/${items.length}`);
-      const bytes = await ghGetRaw(`audio/${key}/${it.h}.${it.ext}`);
-      if (!bytes) continue;
-      await idbSet("i:" + it.h, makeClip(it.enc, bytes, it.rate, it.ext));
-      got++;
-    }
-    if (got) {
-      clearAudioCache();
-      status(`保存済みの音声を取り込みました（新規 ${got}件・取り込み済み ${have}件）。このまま再生できます。`, "ok");
-    }
+    const chosen = await refreshImportVoices(data);
+    if (!chosen) return;             // 音声が無い台本なら黙って何もしない
+    const { got, have } = await pullVoice(key, chosen.tag, chosen.meta);
+    if (got) status(`保存済みの音声を取り込みました（${chosen.label}／新規 ${got}件・取り込み済み ${have}件）。`, "ok");
   } catch (e) {
     status(`音声の取り込みに失敗しました（${e.message}）。データタブの「まとめて読み込む」で再試行できます。`, "warn");
   }
 }
+
+// 声を切り替えたら、その声を取り込んで以後の再生に使う
+$("importVoice").onchange = async () => {
+  if (!script) return;
+  const key = scriptKey(script), tag = $("importVoice").value;
+  if (!tag) return;
+  lsSet("import-voice:" + key, tag);
+  try {
+    const voices = await listVoices(key);
+    const v = voices.find(x => x.tag === tag);
+    if (!v) return;
+    const { got, have } = await pullVoice(key, tag, v.meta);
+    clearAudioCache();
+    status(`この台本の声を「${v.label}」にしました（新規 ${got}件・取り込み済み ${have}件）。`, "ok");
+  } catch (e) {
+    status(`声を切り替えられませんでした（${e.message}）。`, "err");
+  }
+};
 
 $("btnRepoSave").onclick = () => {
   const slug = repoSlug($("dataRepo").value);

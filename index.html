@@ -430,16 +430,14 @@
 
     <div class="row" style="margin-top:10px">
       <div class="fixed"><button id="btnReadUrls">URLを読んで感想を作る</button></div>
-      <div class="fixed"><button id="btnCharPull">リポジトリから読み込む</button></div>
-      <div class="fixed"><button id="btnCharPush">リポジトリに保存</button></div>
       <div><p class="hint" id="charStatus" style="margin:0"></p></div>
     </div>
     <p class="hint">
       興味・関心に<b>noteなどのURLを貼っておくと、その記事を読んで感想を作り、欄に書き足します</b>。
       以降はその感想が雑談の材料になります。読むのはGeminiで、1つのURLにつき1回だけです。
       台本生成の前にも自動で走ります。<br>
-      キャラクター設定と興味・関心は<b>データリポジトリの <code>character/</code></b> に置けます（設定のステップ4）。
-      置いておくと claude.ai/code でリポジトリを開いて書き換えられ、作られた感想もそこへ残ります。
+      キャラクター設定・興味・関心・フィードは、データリポジトリを設定していれば<b>起動時に自動で読み込まれます</b>。
+      手元での書き換えを残したいときは、詳細設定「データ」タブの「まとめて保存」を押してください。
     </p>
 
     <div class="row">
@@ -484,12 +482,11 @@
   <div class="row" style="margin-bottom:16px">
     <button id="btnRun" class="primary fixed">台本を生成</button>
     <button id="btnRegenChat" class="fixed">雑談だけ作り直す</button>
-    <button id="btnRepoSaveScript" class="fixed" disabled>リポジトリに保存</button>
     <button id="btnDownload" class="fixed" disabled>JSONを保存</button>
     <button id="btnCopy" class="fixed" disabled>JSONをコピー</button>
   </div>
   <p class="hint" style="margin:-8px 0 16px">
-    「リポジトリに保存」を使うと、プレイヤーの「保存済みの台本を見る」からそのまま開けます（設定のステップ4が要ります）。
+    データリポジトリを設定していれば、できあがった台本は<b>自動で保存され</b>、「保存済みから選ぶ」に並びます。
   </p>
 
   <div id="out"></div>
@@ -514,6 +511,19 @@
       </div>
       <div class="fixed"><button id="btnTest">声を確認</button></div>
     </div>
+    <div class="row" style="margin-top:8px" id="vvUrlRow">
+      <div>
+        <label for="vvUrl">VOICEVOXの接続先</label>
+        <input type="text" id="vvUrl" placeholder="http://127.0.0.1:50021"
+               autocapitalize="off" autocorrect="off" spellcheck="false">
+      </div>
+    </div>
+    <p class="hint" id="vvHelp">
+      同じPCで使うなら空欄のままで動きます。<b>スマホなど別の端末から使う場合</b>は、PC側で
+      <code>cloudflared tunnel --url http://127.0.0.1:50021</code> を実行し、表示された <code>https://…</code> をここに貼ります
+      （このページはHTTPSのため、<code>http://</code>のLANアドレスはブラウザが拒否します）。
+      エンジンは <code>--allow_origin https://kyunkyunpeachdisco-maker.github.io</code> 付きで起動してください。
+    </p>
     <div class="row" style="margin-top:8px" id="ttsModelRow">
       <div>
         <label for="ttsModel">音声モデル（Gemini音声のみ）</label>
@@ -783,18 +793,18 @@
       <div class="fixed"><button id="btnRepoSave">保存</button></div>
     </div>
     <div class="row" style="margin-top:8px">
-      <div class="fixed"><button id="btnRepoPush">台本と音声を保存</button></div>
-      <div class="fixed"><button id="btnRepoPull">保存した音声を取り込む</button></div>
-      <div class="fixed"><button id="btnRepoList">保存済みの台本を見る</button></div>
+      <div class="fixed"><button id="btnSyncPush">まとめて保存</button></div>
+      <div class="fixed"><button id="btnSyncPull">まとめて読み込む</button></div>
     </div>
-    <div class="row" style="margin-top:8px">
-      <div class="fixed"><button id="btnAvatarPush">アバターと調整値を保存</button></div>
-      <div class="fixed"><button id="btnAvatarPull">アバターと調整値を取り込む</button></div>
-    </div>
+    <p class="hint">
+      <b>まとめて保存</b>＝キャラクター（設定・興味・フィード）＋アバター（VRM・調整値）＋読み込み中の台本と用意済みの音声。<br>
+      <b>まとめて読み込む</b>＝キャラクター＋アバター＋この台本の音声。台本そのものは上部の「保存済みから選ぶ」から開きます。
+    </p>
     <p class="hint" id="repoHint">
       PCで作った音声をスマホで鳴らすための置き場です。<b>台本と音声をあなたのプライベートリポジトリに保存し、別の端末で取り込みます。</b>
       取り込んだ音声はエンジンの設定に関係なく再生されるので、スマホに内蔵音声しかなくてもPCで作った声で鳴ります。
-      <b>台本を読み込むと、その台本の音声は自動で取り込まれます。</b>下のボタンは、失敗したときの再試行用です。
+      <b>台本の保存・音声の取り込みは自動で行われます</b>（台本は生成時、音声は「まとめて用意」後と台本の読み込み時）。
+      取り込み直したいときだけ「まとめて読み込む」を押してください。
     </p>
     <details>
       <summary>初回の準備（3ステップ）</summary>
@@ -934,37 +944,6 @@
     <p class="hint">無料枠は1日10,000ユニット。コメント取得は1回1ユニットなので、通常は使い切りません。</p>
   </section>
 
-  <section class="step">
-    <h3><span class="num">4</span>データリポジトリ<span style="color:var(--sub)">（任意）</span></h3>
-    <p class="hint" style="margin-bottom:10px">
-      キャラクター設定と興味・関心を、自分のプライベートリポジトリに置いて使うための設定です。
-      claude.ai/code でそのリポジトリを開けば、内容の書き換えをAIに頼めます。
-      実況プレイヤー側で設定済みなら、ここは空欄のままで構いません（同じ設定を共有します）。
-    </p>
-    <label for="genDataRepo">リポジトリ（ユーザー名/リポジトリ名）</label>
-    <input type="text" id="genDataRepo" placeholder="例: yourname/drive-wipe-data（URL貼り付けも可）"
-           autocapitalize="off" autocorrect="off" spellcheck="false">
-    <label for="genGhPat" style="margin-top:10px">アクセストークン</label>
-    <input type="password" id="genGhPat" placeholder="github_pat_..."
-           autocapitalize="off" autocorrect="off" spellcheck="false">
-    <ol style="margin:10px 0 0 1.2em">
-      <li><a href="https://github.com/new?name=drive-wipe-data&visibility=private" target="_blank" rel="noopener">このリンク</a>からプライベートリポジトリを作る（名前と非公開が入力済み）。既存のものを使うなら飛ばせます</li>
-      <li><a href="https://github.com/settings/personal-access-tokens/new?name=drive-wipe" target="_blank" rel="noopener">このリンク</a>から Fine-grained トークンを発行する。Token name の例は <code>drive-wipe</code> です
-        <ul style="margin:4px 0 0 0">
-          <li>Expiration：<code>90 days</code> か <code>Custom→1年後</code></li>
-          <li>Repository access：<code>Only select repositories</code> → 1で作ったリポジトリ</li>
-          <li>Repository permissions：<code>Contents: Read and write</code> だけ</li>
-        </ul>
-      </li>
-      <li>表示された <code>github_pat_…</code> を上に貼って「保存」<br>
-        <b>この画面を閉じるとトークンは二度と表示されません。</b></li>
-    </ol>
-    <p class="hint">
-      設定すると、次回このページを開いたときに <code>character/</code> の内容を自動で読み込みます。
-      読み込めなかった場合は、この端末に保存されている内容をそのまま使います。
-    </p>
-  </section>
-
   <div class="row" style="margin-top:20px">
     <button id="btnSave" class="primary fixed">保存</button>
     <button id="btnClose" class="fixed">閉じる</button>
@@ -980,7 +959,7 @@ const $ = id => document.getElementById(id);
 function lsGet(k, d = "") { try { return localStorage.getItem(LS + k) ?? d; } catch (e) { return d; } }
 function lsSet(k, v) { try { localStorage.setItem(LS + k, v); } catch (e) {} }
 
-const VOICEVOX_URL = "http://127.0.0.1:50021";
+function vvUrl() { return (lsGet("voicevox-url").trim() || "http://127.0.0.1:50021").replace(/\/+$/, ""); }
 
 let script = null;      // 読み込んだ台本
 let cues = [];          // 再生用に平坦化した発話キュー
@@ -1427,7 +1406,7 @@ async function gcloudError(res) {
 const voicevox = {
   speakers: [],
   async init() {
-    const res = await fetch(`${VOICEVOX_URL}/speakers`);
+    const res = await fetch(`${vvUrl()}/speakers`);
     if (!res.ok) throw new Error(`VOICEVOX 応答エラー ${res.status}`);
     const list = await res.json();
     this.speakers = [];
@@ -1436,14 +1415,14 @@ const voicevox = {
     return this.speakers;
   },
   async synth(text, speakerId, rate) {
-    const q = await fetch(`${VOICEVOX_URL}/audio_query?text=${encodeURIComponent(text)}&speaker=${speakerId}`, { method: "POST" });
+    const q = await fetch(`${vvUrl()}/audio_query?text=${encodeURIComponent(text)}&speaker=${speakerId}`, { method: "POST" });
     if (!q.ok) throw new Error(`audio_query ${q.status}`);
     const query = await q.json();
     query.speedScale = rate;
     // 24kHzステレオのままだと台本1本で13MBを超える。話し声は16kHzモノラルで足りる
     query.outputSamplingRate = 16000;
     query.outputStereo = false;
-    const s = await fetch(`${VOICEVOX_URL}/synthesis?speaker=${speakerId}`, {
+    const s = await fetch(`${vvUrl()}/synthesis?speaker=${speakerId}`, {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(query)
     });
     if (!s.ok) throw new Error(`synthesis ${s.status}`);
@@ -1465,6 +1444,8 @@ function syncEngineRows() {
   $("ttsModelRow").style.display = v === "gemini" ? "" : "none";
   $("gttsKeyRow").style.display = v === "gcloud" ? "" : "none";
   $("gttsHelp").style.display = v === "gcloud" ? "" : "none";
+  $("vvUrlRow").style.display = v === "voicevox" ? "" : "none";
+  $("vvHelp").style.display = v === "voicevox" ? "" : "none";
 }
 
 let voicesReady = Promise.resolve();
@@ -1855,6 +1836,10 @@ async function prepareAll() {
       done++;
     }
     status(`音声を用意しました。${list.length}件（うち保存済みの再利用 ${reused}件）`, "ok");
+    if (lsGet("data-repo") && lsGet("github-pat")) {
+      try { await repoPushCore(); }
+      catch (e) { status(`音声はできましたが、リポジトリへの保存に失敗しました（${e.message}）。データタブの「まとめて保存」で再試行できます。`, "warn"); }
+    }
   } finally {
     $("btnPrepare").disabled = false;
     $("btnCancelPrepare").style.display = "none";
@@ -2012,32 +1997,34 @@ async function ensureGuide() {
   } catch (e) { return false; }   // 案内ファイルの失敗で保存を止めない
 }
 
-async function repoPush() {
-  if (!script) { status("先に台本を読み込んでください。", "err"); return; }
-  $("btnRepoPush").disabled = true;
-  try {
-    const key = scriptKey(script);
-    const dir = `audio/${key}`;
-    status("リポジトリの状態を確認しています...");
-    const shas = {};
-    for (const f of await ghList(dir)) shas[f.path] = f.sha;
-    for (const f of await ghList("scripts")) shas[f.path] = f.sha;
+async function repoPushCore() {
+  if (!script) throw new Error("台本が読み込まれていません。");
+  const key = scriptKey(script);
+  const dir = `audio/${key}`;
+  status("リポジトリの状態を確認しています...");
+  const shas = {};
+  for (const f of await ghList(dir)) shas[f.path] = f.sha;
+  for (const f of await ghList("scripts")) shas[f.path] = f.sha;
 
-    const items = [];
-    let put = 0, skip = 0;
-    for (const c of cues) {
-      const clip = audioCache.get(c.id) || await cacheGet(c.text);
-      if (!clip || !clip.data) continue;
-      const h = await textHash(c.text);
-      const path = `${dir}/${h}.${clip.ext || "bin"}`;
-      items.push({ h, ext: clip.ext, enc: clip.enc, rate: clip.rate, text: c.text });
-      if (shas[path]) { skip++; continue; }   // 同じ本文の音声は作り直さない
-      status(`音声を保存しています... ${put + 1}件目（既存 ${skip}件）`);
-      await ghPut(path, clip.data, `追加: 音声 ${key}/${h}`);
-      put++;
-    }
-    if (!items.length) { status("保存できる音声がありません。先に「音声をまとめて用意」を実行してください。", "err"); return; }
+  const items = [];
+  let put = 0, skip = 0;
+  for (const c of cues) {
+    const clip = audioCache.get(c.id) || await cacheGet(c.text);
+    if (!clip || !clip.data) continue;
+    const h = await textHash(c.text);
+    const path = `${dir}/${h}.${clip.ext || "bin"}`;
+    items.push({ h, ext: clip.ext, enc: clip.enc, rate: clip.rate, text: c.text });
+    if (shas[path]) { skip++; continue; }   // 同じ本文の音声は作り直さない
+    status(`音声を保存しています... ${put + 1}件目（既存 ${skip}件）`);
+    await ghPut(path, clip.data, `追加: 音声 ${key}/${h}`);
+    put++;
+  }
 
+  // 音声がまだなくても台本だけは置く（音声は「まとめて用意」後に自動で追いつく）
+  await ghPut(`scripts/${key}.json`, new TextEncoder().encode(JSON.stringify(script, null, 2)),
+              `更新: 台本 ${key}`, shas[`scripts/${key}.json`]);
+  await window.__noteScriptSaved?.(script);
+  if (items.length) {
     const meta = {
       engine: $("engine").value, voice: $("voice").value,
       rate: $("rate").value, style: $("style").value,
@@ -2045,17 +2032,11 @@ async function repoPush() {
     };
     await ghPut(`${dir}/index.json`, new TextEncoder().encode(JSON.stringify(meta, null, 2)),
                 `更新: 音声一覧 ${key}`, shas[`${dir}/index.json`]);
-    await ghPut(`scripts/${key}.json`, new TextEncoder().encode(JSON.stringify(script, null, 2)),
-                `更新: 台本 ${key}`, shas[`scripts/${key}.json`]);
-    await window.__noteScriptSaved?.(script);
-    const made = await ensureGuide();
-    status(`保存しました。音声 ${put}件（既存の再利用 ${skip}件）と台本を置きました。`
-         + (made ? " リポジトリに案内ファイル（CLAUDE.md）を作成しました。" : ""), "ok");
-  } catch (e) {
-    status("保存できませんでした: " + e.message, "err");
-  } finally {
-    $("btnRepoPush").disabled = false;
   }
+  const made = await ensureGuide();
+  status(items.length
+    ? `保存しました。音声 ${put}件（既存の再利用 ${skip}件）と台本を置きました。` + (made ? " 案内ファイル（CLAUDE.md）も作成しました。" : "")
+    : "台本を保存しました（用意済みの音声はまだありません）。", "ok");
 }
 
 
@@ -2086,54 +2067,7 @@ async function autoPullAudio(data) {
       status(`保存済みの音声を取り込みました（新規 ${got}件・取り込み済み ${have}件）。このまま再生できます。`, "ok");
     }
   } catch (e) {
-    status(`音声の取り込みに失敗しました（${e.message}）。「保存した音声を取り込む」で再試行できます。`, "warn");
-  }
-}
-
-async function repoPull() {
-  if (!script) { status("先に台本を読み込んでください。", "err"); return; }
-  $("btnRepoPull").disabled = true;
-  try {
-    const key = scriptKey(script);
-    status("音声一覧を取得しています...");
-    const idx = await ghGetRaw(`audio/${key}/index.json`);
-    if (!idx) { status(`この台本の音声はまだ保存されていません（audio/${key}）。`, "err"); return; }
-    const meta = JSON.parse(new TextDecoder().decode(idx));
-    let got = 0, have = 0;
-    for (const it of (meta.items || [])) {
-      if (await idbGet("i:" + it.h)) { have++; continue; }
-      status(`音声を取り込んでいます... ${got + have + 1}/${meta.items.length}`);
-      const bytes = await ghGetRaw(`audio/${key}/${it.h}.${it.ext}`);
-      if (!bytes) continue;
-      await idbSet("i:" + it.h, makeClip(it.enc, bytes, it.rate, it.ext));
-      got++;
-    }
-    clearAudioCache();
-    status(`取り込みました。新規 ${got}件（取り込み済み ${have}件）。`
-         + `作ったときの声は ${meta.engine} / ${meta.voice} です。このまま再生できます。`, "ok");
-  } catch (e) {
-    status("取り込めませんでした: " + e.message, "err");
-  } finally {
-    $("btnRepoPull").disabled = false;
-  }
-}
-
-async function repoListScripts() {
-  $("btnRepoList").disabled = true;
-  try {
-    status("保存済みの台本を探しています...");
-    const list = (await ghList("scripts")).filter(f => f.name.endsWith(".json"));
-    if (!list.length) { status("まだ台本が保存されていません。", "warn"); return; }
-    const name = prompt(`読み込む台本の番号を入れてください。\n\n`
-      + list.map((f, i) => `${i + 1}. ${f.name.replace(/\.json$/, "")}`).join("\n"));
-    const i = parseInt(name, 10) - 1;
-    if (!(i >= 0 && i < list.length)) return;
-    const bytes = await ghGetRaw(list[i].path);
-    loadScript(JSON.parse(new TextDecoder().decode(bytes)));
-  } catch (e) {
-    status("読み込めませんでした: " + e.message, "err");
-  } finally {
-    $("btnRepoList").disabled = false;
+    status(`音声の取り込みに失敗しました（${e.message}）。データタブの「まとめて読み込む」で再試行できます。`, "warn");
   }
 }
 
@@ -2145,9 +2079,35 @@ $("btnRepoSave").onclick = () => {
   if ($("ghPat").value.trim()) lsSet("github-pat", $("ghPat").value.trim());
   status(lsGet("github-pat") ? "保存しました。" : "トークンも入れてください。", lsGet("github-pat") ? "ok" : "warn");
 };
-$("btnRepoPush").onclick = repoPush;
-$("btnRepoPull").onclick = repoPull;
-$("btnRepoList").onclick = openPicker;
+$("btnSyncPush").onclick = async () => {
+  const btn = $("btnSyncPush");
+  btn.disabled = true;
+  const done = [], failed = [];
+  try {
+    repoReady();
+    try { await window.__charPush?.(); done.push("キャラクター"); } catch (e) { failed.push(`キャラクター（${e.message}）`); }
+    try { await avatarPush(); done.push("アバター"); } catch (e) { failed.push(`アバター（${e.message}）`); }
+    if (script) {
+      try { await repoPushCore(); done.push("台本と音声"); } catch (e) { failed.push(`台本と音声（${e.message}）`); }
+    }
+    status(`保存：${done.join("・") || "なし"}${script ? "" : "（台本は未読み込みのため対象外）"}`
+         + (failed.length ? ` ／ 失敗：${failed.join("・")}` : ""), failed.length ? "warn" : "ok");
+  } catch (e) {
+    status(e.message, "err");
+  } finally { btn.disabled = false; }
+};
+$("btnSyncPull").onclick = async () => {
+  const btn = $("btnSyncPull");
+  btn.disabled = true;
+  try {
+    repoReady();
+    try { await window.__charPull?.(true); } catch (e) {}
+    if (script) { autoPullKey = ""; await autoPullAudio(script); }
+    await avatarPull();   // アバターが置いてあれば、最後に画面の読み直しがかかる
+  } catch (e) {
+    status(e.message, "err");
+  } finally { btn.disabled = false; }
+};
 
 /* ---------- アバター（キャンバス） ---------- */
 // VRMに差し替えられるよう、描画はここだけに閉じてある
@@ -2257,7 +2217,9 @@ let queue = [];
 let lastT = -1;
 let draining = false;
 
+let tickRAF = 0;
 function tick() {
+  cancelAnimationFrame(tickRAF);   // 一時停止→再開のたびにループが増えるのを防ぐ
   if (!started || !player || !player.getCurrentTime) return;
   const t = player.getCurrentTime();
 
@@ -2282,7 +2244,7 @@ function tick() {
   prefetch(t);
   const cur = cues.filter(c => c.at <= t).pop();
   if (cur) highlightCue(cur.id);
-  requestAnimationFrame(tick);
+  tickRAF = requestAnimationFrame(tick);
 }
 
 async function drain() {
@@ -2462,9 +2424,16 @@ $("btnOpenSaved").onclick = openPicker;
 $("pickClose").onclick = () => $("pickDlg").close();
 
 // ジェネレーター側から台本を受け取り、読み込んで再生まで進める
+// 生成側から台本を受け取ったら、読み込み→再生→リポジトリへの自動保存まで進める
+async function autoSaveScript() {
+  if (!lsGet("data-repo") || !lsGet("github-pat")) return;
+  try { await repoPushCore(); }
+  catch (e) { status(`台本の自動保存に失敗しました（${e.message}）。データタブの「まとめて保存」で再試行できます。`, "warn"); }
+}
 window.__onScriptReady = data => {
   loadScript(data);
   $("btnStart").click();
+  autoSaveScript();
 };
 
 // 全画面ではタイムラインと操作を隠しているので、必要なときだけ出す
@@ -2604,18 +2573,6 @@ async function avatarPull() {
   setTimeout(() => location.reload(), 800);
 }
 
-$("btnAvatarPush").onclick = async () => {
-  $("btnAvatarPush").disabled = true;
-  status("保存しています…");
-  try { await avatarPush(); } catch (e) { status(e.message, "err"); }
-  finally { $("btnAvatarPush").disabled = false; }
-};
-$("btnAvatarPull").onclick = async () => {
-  $("btnAvatarPull").disabled = true;
-  status("取り込んでいます…");
-  try { await avatarPull(); } catch (e) { status(e.message, "err"); }
-  finally { $("btnAvatarPull").disabled = false; }
-};
 
 $("vrmFile").onchange = async e => {
   const f = e.target.files?.[0];
@@ -2640,6 +2597,8 @@ $("vrmFile").onchange = async e => {
     $("ttsModel").value = tm;
   }
   $("gttsKey").value = lsGet("gtts-api-key");
+  $("vvUrl").value = lsGet("voicevox-url");
+  $("vvUrl").onchange = () => { lsSet("voicevox-url", $("vvUrl").value.trim()); refreshVoices(); };
   $("dataRepo").value = lsGet("data-repo");
   $("ghPat").value = lsGet("github-pat");
   syncEngineRows();
@@ -3465,7 +3424,7 @@ ${interests}
 - **景色に変化がなく、目の前に語ることがない区間でこそ使う**。手持ち無沙汰なときの独り言として出す
 - 逆に、見どころや標識が続いている区間では差し込まない（そちらを優先する）
 - 映っているものから連想して入るのが自然だが、何もない直線なら脈絡なく思い出しても構わない
-- この区間全体で**多くても1〜2回**。連続させない
+- この区間全体で**多くても1〜2回**。連続させない（続きものとして2〜3回に分けて話す場合は、全体で1回と数える）
 - 解説や紹介にならないよう、ひとことの感想にとどめる（詳しく語らない）
 - 確かでないことは言わない。知識を披露しない
 - URLや見出し記号が混ざっていても、それ自体は読み上げない。**書かれている感想や中身のほうを使う**
@@ -3519,6 +3478,8 @@ line には性質の違う2種類があり、それぞれ別の上限を設け�
 - 見どころ・標識・地名が続く区間は **scene を優先し、chat は減らす**（0でよい）
 - 景色に変化がなく語ることがない区間は **scene を無理に作らず、chat で間を持たせる**
 - 実況と雑談を1つの line に詰め込まない。どちらか一方の性質にする
+- 区間に1回まで、**続きものの雑談**を入れてよい。1つの話題を2〜3回の chat に分け、間に実況を挟みながら続ける。
+  2回目以降は「で、さっきの話だけど」のように前を受けて話す。1回ごとの発話は短く切る
 
 拾う細かさの調整（重要）：
 上の回数は上限であると同時に**目安**です。出力がその目安を大きく下回りそうなときは、
@@ -3931,7 +3892,6 @@ ${cmtList}` }], ASSIGN_SCHEMA);
     // できあがったらそのまま再生に入る。音声は走りながら作られる
     try { window.__onScriptReady?.(lastResult); } catch (e) { log("再生を始められませんでした: " + e.message, "err"); }
     $("btnDownload").disabled = false;
-    $("btnRepoSaveScript").disabled = false;
     $("btnCopy").disabled = false;
     log("完了", "");
   } catch (e) {
@@ -4167,7 +4127,7 @@ function repoSlug(input) {
 }
 function repoReady() {
   const r = lsGet("data-repo"), p = lsGet("github-pat");
-  if (!r || !p) throw new Error("設定のステップ4でリポジトリとトークンを入れてください。");
+  if (!r || !p) throw new Error("詳細設定「データ」タブでリポジトリとトークンを入れてください。");
   return r;
 }
 async function ghError(res) {
@@ -4492,16 +4452,6 @@ function scriptKey(d) {
   return `${d.videoId}_${Math.round(d.start || 0)}-${Math.round(d.covered ?? d.end ?? 0)}`;
 }
 
-async function pushScript() {
-  if (!lastResult) return;
-  const key = scriptKey(lastResult);
-  const path = `scripts/${key}.json`;
-  const cur = (await ghList("scripts")).find(f => f.path === path);
-  await ghPutText(path, JSON.stringify(lastResult, null, 2), `更新: 台本 ${key}`, cur?.sha);
-  await window.__noteScriptSaved?.(lastResult);
-  return key;
-}
-
 function charStatus(msg, cls = "") {
   const el = $("charStatus");
   el.textContent = msg;
@@ -4524,6 +4474,9 @@ async function charPull(quiet = false) {
 }
 
 // 手元の内容をリポジトリへ書き戻す
+window.__charPull = (...a) => charPull(...a);
+window.__charPush = () => charPush();
+
 async function charPush() {
   const shas = {};
   for (const f of await ghList("character")) shas[f.path] = f.sha;
@@ -4580,7 +4533,8 @@ ${scenes.length ? scenes.map(x => `${fmtTime(x.abs)} ${x.line}`).join("\n") : "�
 - 上の実況を読んで、その場の状況に合う内容にする
 - 興味・関心は、語ることがなさそうな区間で使う。連続させない
 - ひとことの感想にとどめる。解説や紹介にしない。確かでないことは言わない
-- 見どころが続いていそうな区間には差し込まない`;
+- 見どころが続いていそうな区間には差し込まない
+- 1回まで、1つの話題を2〜3発話に分け、実況を挟んで続けてよい。2回目以降は前を受けた言い方にする`;
 }
 
 async function regenerateChat(onProgress = () => {}) {
@@ -4634,11 +4588,6 @@ $("btnSave").onclick = () => {
   lsSet("gemini-api-key", $("geminiKey").value.trim());
   lsSet("yt-api-key", $("ytKey").value.trim());
   lsSet("model", $("model").value.trim() || "gemini-3.6-flash");
-  const slug = repoSlug($("genDataRepo").value);
-  if ($("genDataRepo").value.trim() && !slug) { alert("リポジトリは ユーザー名/リポジトリ名 の形式で入れてください。"); return; }
-  lsSet("data-repo", slug);
-  $("genDataRepo").value = slug;
-  lsSet("github-pat", $("genGhPat").value.trim());
   $("dlg").close();
 };
 $("btnFeedFetch").onclick = async () => {
@@ -4673,14 +4622,6 @@ $("btnReadUrls").onclick = async () => {
     btn.disabled = false;
   }
 };
-$("btnCharPull").onclick = async () => {
-  charStatus("読み込んでいます…");
-  try { await charPull(); } catch (e) { charStatus(e.message, "err"); }
-};
-$("btnCharPush").onclick = async () => {
-  charStatus("保存しています…");
-  try { await charPush(); } catch (e) { charStatus(e.message, "err"); }
-};
 $("densityScene").oninput = () => { $("densitySceneVal").textContent = $("densityScene").value; };
 $("densityChat").oninput  = () => { $("densityChatVal").textContent  = $("densityChat").value; };
 $("btnRun").onclick = run;
@@ -4693,23 +4634,9 @@ $("btnRegenChat").onclick = async () => {
   try {
     const data = await regenerateChat(m => log("  " + m));
     $("btnDownload").disabled = false;
-    $("btnRepoSaveScript").disabled = false;
     window.__onScriptReady?.(data);
   } catch (e) {
     log("作り直せませんでした: " + e.message, "err");
-  } finally {
-    btn.disabled = false;
-  }
-};
-$("btnRepoSaveScript").onclick = async () => {
-  const btn = $("btnRepoSaveScript");
-  btn.disabled = true;
-  log("リポジトリに保存しています...");
-  try {
-    const key = await pushScript();
-    log(`保存しました: scripts/${key}.json`, "");
-  } catch (e) {
-    log("保存できませんでした: " + e.message, "err");
   } finally {
     btn.disabled = false;
   }
@@ -4749,8 +4676,6 @@ $("btnCopy").onclick = async () => {
   $("feedOrder").value = lsGet("feed-order", "date");
   $("feedMax").value = lsGet("feed-max", "3");
   $("interests").onchange = () => lsSet("interests", $("interests").value);
-  $("genDataRepo").value = lsGet("data-repo");
-  $("genGhPat").value = lsGet("github-pat");
   $("url").value = lsGet("last-url");
   $("url").onchange = () => lsSet("last-url", $("url").value.trim());
   if (!lsGet("gemini-api-key")) $("dlg").showModal();

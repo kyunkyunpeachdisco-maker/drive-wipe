@@ -1797,8 +1797,14 @@ async function textHash(text) {
   const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return [...new Uint8Array(d).slice(0, 6)].map(b => b.toString(16).padStart(2, "0")).join("");
 }
-// いま選ばれている「保存済みの声」。台本ごとに覚える
-function importTag() { return script ? lsGet("import-voice:" + scriptKey(script)) : ""; }
+// いま使う取り置き。人の選択は台本ごとに覚え、取り置きは読み込み時に解決する
+let currentImportTake = "";
+function importTag() {
+  if (!script) return "";
+  const sel = lsGet("import-voice:" + scriptKey(script));
+  if (sel === "__generate") return "__generate";
+  return currentImportTake || sel;   // 解決前は保存値で引く（初期の取り置き名は人のIDと同じ）
+}
 
 async function cacheGet(text) {
   try {
@@ -1987,8 +1993,8 @@ const GUIDE = `# データリポジトリ
 - \`audio/<同じ名前>/<声>/<12桁>.mp3|wav\` … 発話1件ぶんの音声。ファイル名は本文のハッシュです
 - 声のフォルダは \`voicevox-102\` のように「エンジン-話者ID」。作り直しは \`voicevox-102_2\` のように後ろに付け足します
 - **声を変えたり作り直したりしても前のものは消えず**、アプリのプルダウンで選べます
-- 複数あるとき、アプリの既定は**作成日時（index.jsonのcreatedAt）がいちばん新しいもの**です。
-  正を変えたいときは、不要な取り置きフォルダを消すか、createdAtを書き換えてください（このリポジトリの整理はAIに頼めます）
+- 同じ人の取り置きが複数あるとき、アプリは**フォルダ名の降順で最初のもの**を使います（\`voicevox-102_2\` ＞ \`voicevox-102\`）。
+  正を変えたいときは、フォルダを消すか名前を付け替えてください（このリポジトリの整理はAIに頼めます）
 
 ## AIに編集を頼むときのルール
 
@@ -2083,28 +2089,47 @@ async function listVoices(key) {
       out.push({ tag: f.name, label: (meta.label || `${meta.engine} / ${meta.voice}`) + d, meta });
     } catch (e) {}
   }
-  // 新しい取り置きが先。作成日時があればそれで、無ければフォルダ名の降順で比べる
-  // （名前だけの比較だと voicevox-8 が voicevox-102 より上に来てしまう）
-  // 「どれを正にするか」は、不要な取り置きを消すか index.json の createdAt を書き換えて決められる
-  out.sort((a, b) => (b.meta.createdAt || "").localeCompare(a.meta.createdAt || "") || b.tag.localeCompare(a.tag));
+  return out;
+}
+
+// 「人」（エンジン＋話者）ごとにまとめる。取り置きが複数あるときは
+// **フォルダ名の降順で最初のもの**を使う（例：voicevox-102_2 が voicevox-102 より優先）。
+// どれを正にするかは、フォルダの削除・改名で後から変えられる。
+// 比較は同じ人の中に閉じるので、voicevox-8 と voicevox-102 の名前順は関係しない
+function groupVoices(takes) {
+  const groups = {};
+  for (const t of takes) {
+    const gid = `${t.meta.engine}-${t.meta.voice}`.replace(/[^\w.-]+/g, "_");
+    (groups[gid] = groups[gid] || []).push(t);
+  }
+  const out = [];
+  for (const gid of Object.keys(groups)) {
+    const list = groups[gid].sort((a, b) => b.tag.localeCompare(a.tag));
+    out.push({ gid, use: list[0], count: list.length });
+  }
+  // 人の並びは、使う取り置きが新しい順
+  out.sort((a, b) => (b.use.meta.createdAt || "").localeCompare(a.use.meta.createdAt || ""));
   return out;
 }
 
 // 声セレクトを埋めて、選ばれている声を取り込む
 async function refreshImportVoices(data) {
   const key = scriptKey(data);
-  const voices = await listVoices(key);
+  const groups = groupVoices(await listVoices(key));
   const sel = $("importVoice");
-  sel.innerHTML = voices.map(v => `<option value="${v.tag}">${v.label}</option>`).join("")
+  sel.innerHTML = groups.map(g =>
+      `<option value="${g.gid}">${g.use.label}${g.count > 1 ? `（取り置き${g.count}・${g.use.tag}を使用）` : ""}</option>`).join("")
     + `<option value="__generate">その場で生成（取り込まない）</option>`;
   sel.disabled = false;
   const saved = lsGet("import-voice:" + key);
-  if (saved === "__generate") { sel.value = "__generate"; return null; }
-  if (!voices.length) { sel.value = "__generate"; return null; }
-  const chosen = voices.find(v => v.tag === saved) || voices[0];   // 既定＝一番新しい取り置き
-  sel.value = chosen.tag;
-  lsSet("import-voice:" + key, chosen.tag);
-  return chosen;
+  if (saved === "__generate") { sel.value = "__generate"; currentImportTake = ""; return null; }
+  if (!groups.length) { sel.value = "__generate"; currentImportTake = ""; return null; }
+  // 選択は人を覚える。その人の中でどの取り置きを使うかは毎回解決する（新しいものに自動で追従）
+  const chosen = groups.find(g => g.gid === saved) || groups.find(g => g.use.tag === saved) || groups[0];
+  sel.value = chosen.gid;
+  lsSet("import-voice:" + key, chosen.gid);
+  currentImportTake = chosen.use.tag;
+  return chosen.use;
 }
 
 async function pullVoice(key, tag, meta) {
@@ -2140,21 +2165,22 @@ async function autoPullAudio(data) {
 // 声を切り替えたら、その声を取り込んで以後の再生に使う
 $("importVoice").onchange = async () => {
   if (!script) return;
-  const key = scriptKey(script), tag = $("importVoice").value;
-  if (!tag) return;
-  lsSet("import-voice:" + key, tag);
-  if (tag === "__generate") {
+  const key = scriptKey(script), gid = $("importVoice").value;
+  if (!gid) return;
+  lsSet("import-voice:" + key, gid);
+  if (gid === "__generate") {
+    currentImportTake = "";
     clearAudioCache();
     status("この台本は取り込みを使わず、その場で生成します（音声タブのエンジンと話者の設定で鳴ります）。", "ok");
     return;
   }
   try {
-    const voices = await listVoices(key);
-    const v = voices.find(x => x.tag === tag);
-    if (!v) return;
-    const { got, have } = await pullVoice(key, tag, v.meta);
+    const g = groupVoices(await listVoices(key)).find(x => x.gid === gid);
+    if (!g) return;
+    currentImportTake = g.use.tag;
+    const { got, have } = await pullVoice(key, g.use.tag, g.use.meta);
     clearAudioCache();
-    status(`この台本の声を「${v.label}」にしました（新規 ${got}件・取り込み済み ${have}件）。`, "ok");
+    status(`この台本の声を「${g.use.label}」にしました（新規 ${got}件・取り込み済み ${have}件）。`, "ok");
   } catch (e) {
     status(`声を切り替えられませんでした（${e.message}）。`, "err");
   }

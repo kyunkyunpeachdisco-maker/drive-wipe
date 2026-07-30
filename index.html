@@ -448,6 +448,13 @@
         <input type="range" id="densityScene" min="0" max="10" value="3" style="width:100%">
       </div>
       <div>
+        <label for="chatStyle">雑談のスタイル</label>
+        <select id="chatStyle">
+          <option value="quiet">ひかえめ（間をつなぐ独り言）</option>
+          <option value="podcast">ポッドキャスト風（読んだ記事を語る）</option>
+        </select>
+      </div>
+      <div>
         <label for="densityChat">雑談の密度（1分あたり）<span id="densityChatVal">1</span>回</label>
         <input type="range" id="densityChat" min="0" max="10" value="1" style="width:100%">
       </div>
@@ -3542,7 +3549,28 @@ async function geminiOnce(parts, schema) {
   return JSON.parse(text);
 }
 
-function buildPrompt({ persona, sceneDensity, chatDensity, chunkSec, context, spoken, meta, chapters, isOpening, interests }) {
+function buildPrompt({ persona, sceneDensity, chatDensity, chunkSec, context, spoken, meta, chapters, isOpening, interests, topic }) {
+  // ポッドキャスト風：この区間で語る記事を1本だけ渡し、コーナーとして展開させる
+  const topicBlock = topic ? `
+# 今日の話題（この区間のコーナー）
+最近読んだ記事を、ポッドキャストのコーナーのように語ります。この区間で扱うのは次の1本だけです。
+
+タイトル: ${topic.title}
+要約:
+${topic.summary || "（なし）"}
+感想の種:
+${topic.note || "（なし）"}
+
+コーナーの進め方（kind: "chat" の発話として出す）：
+- 導入（「そういえば、この前読んだんだけど」等）→ 内容をかいつまむ → 自分の感想・連想 → ひと区切り、の流れ
+- コーナー全体で**4〜8回のchat**に分ける。1回は1〜3文で短く切る（長広舌にしない）
+- 途中に実況（scene）が挟まってよい。挟まったら「で、さっきの話の続きだけど」のように前を受けて再開する
+- 信号待ちや単調な直線はコーナーを進める好機。見どころ・標識が続く間はコーナーを中断して実況を優先する
+- コーナーが終わったら、この区間の残りは通常の独り言と沈黙に戻る。無理に話題を引き延ばさない
+- 記事に書かれていないことを事実として足さない。要約と感想の範囲で、自分の言葉で話す
+- 出典やURLは読み上げない。「記事で読んだ」「ネットで見た」程度の触れ方にする
+- 運転中の独り言なので、講義口調・紹介口調にしない
+` : "";
   // 独り言らしさを壊さないよう、頻度と踏み込みを明示的に抑える
   const interestBlock = interests ? `
 # キャラクターの興味・関心
@@ -3575,7 +3603,7 @@ ${chapters.map(c => `${fmtTime(c.t)} ${c.label}`).join("\n")}
 
 # キャラクター
 ${persona}
-${metaBlock}${chapterBlock}${interestBlock}${isOpening ? `
+${metaBlock}${chapterBlock}${topicBlock}${interestBlock}${isOpening ? `
 # 冒頭
 この区間は動画の先頭です。0:00〜0:15 のあたりに、これから走る道についての導入のセリフを1つ入れてください。
 動画の情報が分かっている場合はそれを踏まえた一言にすること。
@@ -3856,7 +3884,16 @@ async function run() {
         log(`  新しい記事 ${r.ok}件（読めなかった ${r.ng}件・既読 ${r.skip}件）`);
       } catch (e) { log("  フィードを見られませんでした: " + e.message, "warn"); }
     }
-    const interests = await prepareInterests(persona, m => log("  " + m));
+    let interests = await prepareInterests(persona, m => log("  " + m));
+    const chatStyle = $("chatStyle").value;
+    let topics = [];
+    if (chatStyle === "podcast") {
+      // コーナーの材料は topic として渡すので、感想一覧の重複添付は外す
+      interests = interests.split("\n\n# 読んだものの感想")[0];
+      const nChunksPlan = Math.ceil((end - start) / chunkSec);
+      topics = await collectTopics(nChunksPlan);
+      log(topics.length ? `今日の話題: ${topics.length}本（1区間に1本ずつ）` : "reads/ に話題がまだありません。通常の雑談で進めます。", topics.length ? "" : "warn");
+    }
 
     // チャンクごとに台本を生成
     const items = [];
@@ -3879,6 +3916,7 @@ async function run() {
           },
           { text: buildPrompt({
               persona, sceneDensity, chatDensity, chunkSec: e - s, context, meta, interests,
+              topic: topics[i] || null,
               // 直前チャンクのセリフを渡さないと、区間をまたいで同じことを言い出す
               spoken: items.filter(it => it.line).slice(-25).map(it => "- " + it.line).join("\n"),
               // 章立ては絶対時刻なので、この区間に入るものだけを区間内の相対時刻に直して渡す
@@ -4011,7 +4049,7 @@ ${cmtList}` }], ASSIGN_SCHEMA);
       model: lsGet("model", "gemini-3.6-flash"),
       videoId, start, end, covered, viewType,
       chunkMin: chunkSec / 60,
-      persona, sceneDensity, chatDensity, interests,
+      persona, sceneDensity, chatDensity, interests, chatStyle,
       useComments, maxReplies: useComments ? Math.max(0, parseInt($("maxReplies").value, 10) || 0) : null,
       meta, chapters, items, comments
     };
@@ -4579,6 +4617,29 @@ function scriptKey(d) {
   return `${d.videoId}_${Math.round(d.start || 0)}-${Math.round(d.covered ?? d.end ?? 0)}`;
 }
 
+// ポッドキャスト風で使う「今日の話題」。reads/ の記録から新しい順に拾う
+async function collectTopics(max) {
+  if (!(lsGet("data-repo") && lsGet("github-pat"))) return [];
+  try {
+    const files = (await ghList(READS_DIR)).filter(f => f.name?.endsWith(".md") && f.name !== "README.md");
+    const out = [];
+    for (const f of files) {
+      const raw = await ghGetText(f.path);
+      if (!raw) continue;
+      const pick = re => (raw.match(re) || [])[1]?.trim() || "";
+      const t = {
+        title: pick(/^#\s*(.+)$/m),
+        date: pick(/^-\s*読んだ日:\s*(\S+)/m),
+        summary: pick(/^##\s*要約\s*\n([\s\S]*?)(?=\n##\s|\n#\s|$)/m),
+        note: pick(/^##\s*感想\s*\n([\s\S]*?)(?=\n##\s|\n#\s|$)/m),
+      };
+      if (t.title && (t.summary || t.note)) out.push(t);
+    }
+    out.sort((a, b) => b.date.localeCompare(a.date));   // 新しく読んだものから
+    return out.slice(0, max);
+  } catch (e) { return []; }
+}
+
 function charStatus(msg, cls = "") {
   const el = $("charStatus");
   el.textContent = msg;
@@ -4632,7 +4693,23 @@ const CHAT_SCHEMA = {
   required: ["items"], propertyOrdering: ["items"]
 };
 
-function buildChatPrompt({ persona, interests, chatDensity, scenes, meta, chapters, from, to }) {
+function buildChatPrompt({ persona, interests, chatDensity, scenes, meta, chapters, from, to, topic }) {
+  const topicBlock = topic ? `
+# 今日の話題（この区間のコーナー）
+最近読んだ記事を、ポッドキャストのコーナーのように語ります。この区間で扱うのは次の1本だけです。
+
+タイトル: ${topic.title}
+要約:
+${topic.summary || "（なし）"}
+感想の種:
+${topic.note || "（なし）"}
+
+コーナーの進め方：
+- 導入 → 内容をかいつまむ → 自分の感想・連想 → ひと区切り、の流れを**4〜8回の発話**に分ける。1回は1〜3文
+- 実況と実況の間に置き、2回目以降は「で、さっきの話の続きだけど」のように前を受けて再開する
+- 実況が密な時間帯は避け、空いている時間帯に置く。コーナーが終わったら残りは通常の独り言と沈黙に戻る
+- 記事に書かれていないことを事実として足さない。出典やURLは読み上げない。講義口調にしない
+` : "";
   return `あなたは車載カメラのドライブ動画に、後から実況音声を付ける放送作家です。
 実況のセリフは既にできています。**その合間に入る「雑談」だけ**を作ってください。
 
@@ -4648,6 +4725,7 @@ ${interests}
 # 章立て
 ${chapters.map(c => `${fmtTime(c.t)} ${c.label}`).join("\n")}
 ` : ""}
+${topicBlock}
 # できている実況（${fmtTime(from)}〜${fmtTime(to)}）
 ${scenes.length ? scenes.map(x => `${fmtTime(x.abs)} ${x.line}`).join("\n") : "（この区間に実況はありません）"}
 
@@ -4670,20 +4748,29 @@ async function regenerateChat(onProgress = () => {}) {
   if (!lsGet("gemini-api-key")) throw new Error("Gemini APIキーが未設定です。設定から入れてください。");
 
   const persona = $("persona").value.trim();
-  const interests = await prepareInterests(persona, m => onProgress(m));
+  let interests = await prepareInterests(persona, m => onProgress(m));
   const chatDensity = +$("densityChat").value;
   const from = data.start || 0, to = data.covered ?? data.end ?? 0;
   const chunkSec = Math.max(60, (data.chunkMin || 10) * 60);
+  const chatStyle = $("chatStyle").value;
+  let topics = [];
+  if (chatStyle === "podcast") {
+    interests = interests.split("\n\n# 読んだものの感想")[0];
+    topics = await collectTopics(Math.max(1, Math.ceil((to - from) / chunkSec)));
+    onProgress(topics.length ? `今日の話題: ${topics.length}本` : "reads/ に話題がまだありません。通常の雑談で作ります。");
+  }
 
   const scenes = data.items.filter(x => x.kind !== "chat" && x.line);
   const made = [];
+  let chunkNo = 0;
   for (let s0 = from; s0 < to; s0 += chunkSec) {
     const s1 = Math.min(to, s0 + chunkSec);
     onProgress(`雑談を作っています ${fmtTime(s0)}〜${fmtTime(s1)}`);
     const inChunk = scenes.filter(x => x.abs >= s0 && x.abs < s1);
     const prompt = buildChatPrompt({
       persona, interests, chatDensity, scenes: inChunk,
-      meta: data.meta, chapters: data.chapters, from: s0, to: s1
+      meta: data.meta, chapters: data.chapters, from: s0, to: s1,
+      topic: topics[chunkNo++] || null
     });
     const out = await gemini([{ text: prompt }], CHAT_SCHEMA);
     for (const it of (out.items || [])) {
@@ -4797,6 +4884,8 @@ $("btnCopy").onclick = async () => {
   $("persona").value = lsGet("persona", $("persona").value);
   $("persona").onchange = () => lsSet("persona", $("persona").value);
   $("interests").value = lsGet("interests");
+  $("chatStyle").value = lsGet("chat-style", "quiet");
+  $("chatStyle").onchange = () => lsSet("chat-style", $("chatStyle").value);
   $("feeds").value = lsGet("feeds");
   $("feeds").onchange = () => lsSet("feeds", $("feeds").value);
   $("feedAuto").checked = lsGet("feed-auto") === "1";

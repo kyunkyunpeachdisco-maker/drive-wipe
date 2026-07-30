@@ -1983,8 +1983,8 @@ const GUIDE = `# データリポジトリ
 - \`audio/<同じ名前>/<声>/<12桁>.mp3|wav\` … 発話1件ぶんの音声。ファイル名は本文のハッシュです
 - 声のフォルダは \`voicevox-102\` のように「エンジン-話者ID」。作り直しは \`voicevox-102_2\` のように後ろに付け足します
 - **声を変えたり作り直したりしても前のものは消えず**、アプリのプルダウンで選べます
-- 同じ声が複数あるとき、アプリの既定は**フォルダ名の降順で最初のもの**（＝いちばん新しい取り置き）です。
-  古いほうを正にしたいときは、新しいフォルダを消すか、名前を入れ替えてください（このリポジトリの整理はAIに頼めます）
+- 複数あるとき、アプリの既定は**作成日時（index.jsonのcreatedAt）がいちばん新しいもの**です。
+  正を変えたいときは、不要な取り置きフォルダを消すか、createdAtを書き換えてください（このリポジトリの整理はAIに頼めます）
 
 ## AIに編集を頼むときのルール
 
@@ -2079,9 +2079,10 @@ async function listVoices(key) {
       out.push({ tag: f.name, label: (meta.label || `${meta.engine} / ${meta.voice}`) + d, meta });
     } catch (e) {}
   }
-  // 同じ声を作り直した場合はフォルダ名の降順で新しいほうが先に来る。
-  // 「どれを正にするか」はリポジトリのフォルダ整理（削除・改名）で決められる
-  out.sort((a, b) => b.tag.localeCompare(a.tag));
+  // 新しい取り置きが先。作成日時があればそれで、無ければフォルダ名の降順で比べる
+  // （名前だけの比較だと voicevox-8 が voicevox-102 より上に来てしまう）
+  // 「どれを正にするか」は、不要な取り置きを消すか index.json の createdAt を書き換えて決められる
+  out.sort((a, b) => (b.meta.createdAt || "").localeCompare(a.meta.createdAt || "") || b.tag.localeCompare(a.tag));
   return out;
 }
 

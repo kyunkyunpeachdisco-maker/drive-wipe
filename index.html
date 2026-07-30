@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>ドライブ実況ワイプ（検証版）</title>
 <script type="importmap">
 {
@@ -769,7 +772,9 @@
     <p class="hint">
       <b>「音声をまとめて用意」</b>を先に実行すると、再生中に音声を作らないため利用上限に当たりません。
       作った音声は端末に保存され、同じ台本の2回目以降は生成なしで再生できます。<br>
-      iPhoneでは最初の再生に画面のタップが必要です。この「再生を開始」がその操作を兼ねています。</p>
+      iPhoneでは最初の再生に画面のタップが必要です。この「再生を開始」がその操作を兼ねています。<br>
+      iPhoneのSafariで全画面にしてもバーが残る場合は、<b>共有メニュー →「ホーム画面に追加」</b>から開くと、
+      ブラウザの表示が消えて画面全体で使えます。</p>
   </fieldset>
   </section>
   <section class="tabPane" id="pane-data">
@@ -2555,7 +2560,11 @@ $("btnFull").onclick = () => {
   document.body.classList.add("full-mode");
   // stage 自体を全画面にする。文書全体を全画面にすると、端末によっては
   // 切り欠きぶんの余白が黒帯として残る
-  if ($("stage").requestFullscreen) $("stage").requestFullscreen().catch(() => {});
+  const el = $("stage");
+  try {
+    if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();   // 古いiOS Safari
+  } catch (e) {}
 };
 $("exitFull").onclick = () => {
   $("stage").classList.remove("full");
@@ -2564,6 +2573,14 @@ $("exitFull").onclick = () => {
   moveBackFromStage();
   if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
 };
+document.addEventListener("webkitfullscreenchange", () => {
+  if (!document.webkitFullscreenElement) {
+    $("stage").classList.remove("full");
+    document.body.classList.remove("full-mode");
+    closeFsMenu();
+    moveBackFromStage();
+  }
+});
 document.addEventListener("fullscreenchange", () => {
   if (!document.fullscreenElement) {
     $("stage").classList.remove("full");

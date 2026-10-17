@@ -973,6 +973,9 @@ const LS = "drive-wipe-";
 const $ = id => document.getElementById(id);
 function lsGet(k, d = "") { try { return localStorage.getItem(LS + k) ?? d; } catch (e) { return d; } }
 function lsSet(k, v) { try { localStorage.setItem(LS + k, v); } catch (e) {} }
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+}
 
 function vvUrl() { return (lsGet("voicevox-url").trim() || "http://127.0.0.1:50021").replace(/\/+$/, ""); }
 
@@ -1474,7 +1477,7 @@ async function refreshVoicesInner() {
   $("engineHint").className = "hint";
   try {
     const list = await engine().init();
-    sel.innerHTML = list.map(v => `<option value="${v.id}">${v.name}</option>`).join("");
+    sel.innerHTML = list.map(v => `<option value="${escapeHtml(v.id)}">${escapeHtml(v.name)}</option>`).join("");
     const saved = lsGet("player-voice-" + $("engine").value);
     if (saved && list.some(v => v.id === saved)) sel.value = saved;
     $("engineHint").textContent = `${list.length}件の話者が使えます。`;
@@ -1528,7 +1531,7 @@ $("btnTtsModels").onclick = async () => {
       .sort().reverse();
     if (!names.length) throw new Error("このキーで使える音声モデルが見つかりませんでした。");
     const cur = $("ttsModel").value;
-    $("ttsModel").innerHTML = names.map(n => `<option value="${n}">${n}</option>`).join("");
+    $("ttsModel").innerHTML = names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("");
     $("ttsModel").value = names.includes(cur) ? cur : names[0];
     lsSet("tts-model", $("ttsModel").value);
     clearAudioCache();
@@ -2125,7 +2128,7 @@ async function refreshImportVoices(data) {
   const groups = groupVoices(await listVoices(key));
   const sel = $("importVoice");
   sel.innerHTML = groups.map(g =>
-      `<option value="${g.gid}">${g.use.label}${g.count > 1 ? `（取り置き${g.count}・${g.use.tag}を使用）` : ""}</option>`).join("")
+      `<option value="${escapeHtml(g.gid)}">${escapeHtml(g.use.label)}${g.count > 1 ? `（取り置き${g.count}・${escapeHtml(g.use.tag)}を使用）` : ""}</option>`).join("")
     + `<option value="__generate">その場で生成（取り込まない）</option>`;
   sel.disabled = false;
   const saved = lsGet("import-voice:" + key);
@@ -2727,7 +2730,7 @@ $("vrmFile").onchange = async e => {
   if (e) $("engine").value = e;
   const tm = lsGet("tts-model");
   if (tm && tm !== $("ttsModel").value) {
-    $("ttsModel").insertAdjacentHTML("afterbegin", `<option value="${tm}">${tm}</option>`);
+    $("ttsModel").insertAdjacentHTML("afterbegin", `<option value="${escapeHtml(tm)}">${escapeHtml(tm)}</option>`);
     $("ttsModel").value = tm;
   }
   $("gttsKey").value = lsGet("gtts-api-key");
@@ -4096,7 +4099,7 @@ function render(r) {
       `<p class="hint" style="margin:0 0 8px">言い回しの重複です。多いようならキャラクター設定を厚くするか、セリフ密度を下げてください。</p>` +
       repeats.slice(0, 15).map(p =>
         `<div class="cmt"><span class="tag">${Math.round(p.score * 100)}%</span>` +
-        `${p.a.t} ${escapeHtml(p.a.line)}<br>${p.b.t} ${escapeHtml(p.b.line)}</div>`
+        `${escapeHtml(p.a.t)} ${escapeHtml(p.a.line)}<br>${escapeHtml(p.b.t)} ${escapeHtml(p.b.line)}</div>`
       ).join("");
     out.appendChild(rp);
   }
@@ -4143,7 +4146,7 @@ function render(r) {
       threadHtml(c) + `</div>`
     ).join("");
     div.innerHTML =
-      `<div class="t">${it.t}</div>` +
+      `<div class="t">${escapeHtml(it.t)}</div>` +
       `<div><div class="line${silent ? " silent" : ""}">${silent ? "（無言）" : escapeHtml(it.line)}</div>` +
       `<div class="scene">${tags}${escapeHtml(it.scene)}</div>${cmts}</div>`;
     wrap.appendChild(div);
@@ -4205,7 +4208,7 @@ async function loadModels() {
       .reverse();  // 新しいバージョンが上に来るように
     if (!names.length) throw new Error("動画を扱えそうなモデルが見つかりませんでした。");
     const sel = $("modelList");
-    sel.innerHTML = names.map(n => `<option value="${n}">${n}</option>`).join("");
+    sel.innerHTML = names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("");
     sel.style.display = "block";
     sel.onchange = () => { $("model").value = sel.value; };
     $("model").value = names[0];

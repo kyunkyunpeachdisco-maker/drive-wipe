@@ -3,6 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<script>
+  // ?watch を付けて開くと、見るだけの画面になる
+  window.WATCH_MODE = new URLSearchParams(location.search).has("watch");
+  if (window.WATCH_MODE) document.documentElement.classList.add("watch");
+</script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -308,6 +313,132 @@
     .row > * { min-width: 100%; }
     .row > .fixed { min-width: 0; }
   }
+  /* ==== 見るだけの画面（?watch を付けて開いたとき） ====
+     映像を画面いっぱいに出し、操作は触ったときだけ出す。台本づくりや細かい設定は出さない */
+  html.watch, html.watch body { height: 100%; overflow: hidden; background: #000; }
+  html.watch header, html.watch #quick, html.watch #quick + .hint, html.watch #log,
+  html.watch #tabs, html.watch .tabPane, html.watch #stageBar, html.watch #status,
+  html.watch #fsMenu, html.watch #exitFull { display: none !important; }
+  html.watch main { max-width: none; padding: 0; margin: 0; }
+  html.watch #playArea { position: fixed; inset: 0; display: flex; gap: 0; background: #000; }
+  html.watch #stage { flex: 1 1 auto; min-width: 0; min-height: 0; width: auto; height: 100%; aspect-ratio: auto; border-radius: 0; }
+  /* ワイプと字幕は、枠ではなく映像そのもの（16:9）に合わせて置く。枠が縦長でも映像の上に乗る */
+  html.watch #stage { container-type: size; }
+  html.watch #overlay { width: min(100cqw, 100cqh * 16 / 9); height: auto; max-height: none; }
+  /* セリフの一覧は、出したときだけ横に並ぶ。映像は隠さず、そのぶん縮む */
+  html.watch #tlWrap { display: none; position: relative; }
+  html.watch.list-open #tlWrap { display: block; flex: 0 0 min(360px, 42%); background: var(--bg); }
+  html.watch #timeline { border: 0; border-radius: 0; }
+  html.watch #timeline .cue.topicHead { cursor: default; font-size: 12px; color: var(--sub); background: var(--panel); font-weight: 600; }
+  @media (max-width: 680px) and (orientation: portrait) {
+    html.watch #playArea { flex-direction: column; }
+    html.watch.list-open #stage { flex: 0 0 auto; width: 100%; height: auto; aspect-ratio: 16 / 9; }
+    html.watch.list-open #tlWrap { flex: 1 1 0; min-height: 0; }
+    html.watch #timeline { position: absolute; max-height: none; margin: 0; }
+  }
+  .w { display: none; }
+  html.watch .w { display: block; }
+  /* 映像の上の透明な面。YouTube側の操作に触らせない */
+  #wTap { position: absolute; inset: 0; z-index: 2; cursor: pointer; }
+  /* 字幕：下の中央。1行ずつ背景を敷いて、どんな映像の上でも読めるようにする */
+  html.watch #caption {
+    left: 4%; right: calc(var(--wipe-w, 22%) * .8 + 5%) !important; bottom: 13%; text-align: center; font-weight: 600;
+    font-size: clamp(14px, 2.3vw, 24px); line-height: 1.75; text-shadow: none; min-height: 0;
+  }
+  html.watch #caption:not(:empty) { z-index: 3; }
+  /* ワイプはひとまわり小さくして、操作の帯にかからない高さへ上げる。字幕はその左に収める */
+  html.watch #avatar { width: calc(var(--wipe-w, 22%) * .8); bottom: 13%; border-radius: 16px; outline: 2px solid rgba(255,255,255,.75); outline-offset: -2px; }
+  /* 字幕と札は、ふわっと出入りさせる */
+  html.watch #caption span { animation: wIn .22s ease-out; }
+  @keyframes wIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .wCard { transform: translateY(-8px); transition: opacity .5s, transform .5s; }
+  .wCard.on { transform: none; }
+
+  /* ---- 余白があるとき（スマホの縦持ち・4:3の画面など） ----
+     映像を上に寄せ、空いた下の帯にキャラと字幕を出す。映像の上には何もかぶせない */
+  html.watch.booth #ytbox { inset: 0 0 auto 0; height: var(--b-vh); }
+  html.watch.booth #overlay { position: absolute; inset: 0; width: 100%; height: 100%; aspect-ratio: auto; }
+  html.watch.booth #avatar {
+    left: auto !important; right: 4% !important; bottom: auto !important;
+    top: calc(var(--b-top) + (var(--b-h) - var(--b-avh)) / 2) !important;
+    width: var(--b-avw) !important; height: var(--b-avh) !important; max-width: none; aspect-ratio: auto;
+    box-shadow: none; outline: 0; backdrop-filter: none; border-radius: 14px;
+  }
+  html.watch.booth #caption {
+    left: 5%; right: calc(8% + var(--b-avw)) !important; top: var(--b-top); height: var(--b-h); bottom: auto;
+    display: flex; align-items: center; text-align: left;
+    font-size: clamp(15px, 4.4cqw, 30px); line-height: 1.6;
+  }
+  html.watch.booth #caption span { background: none; padding: 0; border-radius: 0; }
+  html.watch.booth-tall #avatar { right: calc(50% - var(--b-avw) / 2) !important; top: calc(var(--b-top) + 8px) !important; }
+  html.watch.booth-tall #caption {
+    left: 6%; right: 6% !important; top: var(--b-captop); height: var(--b-caph);
+    align-items: flex-start; justify-content: center; text-align: center; font-size: clamp(16px, 5cqw, 30px);
+  }
+  /* 帯の中は操作が常に見えていてよい。映像に重ならないので、消す必要がない */
+  html.watch.booth #wBar { opacity: 1; pointer-events: auto; background: none; padding-top: 6px; }
+  html.watch.booth:not(.ui-on) #stage { cursor: auto; }
+  html.watch.booth #wTap { bottom: auto; height: var(--b-vh); }
+  html.watch #caption span {
+    background: rgba(0,0,0,.66); padding: .12em .5em; border-radius: 4px;
+    -webkit-box-decoration-break: clone; box-decoration-break: clone;
+  }
+  /* 札：左上に話題、右上に場所 */
+  .wCard {
+    position: absolute; top: 14px; z-index: 3; pointer-events: none; color: #fff;
+    background: rgba(0,0,0,.58); border-radius: 8px; padding: 7px 12px;
+    opacity: 0; transition: opacity .5s; max-width: 52%;
+  }
+  .wCard.on { opacity: 1; }
+  #wTopic { left: 14px; }
+  #wTopic .lb { font-size: 11px; color: #9fe1cb; display: block; line-height: 1.4; }
+  #wTopic .tt { font-size: clamp(13px, 1.7vw, 17px); font-weight: 600; line-height: 1.45; }
+  #wPlace { right: 14px; font-size: clamp(12px, 1.4vw, 14px); max-width: 40%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* 下の操作の帯。触ったときだけ出て、数秒で消える */
+  #wBar {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 4; color: #fff;
+    padding: 26px 14px calc(10px + env(safe-area-inset-bottom));
+    background: linear-gradient(to top, rgba(0,0,0,.78), rgba(0,0,0,0));
+    opacity: 0; pointer-events: none; transition: opacity .25s;
+  }
+  html.watch.ui-on #wBar { opacity: 1; pointer-events: auto; }
+  html.watch:not(.ui-on) #stage { cursor: none; }
+  #wProg { position: relative; height: 22px; cursor: pointer; touch-action: none; }
+  #wSegs { position: absolute; left: 0; right: 0; top: 8px; height: 6px; display: flex; gap: 2px; }
+  #wSegs i { display: block; height: 100%; border-radius: 2px; background: rgba(255,255,255,.28); min-width: 2px; }
+  #wSegs i.topic { background: rgba(93,202,165,.55); }
+  #wPlayed { position: absolute; left: 0; top: 8px; height: 6px; width: 0; background: rgba(255,255,255,.55); border-radius: 2px; pointer-events: none; mix-blend-mode: screen; }
+  #wHead { position: absolute; top: 4px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; background: #fff; pointer-events: none; }
+  #wTip { position: absolute; bottom: 24px; transform: translateX(-50%); background: rgba(0,0,0,.85); font-size: 12px; padding: 3px 8px; border-radius: 4px; white-space: nowrap; display: none; pointer-events: none; }
+  #wBtns { display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+  #wBtns button {
+    background: none; border: 0; color: #fff; padding: 8px; border-radius: 8px; min-width: 44px; min-height: 44px;
+    display: inline-flex; align-items: center; justify-content: center; font-size: 13px;
+  }
+  #wBtns button:hover { background: rgba(255,255,255,.14); }
+  #wBtns svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  #wTime { font-size: 13px; font-variant-numeric: tabular-nums; margin: 0 6px; white-space: nowrap; }
+  #wNow { flex: 1 1 auto; min-width: 0; font-size: 13px; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* 再生前と一時停止中の入口 */
+  #wStart {
+    position: absolute; inset: 0; z-index: 5; display: none; color: #fff; text-align: center;
+    background: rgba(0,0,0,.55); align-items: center; justify-content: center; flex-direction: column; gap: 14px; padding: 20px;
+  }
+  html.watch #wStart.on { display: flex; }
+  #wStart h2 { font-size: clamp(16px, 2.4vw, 24px); margin: 0; font-weight: 600; max-width: 80%; line-height: 1.5; }
+  #wStart p { margin: 0; font-size: 13px; opacity: .8; max-width: 80%; }
+  #wStart .big {
+    width: 76px; height: 76px; border-radius: 50%; border: 0; background: #fff; color: #111; padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  #wStart .big svg { width: 34px; height: 34px; fill: currentColor; margin-left: 4px; }
+  #wStart .sub { background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.35); color: #fff; }
+  #wStart a { color: #cfd0ff; font-size: 13px; }
+  #wToast {
+    position: absolute; left: 50%; top: 14px; transform: translateX(-50%); z-index: 6; display: none;
+    background: rgba(0,0,0,.8); color: #fff; font-size: 13px; padding: 6px 12px; border-radius: 8px; max-width: 70%;
+  }
+  html.watch #wToast.on { display: block; }
 </style>
 </head>
 <body>
@@ -343,6 +474,30 @@
         <div class="grip"></div>
       </div>
       <div id="caption"></div>
+    </div>
+    <!-- 見るだけの画面の部品（?watch のときだけ出る） -->
+    <div id="wTap" class="w"></div>
+    <div id="wTopic" class="w wCard"><span class="lb"></span><span class="tt"></span></div>
+    <div id="wPlace" class="w wCard"></div>
+    <div id="wToast" class="w"></div>
+    <div id="wBar" class="w">
+      <div id="wProg"><div id="wSegs"></div><div id="wPlayed"></div><div id="wHead"></div><div id="wTip"></div></div>
+      <div id="wBtns">
+        <button id="wPlay" title="再生・一時停止" aria-label="再生・一時停止"></button>
+        <button id="wBack" title="10秒戻る" aria-label="10秒戻る"><svg viewBox="0 0 24 24"><path d="M4 5v5h5"/><path d="M4.6 14a8 8 0 1 0 1.7-7.6L4 10"/></svg></button>
+        <span id="wTime">0:00 / 0:00</span>
+        <span id="wNow"></span>
+        <button id="wList" title="セリフの一覧" aria-label="セリフの一覧"><svg viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg></button>
+        <button id="wPick" title="台本を選ぶ" aria-label="台本を選ぶ"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button>
+        <button id="wFs" title="全画面" aria-label="全画面"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+      </div>
+    </div>
+    <div id="wStart" class="w">
+      <h2 id="wTitle"></h2>
+      <p id="wInfo"></p>
+      <button class="big" id="wBig" aria-label="再生"><svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg></button>
+      <button class="sub" id="wPick2">台本を選ぶ</button>
+      <a href="./">声・アバター・接続の設定（詳しい画面）</a>
     </div>
     <button id="fsMenu">メニュー</button>
     <button id="exitFull">閉じる</button>
@@ -1094,7 +1249,9 @@ function setupPlayer(videoId) {
   player = new YT.Player("ytplayer", {
     videoId,
     width: "100%", height: "100%",
-    playerVars: { playsinline: 1, rel: 0, modestbranding: 1 },
+    // 見るだけの画面では、操作は自前の帯で行う。YouTube側の操作は出さない
+    playerVars: { playsinline: 1, rel: 0, modestbranding: 1,
+                  ...(window.WATCH_MODE ? { controls: 0, disablekb: 1, fs: 0, iv_load_policy: 3 } : {}) },
     events: {
       onReady: () => status("動画を読み込みました。"),
       onStateChange: e => {
@@ -4902,13 +5059,271 @@ $("btnCopy").onclick = async () => {
   $("interests").onchange = () => lsSet("interests", $("interests").value);
   $("url").value = lsGet("last-url");
   $("url").onchange = () => lsSet("last-url", $("url").value.trim());
-  if (!lsGet("gemini-api-key")) $("dlg").showModal();
+  if (!lsGet("gemini-api-key") && !window.WATCH_MODE) $("dlg").showModal();
   // リポジトリ側を正とする。取れなければ手元の値のまま黙って続ける
   if (lsGet("data-repo") && lsGet("github-pat")) {
     charPull(true).catch(e => charStatus(`リポジトリから読み込めませんでした（${e.message}）。この端末の内容を使います。`, "err"));
   }
 })();
 
+})();
+</script>
+<script>
+/* ==== 見るだけの画面（?watch を付けて開いたとき） ====
+   既存の再生の仕組み（台本の読み込み・音声・アバター・同期）はそのまま使い、
+   画面の出し方と操作だけを差し替える */
+(function () {
+  if (!window.WATCH_MODE) return;
+  const root = document.documentElement;
+  const ICON_PLAY = '<svg viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z" fill="currentColor"/></svg>';
+  const ICON_PAUSE = '<svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg>';
+  let topics = [];      // {start, end, title} 記事のコーナー
+  let places = [];      // {at, place}
+  let total = 0;
+
+  // 台本にコーナーの情報（topics）があればそれを使う。無い古い台本は、雑談が続いている区間をコーナーとみなす
+  function findTopics(s) {
+    if (Array.isArray(s.topics) && s.topics.length) return s.topics.map(t => ({ start: t.start, end: t.end, title: t.title || "" }));
+    const out = [];
+    let run = [];
+    const flush = () => {
+      if (run.length >= 5) out.push({ start: run[0].abs, end: run[run.length - 1].abs + 8, title: "" });
+      run = [];
+    };
+    let sceneStreak = 0;
+    for (const it of s.items) {
+      if (!it.line) continue;
+      if (it.kind === "chat") {
+        if (run.length && it.abs - run[run.length - 1].abs > 40) flush();
+        run.push(it); sceneStreak = 0;
+      } else if (++sceneStreak >= 2) flush();   // 実況が2つ続いたら、コーナーは終わったとみなす
+    }
+    flush();
+    return out;
+  }
+
+  function build() {
+    if (!script) return;
+    total = script.covered ?? script.end ?? 0;
+    topics = findTopics(script);
+    places = script.items.filter(it => it.place).map(it => ({ at: it.abs, place: it.place }));
+    // 再生バーを、コーナーとそれ以外に区切る
+    const segs = $("wSegs");
+    segs.innerHTML = "";
+    let pos = 0;
+    const add = (len, cls) => { if (len <= 0) return; const i = document.createElement("i"); i.style.flex = `${len} 0 0`; if (cls) i.className = cls; segs.appendChild(i); };
+    for (const t of topics) { add(t.start - pos, ""); add(Math.min(t.end, total) - t.start, "topic"); pos = Math.min(t.end, total); }
+    add(total - pos, "");
+    // 一覧にも、コーナーの見出しを挟む
+    const tl = $("timeline");
+    tl.querySelectorAll(".topicHead").forEach(e => e.remove());
+    topics.forEach((t, n) => {
+      const first = cues.find(c => c.at >= t.start);
+      const row = first && tl.querySelector(`.cue[data-id="${first.id}"]`);
+      if (!row) return;
+      const h = document.createElement("div");
+      h.className = "cue topicHead";
+      h.textContent = `記事 ${n + 1} / ${topics.length}` + (t.title ? `　${t.title}` : "");
+      tl.insertBefore(h, row);
+    });
+    $("wTitle").textContent = script.meta?.title || "";
+    const nLines = script.items.filter(it => it.line).length;
+    $("wInfo").textContent = `${fmtTime(total)} ／ 発話 ${nLines}件` + (topics.length ? ` ／ 記事 ${topics.length}本` : "");
+    $("wBig").style.display = "";
+    showStart(true);
+    update();
+  }
+
+  // 台本が読み込まれるたびに作り直す
+  const _load = loadScript;
+  loadScript = function (data, remember) { started = false; _load(data, remember); build(); };
+
+  function showStart(on) { $("wStart").classList.toggle("on", on); }
+  function playing() { try { return player.getPlayerState() === 1; } catch (e) { return false; } }
+
+  function togglePlay() {
+    if (!script) { openPicker(); return; }
+    if (!started) { $("btnStart").click(); showStart(false); poke(); return; }
+    try { playing() ? player.pauseVideo() : player.playVideo(); } catch (e) {}
+    poke();
+  }
+
+  // 操作の帯は、触ってから3秒で消える。止まっている間は出したままにする
+  let hideTimer = 0;
+  function poke() {
+    root.classList.add("ui-on");
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => { if (playing()) root.classList.remove("ui-on"); }, 3000);
+  }
+
+  function update() {
+    if (!script) return;
+    let t = 0;
+    try { t = player.getCurrentTime() || 0; } catch (e) {}
+    const f = total ? Math.min(1, t / total) : 0;
+    if (!dragging) {
+      $("wPlayed").style.width = (f * 100) + "%";
+      $("wHead").style.left = (f * 100) + "%";
+    }
+    $("wTime").textContent = `${fmtTime(t)} / ${fmtTime(total)}`;
+    $("wPlay").innerHTML = playing() ? ICON_PAUSE : ICON_PLAY;
+    // 話題の札：コーナーの間だけ出す
+    const ti = topics.findIndex(x => t >= x.start - 1 && t <= x.end);
+    const tp = $("wTopic");
+    if (started && ti >= 0) {
+      tp.querySelector(".lb").textContent = `いま話している記事　${ti + 1} / ${topics.length}`;
+      tp.querySelector(".tt").textContent = topics[ti].title || "読んだ記事の話";
+      tp.classList.add("on");
+    } else tp.classList.remove("on");
+    // 場所の札：直近に通った場所。3分たったら消す
+    let pl = null;
+    for (const p of places) { if (p.at > t) break; pl = p; }
+    const pc = $("wPlace");
+    if (started && pl && t - pl.at < 180) { pc.textContent = pl.place; pc.classList.add("on"); }
+    else pc.classList.remove("on");
+    $("wNow").textContent = ti >= 0 ? (topics[ti].title || "") : (pl && t - pl.at < 180 ? pl.place : "");
+    if (started && !playing() && !$("wStart").classList.contains("on")) root.classList.add("ui-on");
+  }
+  setInterval(update, 250);
+
+  // 字幕は1行ずつ背景を敷くので、文字を span で包む
+  new MutationObserver(() => {
+    const el = $("caption");
+    if (el.firstChild && el.firstChild.nodeType === 3 && el.textContent) {
+      const s = document.createElement("span");
+      s.textContent = el.textContent;
+      el.textContent = "";
+      el.appendChild(s);
+    }
+  }).observe($("caption"), { childList: true });
+
+  // 隠している案内（エラーや注意）は、上に小さく出す
+  let toastTimer = 0;
+  new MutationObserver(() => {
+    const st = $("status");
+    if (!/\berr\b/.test(st.className) || !st.textContent) return;
+    const el = $("wToast");
+    el.textContent = st.textContent;
+    el.classList.add("on");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove("on"), 6000);
+  }).observe($("status"), { childList: true, attributes: true, characterData: true, subtree: true });
+
+  // 再生バー：押した位置へ飛ぶ。なぞっている間は、その位置の時刻と話題を出す
+  let dragging = false;
+  const prog = $("wProg");
+  const fracAt = e => { const r = prog.getBoundingClientRect(); return Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)); };
+  function tipAt(e) {
+    const f = fracAt(e), t = f * total;
+    const tp = topics.find(x => t >= x.start && t <= x.end);
+    const tip = $("wTip");
+    tip.textContent = fmtTime(t) + (tp && tp.title ? "　" + tp.title : "");
+    tip.style.left = (f * 100) + "%";
+    tip.style.display = "block";
+    return f;
+  }
+  prog.addEventListener("pointerdown", e => {
+    if (!script) return;
+    dragging = true; prog.setPointerCapture(e.pointerId);
+    const f = tipAt(e);
+    $("wPlayed").style.width = (f * 100) + "%"; $("wHead").style.left = (f * 100) + "%";
+  });
+  prog.addEventListener("pointermove", e => {
+    if (!script) return;
+    const f = tipAt(e);
+    if (dragging) { $("wPlayed").style.width = (f * 100) + "%"; $("wHead").style.left = (f * 100) + "%"; }
+    poke();
+  });
+  prog.addEventListener("pointerup", e => {
+    if (!dragging) return;
+    dragging = false;
+    const t = fracAt(e) * total;
+    if (!started) { $("btnStart").click(); showStart(false); setTimeout(() => { try { player.seekTo(t, true); } catch (err) {} }, 600); }
+    else { try { player.seekTo(t, true); player.playVideo(); } catch (err) {} }
+    poke();
+  });
+  prog.addEventListener("pointerleave", () => { if (!dragging) $("wTip").style.display = "none"; });
+
+  // 余白の使い方を決める。映像（16:9）の下に十分な空きがあれば、そこをキャラと字幕の場所にする
+  function layout() {
+    const st = $("stage");
+    const w = st.clientWidth, h = st.clientHeight;
+    if (!w || !h) return;
+    const vh = w * 9 / 16, spare = h - vh;
+    // 操作の帯を引いても、キャラを置ける高さ（140px）が残るときだけ余白を使う
+    const booth = spare - ($("wBar").offsetHeight || 84) >= 140;
+    const was = root.classList.contains("booth");
+    root.classList.toggle("booth", booth);
+    if (!booth) root.classList.remove("booth-tall");
+    if (booth) {
+      const barH = $("wBar").offsetHeight || 80;
+      const top = vh + 8, regionH = Math.max(60, h - top - barH);
+      // ワイプの形（設定の縦横比）は保ったまま、帯に収まるいちばん大きい寸法にする
+      const m = getComputedStyle(root).getPropertyValue("--wipe-ar").match(/([\d.]+)\s*\/\s*([\d.]+)/);
+      const ar = m ? (+m[1]) / (+m[2]) : 3 / 4;
+      let avH = Math.min(regionH, 340), avW = avH * ar;
+      if (avW > w * 0.44) { avW = w * 0.44; avH = avW / ar; }
+      // 帯が縦に長いとき（スマホの縦持ち）は横に並べず、キャラを大きく上に、字幕をその下に置く
+      const tall = regionH > avH * 1.7;
+      root.classList.toggle("booth-tall", tall);
+      const s = root.style;
+      if (tall) {
+        avW = Math.min(w * 0.92, 460); avH = avW / ar;
+        if (avH > regionH * 0.6) { avH = regionH * 0.6; avW = avH * ar; }
+        s.setProperty("--b-captop", Math.round(top + 8 + avH + 10) + "px");
+        s.setProperty("--b-caph", Math.round(Math.max(40, regionH - avH - 18)) + "px");
+      }
+      s.setProperty("--b-vh", vh + "px");
+      s.setProperty("--b-top", top + "px");
+      s.setProperty("--b-h", regionH + "px");
+      s.setProperty("--b-avw", Math.round(avW) + "px");
+      s.setProperty("--b-avh", Math.round(avH) + "px");
+    }
+    // アバターの描画は窓の大きさが変わったときにしか寸法を取り直さないので、知らせる
+    if (booth || was) setTimeout(() => { selfResize = true; window.dispatchEvent(new Event("resize")); selfResize = false; }, 50);
+  }
+  // 画面が隠れている間は下の見張りが動かないので、窓の大きさが変わったときにも取り直す
+  let selfResize = false;
+  window.addEventListener("resize", () => { if (!selfResize) layout(); });
+  let inLayout = false;
+  new ResizeObserver(() => { if (inLayout) return; inLayout = true; layout(); setTimeout(() => { inLayout = false; }, 120); }).observe($("stage"));
+  layout();
+
+  $("wPlay").onclick = togglePlay;
+  $("wBig").onclick = togglePlay;
+  $("wBack").onclick = () => { try { player.seekTo(Math.max(0, player.getCurrentTime() - 10), true); } catch (e) {} poke(); };
+  $("wList").onclick = () => { root.classList.toggle("list-open"); poke(); };
+  $("wPick").onclick = () => { try { player.pauseVideo(); } catch (e) {} openPicker(); };
+  $("wPick2").onclick = () => openPicker();
+  $("wFs").onclick = () => {
+    const d = document, el = d.documentElement;
+    try {
+      if (d.fullscreenElement || d.webkitFullscreenElement) (d.exitFullscreen || d.webkitExitFullscreen).call(d);
+      else (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+    } catch (e) {}
+    poke();
+  };
+  // 映像を押す：帯が隠れていれば出す。出ていれば再生・一時停止
+  $("wTap").onclick = () => { if (!root.classList.contains("ui-on")) poke(); else togglePlay(); };
+  $("stage").addEventListener("mousemove", poke);
+  document.addEventListener("keydown", e => {
+    if (/input|textarea|select/i.test(e.target.tagName) || document.querySelector("dialog[open]")) return;
+    if (e.key === " " || e.key === "k") { e.preventDefault(); togglePlay(); }
+    else if (e.key === "ArrowLeft") $("wBack").click();
+    else if (e.key === "ArrowRight") { try { player.seekTo(player.getCurrentTime() + 10, true); } catch (err) {} poke(); }
+    else if (e.key === "l") $("wList").click();
+    else if (e.key === "f") $("wFs").click();
+  });
+
+  // 台本がまだ無いとき：選ぶところから始める
+  $("wPlay").innerHTML = ICON_PLAY;
+  setTimeout(() => {
+    if (script) { if (!started) build(); return; }
+    $("wTitle").textContent = "ドライブ実況ワイプ";
+    $("wInfo").textContent = "見る台本を選んでください。";
+    $("wBig").style.display = "none";
+    showStart(true);
+  }, 1200);
 })();
 </script>
 </body>

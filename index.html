@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
-  // ?watch を付けて開くと、見るだけの画面になる
-  window.WATCH_MODE = new URLSearchParams(location.search).has("watch");
+  // ふつうに開くと、見るだけの画面になる。台本づくりや細かい設定の画面は ?edit を付けて開く
+  window.WATCH_MODE = !new URLSearchParams(location.search).has("edit");
   if (window.WATCH_MODE) document.documentElement.classList.add("watch");
 </script>
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -313,14 +313,18 @@
     .row > * { min-width: 100%; }
     .row > .fixed { min-width: 0; }
   }
-  /* ==== 見るだけの画面（?watch を付けて開いたとき） ====
+  /* ==== 見るだけの画面（ふつうに開いたとき。?edit を付けると従来の画面） ====
      映像を画面いっぱいに出し、操作は触ったときだけ出す。台本づくりや細かい設定は出さない */
   html.watch, html.watch body { height: 100%; overflow: hidden; background: #000; }
   html.watch header, html.watch #quick, html.watch #quick + .hint, html.watch #log,
   html.watch #tabs, html.watch .tabPane, html.watch #stageBar, html.watch #status,
   html.watch #fsMenu, html.watch #exitFull { display: none !important; }
   html.watch main { max-width: none; padding: 0; margin: 0; }
-  html.watch #playArea { position: fixed; inset: 0; display: flex; gap: 0; background: #000; }
+  html.watch #playArea {
+    position: fixed; inset: 0; display: flex; gap: 0; background: #000;
+    /* 横持ちのとき、端末の切り欠きに映像や操作がかからないようにする */
+    padding: 0 env(safe-area-inset-right) 0 env(safe-area-inset-left);
+  }
   html.watch #stage { flex: 1 1 auto; min-width: 0; min-height: 0; width: auto; height: 100%; aspect-ratio: auto; border-radius: 0; }
   /* ワイプと字幕は、枠ではなく映像そのもの（16:9）に合わせて置く。枠が縦長でも映像の上に乗る */
   html.watch #stage { container-type: size; }
@@ -445,6 +449,7 @@
 
 <header>
   <h1>ドライブ実況ワイプ<span style="color:var(--sub);font-weight:400"> 検証版</span></h1>
+  <a href="./" style="font-size:14px;color:var(--accent);white-space:nowrap">見る画面へ</a>
 </header>
 
 <main>
@@ -475,7 +480,7 @@
       </div>
       <div id="caption"></div>
     </div>
-    <!-- 見るだけの画面の部品（?watch のときだけ出る） -->
+    <!-- 見るだけの画面の部品（?edit を付けて開いたときは出ない） -->
     <div id="wTap" class="w"></div>
     <div id="wTopic" class="w wCard"><span class="lb"></span><span class="tt"></span></div>
     <div id="wPlace" class="w wCard"></div>
@@ -489,6 +494,7 @@
         <span id="wNow"></span>
         <button id="wList" title="セリフの一覧" aria-label="セリフの一覧"><svg viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg></button>
         <button id="wPick" title="台本を選ぶ" aria-label="台本を選ぶ"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button>
+        <button id="wSetBtn" title="設定" aria-label="設定"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
         <button id="wFs" title="全画面" aria-label="全画面"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
       </div>
     </div>
@@ -497,7 +503,7 @@
       <p id="wInfo"></p>
       <button class="big" id="wBig" aria-label="再生"><svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg></button>
       <button class="sub" id="wPick2">台本を選ぶ</button>
-      <a href="./">声・アバター・接続の設定（詳しい画面）</a>
+      <a href="./?edit">声・アバター・接続の設定（詳しい画面）</a>
     </div>
     <button id="fsMenu">メニュー</button>
     <button id="exitFull">閉じる</button>
@@ -1010,7 +1016,30 @@
   <h2 style="margin-top:0;font-size:17px">保存済みの台本</h2>
   <p class="hint" id="pickHint" style="margin-bottom:10px">データリポジトリに保存した台本を選ぶと、読み込んで再生します。</p>
   <div id="pickList" style="border:1px solid var(--line);border-radius:10px"></div>
-  <div class="row" style="margin-top:16px"><button id="pickClose" class="fixed">閉じる</button></div>
+  <div class="row" style="margin-top:16px"><button id="pickClose" class="fixed">閉じる</button>
+    <button id="pickFix" class="fixed primary" style="display:none">接続を直す</button></div>
+</dialog>
+
+<!-- 見る画面の設定（再生中でも開ける） -->
+<dialog id="wSet">
+  <h2 style="margin-top:0;font-size:17px">設定</h2>
+  <p style="margin:0 0 6px;font-size:14px;font-weight:600">データの接続</p>
+  <p class="hint" style="margin:0 0 8px">台本・音声・アバターを置いているリポジトリと、それを読むためのトークンです。</p>
+  <label for="wRepo">リポジトリ</label>
+  <input type="text" id="wRepo" placeholder="例: yourname/drive-wipe-data" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <label for="wPat">トークン</label>
+  <input type="password" id="wPat" placeholder="github_pat_…（変えないときは空のまま）" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <p class="hint">期限が切れたら、<a href="https://github.com/settings/personal-access-tokens/new?name=drive-wipe" target="_blank" rel="noopener">ここから発行し直して</a>貼り直します。
+    対象のリポジトリだけを選び、<code>Contents: Read and write</code> を付けます。</p>
+  <p class="hint" id="wSetMsg"></p>
+  <div class="row" style="margin-top:10px">
+    <button id="wSetSave" class="fixed primary">保存して読み込む</button>
+    <button id="wSetClose" class="fixed">閉じる</button>
+  </div>
+  <p style="margin:18px 0 4px;font-size:14px;font-weight:600">そのほか</p>
+  <p class="hint" style="margin:0">声・アバター・台本づくりは <a href="./?edit">詳しい画面</a> で変えられます（再生は止まります）。</p>
+  <p class="hint" id="wA2hs">iPhoneで上のタブやアドレスバーを消すには、Safariの共有メニューから「ホーム画面に追加」して、ホーム画面から開きます。
+    ホーム画面から開いたときはSafariとは記憶が別なので、最初にこの画面で接続を入れ直します。</p>
 </dialog>
 
 
@@ -1052,11 +1081,9 @@
   <section class="step">
     <h3><span class="num">2</span>モデルを選ぶ</h3>
     <div class="row">
-      <input type="text" id="model" value="gemini-3.6-flash"
-             autocapitalize="off" autocorrect="off" spellcheck="false">
+      <select id="model"><option value="gemini-3.6-flash">gemini-3.6-flash</option></select>
       <button id="btnModels" class="fixed">一覧を取得</button>
     </div>
-    <select id="modelList" style="display:none;margin-top:8px"></select>
     <p class="hint">
       既定のまま試して動けばそれでOKです。<br>
       モデル名は頻繁に入れ替わります。エラーが出たら「一覧を取得」で、<b>あなたのキーで今使えるもの</b>を確認できます（キーの疎通確認も兼ねます）。
@@ -4347,6 +4374,12 @@ function escapeHtml(s) {
 }
 
 /* ---------- 設定 ---------- */
+// モデルは選択肢1つにまとめる。最初は使っているモデルだけ、「一覧を取得」で使えるもの全部に入れ替わる
+function setModelOptions(names, value) {
+  const list = names.includes(value) ? names : [value, ...names];
+  $("model").innerHTML = list.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("");
+  $("model").value = value;
+}
 async function loadModels() {
   const key = lsGet("gemini-api-key") || $("geminiKey").value.trim();
   if (!key) { alert("先にGemini APIキーを入力してください。"); return; }
@@ -4364,11 +4397,9 @@ async function loadModels() {
       .sort()
       .reverse();  // 新しいバージョンが上に来るように
     if (!names.length) throw new Error("動画を扱えそうなモデルが見つかりませんでした。");
-    const sel = $("modelList");
-    sel.innerHTML = names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("");
-    sel.style.display = "block";
-    sel.onchange = () => { $("model").value = sel.value; };
-    $("model").value = names[0];
+    // 選んでいたモデルが一覧にあれば、そのまま選んでおく
+    const cur = $("model").value;
+    setModelOptions(names, names.includes(cur) ? cur : names[0]);
   } catch (e) {
     alert(e.message);
   } finally {
@@ -5044,7 +5075,7 @@ $("btnCopy").onclick = async () => {
 (function init() {
   $("geminiKey").value = lsGet("gemini-api-key");
   $("ytKey").value = lsGet("yt-api-key");
-  $("model").value = lsGet("model", "gemini-3.6-flash");
+  setModelOptions([], lsGet("model", "gemini-3.6-flash"));
   // キャラクター設定はHTMLの既定文をそのまま初期値にする（保存済みがあればそちら）
   $("persona").value = lsGet("persona", $("persona").value);
   $("persona").onchange = () => lsSet("persona", $("persona").value);
@@ -5069,7 +5100,7 @@ $("btnCopy").onclick = async () => {
 })();
 </script>
 <script>
-/* ==== 見るだけの画面（?watch を付けて開いたとき） ====
+/* ==== 見るだけの画面（ふつうに開いたとき。?edit を付けると従来の画面） ====
    既存の再生の仕組み（台本の読み込み・音声・アバター・同期）はそのまま使い、
    画面の出し方と操作だけを差し替える */
 (function () {
@@ -5134,6 +5165,10 @@ $("btnCopy").onclick = async () => {
     update();
   }
 
+  // 札は映像の上に置く（左右に黒い帯があっても、帯ではなく映像の角に出す）
+  $("overlay").appendChild($("wTopic"));
+  $("overlay").appendChild($("wPlace"));
+
   // 台本が読み込まれるたびに作り直す
   const _load = loadScript;
   loadScript = function (data, remember) { started = false; _load(data, remember); build(); };
@@ -5155,6 +5190,21 @@ $("btnCopy").onclick = async () => {
     clearTimeout(hideTimer);
     hideTimer = setTimeout(() => { if (playing()) root.classList.remove("ui-on"); }, 3000);
   }
+
+  // 端末を回したときなど、枠の大きさが変わったら配置し直す。通知に頼ると取りこぼすことがあるので、自分で見張る
+  let lastSize = "";
+  function watchSize() {
+    const st = $("stage"), k = st.clientWidth + "x" + st.clientHeight;
+    if (k !== lastSize) { lastSize = k; layout(); }
+  }
+  setInterval(watchSize, 300);
+  // 横持ちにしたとき、最初の1回だけタブの消し方を案内する
+  addEventListener("orientationchange", () => setTimeout(() => {
+    if (!isIOS || standalone || innerWidth < innerHeight || lsGet("hint-a2hs")) return;
+    lsSet("hint-a2hs", "1");
+    showToast("タブを消すには、共有メニューから「ホーム画面に追加」して、ホーム画面から開きます。", 9000);
+  }, 600));
+  window.addEventListener("orientationchange", () => setTimeout(watchSize, 200));
 
   function update() {
     if (!script) return;
@@ -5295,8 +5345,54 @@ $("btnCopy").onclick = async () => {
   $("wList").onclick = () => { root.classList.toggle("list-open"); poke(); };
   $("wPick").onclick = () => { try { player.pauseVideo(); } catch (e) {} openPicker(); };
   $("wPick2").onclick = () => openPicker();
+  function showToast(msg, ms) {
+    const el = $("wToast");
+    el.textContent = msg;
+    el.classList.add("on");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove("on"), ms || 6000);
+  }
+  const isIOS = /iP(hone|od|ad)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const standalone = navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
+  if (!isIOS || standalone) $("wA2hs").style.display = "none";
+
+  function openSet(msg) {
+    $("wRepo").value = lsGet("data-repo");
+    $("wPat").value = "";
+    $("wSetMsg").textContent = msg || (lsGet("github-pat") ? "トークンは保存されています。" : "トークンがまだ入っていません。");
+    $("wSetMsg").className = "hint";
+    $("wSet").showModal();
+  }
+  $("wSetBtn").onclick = () => openSet();
+  $("wSetClose").onclick = () => $("wSet").close();
+  $("wSetSave").onclick = async () => {
+    const slug = repoSlug($("wRepo").value);
+    const msg = $("wSetMsg");
+    if (!slug) { msg.textContent = "リポジトリは owner/repo の形で入れてください。"; msg.className = "hint err"; return; }
+    if (!$("wPat").value.trim() && !lsGet("github-pat")) { msg.textContent = "トークンを入れてください。"; msg.className = "hint err"; return; }
+    $("dataRepo").value = slug;
+    $("ghPat").value = $("wPat").value.trim();
+    $("btnRepoSave").click();
+    msg.textContent = "読み込んでいます…"; msg.className = "hint";
+    try { await $("btnSyncPull").onclick(); } catch (e) {}
+    $("wSet").close();
+    openPicker();   // ここで台本の一覧が出れば、接続は通っている
+  };
+  // 台本選びで接続の失敗が出たら、直す入口を出す
+  new MutationObserver(() => {
+    $("pickFix").style.display = /トークン|リポジトリ|権限|見つかりません|設定/.test($("pickHint").textContent) && !$("pickList").children.length ? "" : "none";
+  }).observe($("pickHint"), { childList: true, characterData: true, subtree: true });
+  $("pickFix").onclick = () => { $("pickDlg").close(); openSet("トークンを貼り直して「保存して読み込む」を押してください。"); };
+
+  // iPhoneのSafariは、ページから全画面にできない。ホーム画面から開く方法を案内する
   $("wFs").onclick = () => {
     const d = document, el = d.documentElement;
+    if (!(d.fullscreenEnabled || d.webkitFullscreenEnabled)) {
+      showToast(isIOS && !standalone
+        ? "iPhoneでは、Safariの共有メニューから「ホーム画面に追加」して開くと、タブやアドレスバーが消えます。"
+        : "この端末では全画面にできません。", 9000);
+      return;
+    }
     try {
       if (d.fullscreenElement || d.webkitFullscreenElement) (d.exitFullscreen || d.webkitExitFullscreen).call(d);
       else (el.requestFullscreen || el.webkitRequestFullscreen).call(el);

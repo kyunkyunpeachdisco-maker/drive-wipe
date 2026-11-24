@@ -193,11 +193,52 @@
   .tabBtn.on { background: var(--accent); color: #fff; border-color: var(--accent); }
   .tabPane { display: none; }
   .tabPane.on { display: block; }
-  #pickList .pick {
-    padding: 10px 12px; border-top: 1px solid var(--line); cursor: pointer; font-size: 14px;
-  }
-  #pickList .pick:first-child { border-top: 0; }
+  /* 台本の一覧（動画アプリの一覧にならう：サムネと時間、題、補足、右にお気に入りとメニュー） */
+  #pickDlg { max-width: 900px; padding: 0; overflow: hidden; }
+  #pickDlg[open] { display: flex; flex-direction: column; height: 85dvh; }
+  #pickTop { padding: 12px 16px 8px; border-bottom: 1px solid var(--line); }
+  #pickTop .hd { display: flex; align-items: center; gap: 8px; }
+  #pickTop h2 { flex: 1; margin: 0; font-size: 17px; }
+  #pickTop .tools { display: flex; gap: 8px; margin-top: 8px; }
+  #pickQ { flex: 1; min-width: 0; width: auto; padding: 8px 14px; border: 1px solid var(--line); border-radius: 20px; background: var(--panel); color: var(--fg); -webkit-appearance: none; appearance: none; }
+  #pickSort { width: auto; flex: 0 0 auto; padding: 8px; }
+  #pickChips { display: flex; gap: 6px; margin-top: 8px; overflow-x: auto; scrollbar-width: none; }
+  #pickChips::-webkit-scrollbar { display: none; }
+  #pickChips button { flex: 0 0 auto; border-radius: 16px; padding: 6px 14px; font-size: 14px; }
+  #pickChips button.on { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+  #pickDlg:not(.has) .tools, #pickDlg:not(.has) #pickChips { display: none; }
+  #pickHint { margin: 8px 0 0; font-size: 13px; }
+  #pickHint:empty { display: none; }
+  #pickList { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 8px 0; }
+  #pickFoot { display: flex; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--line); }
+  #pickList .pick { display: flex; gap: 4px; padding: 8px 8px 8px 16px; align-items: flex-start; }
   #pickList .pick:hover { background: var(--panel); }
+  #pickList .go { flex: 1; min-width: 0; display: flex; gap: 12px; align-items: flex-start; text-align: left; background: none; border: 0; padding: 0; color: inherit; font-weight: 400; }
+  #pickList .th { position: relative; flex: 0 0 42%; max-width: 220px; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden; background: var(--line); }
+  #pickList .th img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  #pickList .th .len { position: absolute; right: 5px; bottom: 6px; padding: 1px 5px; border-radius: 4px; background: rgba(0,0,0,.8); color: #fff; font-size: 12px; font-variant-numeric: tabular-nums; }
+  #pickList .th .pos { position: absolute; left: 0; bottom: 0; height: 4px; background: #f33; }
+  #pickList .tx { flex: 1; min-width: 0; }
+  #pickList .nm { font-size: 15px; font-weight: 600; line-height: 1.4; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+  #pickList .sub { font-size: 12px; color: var(--sub); line-height: 1.5; margin-top: 2px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+  #pickList .ops { flex: 0 0 40px; display: flex; flex-direction: column; }
+  #pickList .ops button { background: none; border: 0; padding: 0; width: 40px; height: 40px; font-size: 20px; line-height: 1; color: var(--sub); }
+  #pickList .ops .fav.on { color: #f5b301; }
+  #pickList .menu { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 16px 10px; }
+  #pickList .menu button, #pickList .menu a { font-size: 14px; line-height: 1.5; padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px; color: var(--fg); text-decoration: none; background: var(--panel); }
+  @media (max-width: 680px) {
+    #pickDlg { width: 100%; max-width: 100%; margin: 0; border: 0; border-radius: 0; max-height: none; }
+    #pickDlg[open] { height: 100dvh; }
+    #pickTop { padding-top: calc(12px + env(safe-area-inset-top)); }
+    #pickFoot { padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
+  }
+  /* 横持ちのスマホ：見出しごと流して、一覧に高さを使う */
+  @media (max-height: 500px) {
+    #pickDlg { width: 100%; max-width: 100%; margin: 0; border: 0; border-radius: 0; max-height: none; }
+    #pickDlg[open] { display: block; height: 100dvh; overflow-y: auto; padding: 0 env(safe-area-inset-right) 0 env(safe-area-inset-left); box-sizing: border-box; }
+    #pickList { overflow: visible; }
+    #pickList .th { flex-basis: 30%; }
+  }
   /* ---- 統合UI ---- */
   #quick { display: flex; gap: 8px; align-items: flex-end; margin-bottom: 10px; flex-wrap: wrap; }
   #quick > .grow { flex: 1 1 320px; min-width: 0; }
@@ -300,6 +341,7 @@
     max-height: 85dvh; overflow-y: auto; -webkit-overflow-scrolling: touch;
   }
   dialog::backdrop { background: rgba(0,0,0,.5); }
+  html:not(.watch) #pickMake { display: none; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   td { padding: 3px 8px 3px 0; vertical-align: top; }
   .step { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 18px; }
@@ -516,6 +558,7 @@
       <p id="wInfo"></p>
       <button class="big" id="wBig" aria-label="再生"><svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg></button>
       <button class="sub" id="wPick2">台本を選ぶ</button>
+      <button class="sub" id="wMake">台本の作り方</button>
       <a href="./?edit">声・アバター・接続の設定（詳しい画面）</a>
     </div>
     <button id="fsMenu">メニュー</button>
@@ -1026,11 +1069,44 @@
 </main>
 
 <dialog id="pickDlg">
-  <h2 style="margin-top:0;font-size:17px">保存済みの台本</h2>
-  <p class="hint" id="pickHint" style="margin-bottom:10px">データリポジトリに保存した台本を選ぶと、読み込んで再生します。</p>
-  <div id="pickList" style="border:1px solid var(--line);border-radius:10px"></div>
-  <div class="row" style="margin-top:16px"><button id="pickClose" class="fixed">閉じる</button>
-    <button id="pickFix" class="fixed primary" style="display:none">接続を直す</button></div>
+  <div id="pickTop">
+    <div class="hd"><h2>保存済みの台本</h2><button id="pickClose">閉じる</button></div>
+    <div class="tools">
+      <input type="search" id="pickQ" placeholder="検索" aria-label="台本を検索" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="search">
+      <select id="pickSort" aria-label="並び順"><option value="new">新しい順</option><option value="recent">最近見た順</option><option value="name">名前順</option><option value="short">短い順</option></select>
+    </div>
+    <div id="pickChips"></div>
+    <p class="hint" id="pickHint"></p>
+  </div>
+  <div id="pickList"></div>
+  <div id="pickFoot"><button id="pickMake">台本の作り方</button>
+    <button id="pickFix" class="primary" style="display:none">接続を直す</button></div>
+</dialog>
+
+<!-- 台本の作り方（接続の前と後で中身が替わる） -->
+<dialog id="makeDlg">
+  <h2 style="margin-top:0;font-size:17px">台本の作り方</h2>
+  <div id="makeNew">
+    <p>台本は、キャラクターが動画に合わせて話すセリフを並べたものです。台本は、Claude Code などの AI エージェントに頼んで作ります。</p>
+    <p>先に<a href="https://github.com/kyunkyunpeachdisco-maker/drive-wipe-data-template#readme" target="_blank" rel="noopener">準備の手順</a>を開いて、台本を置く場所を作ります。</p>
+    <p>準備の手順の5まで進んだら、［接続する］を押します。</p>
+    <div class="row"><button id="makeConnect" class="fixed primary">接続する</button></div>
+  </div>
+  <div id="makeOld">
+    <ol style="padding-left:1.4em;margin:0">
+      <li><label for="makeUrl" style="font-size:inherit;color:inherit">YouTube のドライブ動画の URL を入れます。</label>
+        <input type="text" inputmode="url" id="makeUrl" placeholder="https://www.youtube.com/watch?v=…" autocapitalize="off" autocorrect="off" spellcheck="false"></li>
+      <li style="margin-top:12px">［コピー］を押して、AI エージェントに送る文をコピーします。
+        <textarea id="makeText" readonly rows="3" style="width:100%;box-sizing:border-box"></textarea>
+        <div class="row"><button id="makeCopy" class="fixed primary">コピー</button></div></li>
+      <li style="margin-top:12px"><a href="https://claude.ai/code" target="_blank" rel="noopener">Claude Code</a> を開いて、リポジトリ <code id="makeRepo"></code> を選び、コピーした文を送ります。</li>
+      <li style="margin-top:12px">台本と声ができると、AI エージェントから返事が来ます。アプリの最初の画面で［台本を選ぶ］を押して、台本を選びます。</li>
+    </ol>
+    <p class="hint">リポジトリが表示されないときは、<a href="https://code.claude.com/docs/en/claude-code-on-the-web" target="_blank" rel="noopener">GitHub のアカウントを Claude Code につなぐ手順</a>を開きます。</p>
+    <p class="hint">URL を入れないと、送る文は、動画の候補を探してもらう文になります。</p>
+    <p class="hint"><a href="https://github.com/kyunkyunpeachdisco-maker/drive-wipe-data-template#台本を作るたびにやること" target="_blank" rel="noopener">Claude Code 以外の AI エージェントで台本を作る手順</a></p>
+  </div>
+  <div class="row" style="margin-top:16px"><button id="makeClose" class="fixed">閉じる</button></div>
 </dialog>
 
 <!-- 見る画面の設定（再生中でも開ける） -->
@@ -1266,7 +1342,16 @@ $("btnPaste").onclick = () => {
 $("useComments").onchange = () => { if (script) { cues = buildCues(script, $("useComments").checked); renderTimeline(); } };
 
 /* ---------- YouTube プレイヤー ---------- */
-let ytReady = false, pendingVideo = null;
+let ytReady = false, pendingVideo = null, pendingStart = false, seekWant = 0;
+// 再生を始める位置。見る画面では、途中まで見た台本は続きから
+function startPos() { return (window.WATCH_MODE && script && resumeAt(scriptKey(script))) || script?.start || 0; }
+function startVideo() {
+  // プレイヤーの準備ができる前に押されたら、準備ができたときに始める
+  if (!player || !player.seekTo) { pendingStart = true; return; }
+  // 動画を替えた直後の seekTo は捨てられることがあるので、再生が始まってからも位置を確かめる
+  seekWant = startPos();
+  try { player.seekTo(seekWant, true); player.playVideo(); } catch (e) {}
+}
 window.onYouTubeIframeAPIReady = () => {
   ytReady = true;
   if (pendingVideo) { const v = pendingVideo; pendingVideo = null; setupPlayer(v); }
@@ -1284,7 +1369,8 @@ window.onYouTubeIframeAPIReady = () => {
 
 function setupPlayer(videoId) {
   if (!ytReady) { pendingVideo = videoId; return; }
-  if (player) { player.loadVideoById(videoId); return; }
+  if (player && player.loadVideoById) { pendingStart = false; player.loadVideoById({ videoId, startSeconds: startPos() }); return; }
+  if (player) return;   // 準備中。準備ができたら onReady で今の動画に替える
   if (!document.getElementById("ytplayer")) { status("動画の表示枠が見つかりません。再読み込みしてください。", "err"); return; }
   player = new YT.Player("ytplayer", {
     videoId,
@@ -1293,9 +1379,17 @@ function setupPlayer(videoId) {
     playerVars: { playsinline: 1, rel: 0, modestbranding: 1,
                   ...(window.WATCH_MODE ? { controls: 0, disablekb: 1, fs: 0, iv_load_policy: 3 } : {}) },
     events: {
-      onReady: () => status("動画を読み込みました。"),
+      onReady: () => {
+        status("動画を読み込みました。");
+        if (script && script.videoId !== videoId) player.cueVideoById({ videoId: script.videoId, startSeconds: startPos() });
+        if (pendingStart) { pendingStart = false; startVideo(); }
+      },
       onStateChange: e => {
-        if (e.data === YT.PlayerState.PLAYING) tick();
+        if (e.data === YT.PlayerState.PLAYING) {
+          if (seekWant && player.getCurrentTime() < seekWant - 5) player.seekTo(seekWant, true);
+          seekWant = 0;
+          tick();
+        }
         // 一時停止したまま喋り続けると映像とずれるので止める
         if (e.data === YT.PlayerState.PAUSED || e.data === YT.PlayerState.ENDED) {
           queue = [];
@@ -2612,7 +2706,7 @@ $("btnStart").onclick = async () => {
   // iOSは利用者の操作を起点にしないと音が出せないので、ここで一度鳴らして解錠する
   primeAudio();
   started = true;
-  try { player.seekTo(script.start || 0, true); player.playVideo(); } catch (e) {}
+  startVideo();
   status("再生中。", "ok");
   tick();
 };
@@ -2660,6 +2754,7 @@ window.__noteScriptSaved = async data => {
     const key = scriptKey(data), idx = await readScriptIndex();
     const title = data.meta?.title || await ytTitle(data.videoId);
     idx[key] = {
+      ...idx[key],
       label: idx[key]?.label || title || key,
       videoId: data.videoId, start: data.start || 0, end: data.covered ?? data.end ?? 0,
       savedAt: new Date().toISOString()
@@ -2668,80 +2763,160 @@ window.__noteScriptSaved = async data => {
   } catch (e) {}   // 一覧の更新に失敗しても台本の保存は成立している
 };
 
+// どこまで見たか（この端末だけの記録）。player- で始めると設定の保存に混ざるので別の名前にする
+function watchPos() { try { return JSON.parse(lsGet("watch-pos", "{}")) || {}; } catch (e) { return {}; } }
+function resumeAt(key) {
+  const w = watchPos()[key];
+  return w && w.t > 15 && w.t < w.d - 20 ? w.t : 0;
+}
+
+const PICK_FILTERS = [
+  ["all", "すべて", () => true],
+  ["fav", "お気に入り", x => !!x.info.fav],
+  ["mid", "途中まで見た", x => resumeAt(x.key) > 0],
+  ["new", "まだ見ていない", x => !watchPos()[x.key]],
+  ["voice", "声あり", x => x.voice],
+];
+let pickItems = [], pickFilter = "all", pickSeq = 0;
+
 async function openPicker() {
-  $("pickDlg").showModal();
+  const seq = ++pickSeq;
+  if (!$("pickDlg").open) $("pickDlg").showModal();
+  $("pickDlg").classList.remove("has");
   $("pickList").innerHTML = "";
   $("pickHint").textContent = "読み込んでいます…";
-  let files, idx;
+  let files, idx, voices;
   try {
-    files = (await ghList("scripts")).filter(f => f.name.endsWith(".json") && f.name !== "_index.json");
-    idx = await readScriptIndex();
-  } catch (e) { $("pickHint").textContent = e.message; return; }
+    repoReady();
+    [files, idx, voices] = await Promise.all([ghList("scripts"), readScriptIndex(), ghList("audio").catch(() => null)]);
+  } catch (e) { if (seq === pickSeq) $("pickHint").textContent = e.message; return; }
+  if (seq !== pickSeq) return;
+  files = files.filter(f => f.name.endsWith(".json") && f.name !== "_index.json");
   if (!files.length) { $("pickHint").textContent = "まだ台本が保存されていません。台本を作ってから「リポジトリに保存」を押してください。"; return; }
-  $("pickHint").textContent = "選ぶと読み込んで再生します。";
-  const info4 = f => idx[f.name.replace(/\.json$/, "")] || {};
-  files.sort((x, y) => (info4(y).fav ? 1 : 0) - (info4(x).fav ? 1 : 0)
-                    || (info4(y).savedAt || "").localeCompare(info4(x).savedAt || ""));
-  for (const f of files) {
+  const dirs = voices && new Set(voices.filter(v => v.type === "dir").map(v => v.name));
+  pickItems = files.map(f => {
     const key = f.name.replace(/\.json$/, "");
     const info = idx[key] || {};
-    const row = document.createElement("div");
-    row.className = "pick";
-    row.innerHTML = '<div class="row"><div class="fixed"><button type="button" class="fav" title="お気に入り"></button></div>'
-                  + '<div><b class="nm"></b><br><span class="hint sub"></span></div>'
-                  + '<div class="fixed"><button type="button" class="ren">名前を変更</button></div></div>';
-    const fav = row.querySelector(".fav");
-    const paintFav = on => { fav.textContent = on ? "★" : "☆"; fav.style.color = on ? "var(--accent)" : "var(--sub)"; };
-    paintFav(!!info.fav);
-    fav.onclick = async ev => {
-      ev.stopPropagation();
-      const on = !(info.fav);
-      info.fav = on; paintFav(on);
-      try {
-        const all = await readScriptIndex();
-        all[key] = { ...(all[key] || {}), fav: on };
-        await writeScriptIndex(all);
-      } catch (e) { $("pickHint").textContent = e.message; paintFav(!on); info.fav = !on; }
-    };
-    const nm = row.querySelector(".nm");
-    nm.textContent = info.label || "（読み込み中…）";
-    if (!info.label) {
-      // 名前が無い台本は動画名を引いて埋める。次からは一覧ファイルから出る
-      ytTitle(key.split("_")[0]).then(async t => {
-        nm.textContent = t || key;
-        if (!t) return;
-        try {
-          const all = await readScriptIndex();
-          all[key] = { ...(all[key] || {}), label: t };
-          await writeScriptIndex(all);
-        } catch (e) {}
-      });
-    }
-    row.querySelector(".sub").textContent = info.start !== undefined
-      ? `${fmtTime(info.start)}〜${fmtTime(info.end)} ／ ${key}` : key;
-    row.querySelector(".nm").parentElement.onclick = async () => {
-      $("pickHint").textContent = "読み込んでいます…";
-      try {
-        const bytes = await ghGetRaw(f.path);
-        loadScript(JSON.parse(new TextDecoder().decode(bytes)));
-        $("pickDlg").close();
-        $("btnStart").click();
-      } catch (e) { $("pickHint").textContent = e.message; }
-    };
-    row.querySelector(".ren").onclick = async ev => {
-      ev.stopPropagation();
+    return { key, path: f.path, info, voice: !!dirs && dirs.has(key), voiceKnown: !!dirs,
+             videoId: info.videoId || key.replace(/_\d+-\d+$/, "") };
+  });
+  $("pickDlg").classList.add("has");
+  renderPicker();
+  // 名前が無い台本は動画名を引いて埋める。次からは一覧ファイルから出る
+  for (const x of pickItems.filter(x => !x.info.label)) {
+    const t = await ytTitle(x.videoId);
+    if (!t) continue;
+    x.info.label = t;
+    if (seq === pickSeq) renderPicker();
+    try { await saveScriptInfo(x.key, { label: t }); } catch (e) {}
+  }
+}
+
+async function saveScriptInfo(key, patch) {
+  const all = await readScriptIndex();
+  all[key] = { ...(all[key] || {}), ...patch };
+  await writeScriptIndex(all);
+}
+
+function renderPicker() {
+  const norm = s => s.normalize("NFKC").toLowerCase();
+  const words = norm($("pickQ").value).split(/\s+/).filter(Boolean);
+  const pos = watchPos();
+  const text = x => norm([x.info.label, x.key, x.info.channel, ...(x.info.topics || [])].join(" "));
+  const hit = pickItems.filter(x => words.every(w => text(x).includes(w)));
+  const chips = $("pickChips");
+  chips.innerHTML = "";
+  for (const [id, name, fn] of PICK_FILTERS) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = `${name} ${hit.filter(fn).length}`;
+    b.classList.toggle("on", id === pickFilter);
+    b.setAttribute("aria-pressed", id === pickFilter);
+    b.onclick = () => { pickFilter = id; renderPicker(); };
+    chips.appendChild(b);
+  }
+  const label = x => x.info.label || x.key;
+  const len = x => (x.info.end || 0) - (x.info.start || 0);
+  const newest = (a, b) => (b.info.savedAt || "").localeCompare(a.info.savedAt || "");
+  const by = {
+    new: newest,
+    recent: (a, b) => (pos[b.key]?.at || 0) - (pos[a.key]?.at || 0) || newest(a, b),
+    name: (a, b) => label(a).localeCompare(label(b), "ja"),
+    short: (a, b) => len(a) - len(b),
+  };
+  const list = hit.filter(PICK_FILTERS.find(f => f[0] === pickFilter)[2]).sort(by[$("pickSort").value] || newest);
+  $("pickList").innerHTML = "";
+  for (const x of list) $("pickList").appendChild(pickRow(x));
+  $("pickHint").textContent = list.length ? "" : "当てはまる台本がありません。";
+}
+
+function pickRow(x) {
+  const { key, info } = x;
+  const wrap = document.createElement("div");
+  wrap.innerHTML = `<div class="pick"><button type="button" class="go"><span class="th"><img alt="" loading="lazy"><span class="len"></span><span class="pos"></span></span>
+    <span class="tx"><span class="nm"></span><span class="sub"></span></span></button>
+    <span class="ops"><button type="button" class="fav" aria-label="お気に入り"></button><button type="button" class="more" aria-label="メニュー" aria-expanded="false">⋮</button></span></div>`;
+  const q = c => wrap.querySelector(c);
+  const img = q("img");
+  img.onerror = () => { img.style.display = "none"; };
+  img.src = `https://i.ytimg.com/vi/${encodeURIComponent(x.videoId)}/mqdefault.jpg`;
+  const len = (info.end || 0) - (info.start || 0);
+  if (len > 0) q(".len").textContent = fmtTime(len); else q(".len").remove();
+  const w = watchPos()[key];
+  if (w && w.d > 0) q(".pos").style.width = Math.min(100, w.t / w.d * 100) + "%"; else q(".pos").remove();
+  q(".nm").textContent = info.label || key;
+  const d = info.savedAt ? new Date(info.savedAt) : null;
+  q(".sub").textContent = [
+    d && !isNaN(d) ? `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}` : "",
+    x.voiceKnown && !x.voice ? "声なし" : "",
+    (info.topics || []).filter(Boolean).join("、"),
+  ].filter(Boolean).join(" ・ ");
+  const fav = q(".fav");
+  const paint = () => {
+    fav.textContent = info.fav ? "★" : "☆";
+    fav.classList.toggle("on", !!info.fav);
+    fav.setAttribute("aria-pressed", !!info.fav);
+  };
+  paint();
+  fav.onclick = async () => {
+    const on = !info.fav;
+    info.fav = on; paint();
+    try { await saveScriptInfo(key, { fav: on }); }
+    catch (e) { info.fav = !on; paint(); $("pickHint").textContent = e.message; }
+  };
+  q(".go").onclick = async () => {
+    $("pickHint").textContent = "読み込んでいます…";
+    try {
+      const bytes = await ghGetRaw(x.path);
+      loadScript(JSON.parse(new TextDecoder().decode(bytes)));
+      $("pickDlg").close();
+      $("btnStart").click();
+    } catch (e) { $("pickHint").textContent = e.message; }
+  };
+  q(".more").onclick = () => {
+    const old = q(".menu");
+    q(".more").setAttribute("aria-expanded", !old);
+    if (old) { old.remove(); return; }
+    const m = document.createElement("div");
+    m.className = "menu";
+    m.innerHTML = `<button type="button">名前を変更</button><a target="_blank" rel="noopener">YouTubeで開く</a>`;
+    m.querySelector("a").href = "https://www.youtube.com/watch?v=" + encodeURIComponent(x.videoId);
+    m.querySelector("button").onclick = async () => {
       const name = prompt("表示名を入れてください。", info.label || key);
       if (name === null) return;
       try {
-        const all = await readScriptIndex();
-        all[key] = { ...(all[key] || {}), label: name.trim() || key };
-        await writeScriptIndex(all);
-        row.querySelector(".nm").textContent = all[key].label;
+        await saveScriptInfo(key, { label: name.trim() || key });
+        info.label = name.trim() || key;
+        renderPicker();
       } catch (e) { $("pickHint").textContent = e.message; }
     };
-    $("pickList").appendChild(row);
-  }
+    wrap.appendChild(m);
+  };
+  return wrap;
 }
+$("pickQ").oninput = renderPicker;
+$("pickSort").value = lsGet("pick-sort", "new");
+$("pickSort").onchange = () => { lsSet("pick-sort", $("pickSort").value); renderPicker(); };
 $("btnOpenSaved").onclick = openPicker;
 $("pickClose").onclick = () => $("pickDlg").close();
 
@@ -5219,8 +5394,19 @@ $("btnCopy").onclick = async () => {
   }, 600));
   window.addEventListener("orientationchange", () => setTimeout(watchSize, 200));
 
+  // どこまで見たかを、5秒ごとに覚える
+  setInterval(() => {
+    if (!script || !started || !playing() || seekWant) return;
+    try {
+      const all = watchPos(), t = player.getCurrentTime() || 0;
+      all[scriptKey(script)] = { t: Math.round(t), d: Math.round(total), at: Date.now() };
+      lsSet("watch-pos", JSON.stringify(all));
+    } catch (e) {}
+  }, 5000);
+
   function update() {
     if (!script) return;
+    if (started && playing() && $("wStart").classList.contains("on")) showStart(false);   // 一覧から選んで始まったとき
     let t = 0;
     try { t = player.getCurrentTime() || 0; } catch (e) {}
     const f = total ? Math.min(1, t / total) : 0;
@@ -5301,7 +5487,7 @@ $("btnCopy").onclick = async () => {
     if (!dragging) return;
     dragging = false;
     const t = fracAt(e) * total;
-    if (!started) { $("btnStart").click(); showStart(false); setTimeout(() => { try { player.seekTo(t, true); } catch (err) {} }, 600); }
+    if (!started) { $("btnStart").click(); showStart(false); setTimeout(() => { seekWant = 0; try { player.seekTo(t, true); } catch (err) {} }, 600); }
     else { try { player.seekTo(t, true); player.playVideo(); } catch (err) {} }
     poke();
   });
@@ -5409,6 +5595,31 @@ $("btnCopy").onclick = async () => {
     $("pickFix").style.display = /トークン|リポジトリ|権限|見つかりません|設定/.test($("pickHint").textContent) && !$("pickList").children.length ? "" : "none";
   }).observe($("pickHint"), { childList: true, characterData: true, subtree: true });
   $("pickFix").onclick = () => { $("pickDlg").close(); openSet(noRepo() ? "リポジトリとトークンを入れて「保存して読み込む」を押してください。" : "トークンを貼り直して「保存して読み込む」を押してください。"); };
+
+  // 台本の作り方
+  function makeText() {
+    const u = $("makeUrl").value.trim();
+    $("makeText").value = u ? "この動画で台本と声を作って。" + u : "候補を出して";
+    $("makeCopy").textContent = "コピー";
+  }
+  function openMake() {
+    $("makeNew").style.display = noRepo() ? "" : "none";
+    $("makeOld").style.display = noRepo() ? "none" : "";
+    $("makeRepo").textContent = lsGet("data-repo") || "";
+    makeText();
+    $("makeDlg").showModal();
+  }
+  $("wMake").onclick = openMake;
+  $("pickMake").onclick = () => { $("pickDlg").close(); openMake(); };
+  $("makeUrl").oninput = makeText;
+  $("makeConnect").onclick = () => { $("makeDlg").close(); openSet("リポジトリとトークンを入れて「保存して読み込む」を押してください。"); };
+  $("makeClose").onclick = () => $("makeDlg").close();
+  $("makeCopy").onclick = async () => {
+    let ok = false;
+    try { await navigator.clipboard.writeText($("makeText").value); ok = true; }
+    catch (e) { $("makeText").select(); try { ok = document.execCommand("copy"); } catch (e2) {} }
+    $("makeCopy").textContent = ok ? "コピーしました" : "コピーできませんでした";
+  };
 
   // iPhoneのSafariは、ページから全画面にできない。ホーム画面から開く方法を案内する
   $("wFs").onclick = () => {

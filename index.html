@@ -11,7 +11,20 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>ドライブ実況ワイプ（検証版）</title>
+<title>ドライブ実況ワイプ - 記事を語るキャラとドライブ動画を見る</title>
+<meta name="apple-mobile-web-app-title" content="ドライブ実況">
+<meta name="application-name" content="ドライブ実況">
+<meta name="description" content="ドライブ動画に、読んだ記事を語るキャラクターの実況を重ねて見るアプリ。台本と声は前もって作っておき、スマホでも映像とずれずに流れます。">
+<meta name="theme-color" content="#242552">
+<link rel="icon" href="icons/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta property="og:title" content="ドライブ実況ワイプ - 記事を語るキャラとドライブ動画を見る">
+<meta property="og:description" content="ドライブ動画に、読んだ記事を語るキャラクターの実況を重ねて見るアプリ。台本と声は前もって作っておき、スマホでも映像とずれずに流れます。">
+<meta property="og:url" content="https://kyunkyunpeachdisco-maker.github.io/drive-wipe/">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://kyunkyunpeachdisco-maker.github.io/drive-wipe/icons/ogp.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://kyunkyunpeachdisco-maker.github.io/drive-wipe/icons/ogp.png">
 <script type="importmap">
 {
   "imports": {
@@ -5355,6 +5368,9 @@ $("btnCopy").onclick = async () => {
   const isIOS = /iP(hone|od|ad)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   const standalone = navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
   if (!isIOS || standalone) $("wA2hs").style.display = "none";
+  // 全画面にできない端末（iPhoneのSafariなど）では、押しても何も起きないのでボタンを出さない。
+  // タブの消し方は、設定の画面と、初めて横持ちにしたときの案内で伝える
+  if (!(document.fullscreenEnabled || document.webkitFullscreenEnabled)) $("wFs").style.display = "none";
 
   function openSet(msg) {
     $("wRepo").value = lsGet("data-repo");
@@ -5374,15 +5390,25 @@ $("btnCopy").onclick = async () => {
     $("ghPat").value = $("wPat").value.trim();
     $("btnRepoSave").click();
     msg.textContent = "読み込んでいます…"; msg.className = "hint";
+    // アバターの調整値を取り込むと画面が読み直されるので、読み直したあとも台本選びを開く
+    try { sessionStorage.setItem(LS + "open-picker", String(Date.now())); } catch (e) {}
     try { await $("btnSyncPull").onclick(); } catch (e) {}
     $("wSet").close();
     openPicker();   // ここで台本の一覧が出れば、接続は通っている
   };
   // 台本選びで接続の失敗が出たら、直す入口を出す
+  // 接続がまだ無いときは、詳しい画面向けの言い方を、この画面の言い方に替える
+  const NO_REPO = "まだデータの接続がありません。「接続する」を押して、リポジトリとトークンを入れてください。";
+  const NO_SCRIPT = "つながりました。まだ台本がありません。AIエージェントに台本を頼むと、ここに並びます。";
+  const noRepo = () => !lsGet("data-repo") || !lsGet("github-pat");
   new MutationObserver(() => {
+    const t = $("pickHint").textContent;
+    if (noRepo() && t !== NO_REPO && /設定してください|入れてください/.test(t)) { $("pickHint").textContent = NO_REPO; return; }
+    if (t.startsWith("まだ台本が保存されていません")) { $("pickHint").textContent = NO_SCRIPT; return; }
+    $("pickFix").textContent = noRepo() ? "接続する" : "接続を直す";
     $("pickFix").style.display = /トークン|リポジトリ|権限|見つかりません|設定/.test($("pickHint").textContent) && !$("pickList").children.length ? "" : "none";
   }).observe($("pickHint"), { childList: true, characterData: true, subtree: true });
-  $("pickFix").onclick = () => { $("pickDlg").close(); openSet("トークンを貼り直して「保存して読み込む」を押してください。"); };
+  $("pickFix").onclick = () => { $("pickDlg").close(); openSet(noRepo() ? "リポジトリとトークンを入れて「保存して読み込む」を押してください。" : "トークンを貼り直して「保存して読み込む」を押してください。"); };
 
   // iPhoneのSafariは、ページから全画面にできない。ホーム画面から開く方法を案内する
   $("wFs").onclick = () => {
@@ -5414,6 +5440,9 @@ $("btnCopy").onclick = async () => {
   // 台本がまだ無いとき：選ぶところから始める
   $("wPlay").innerHTML = ICON_PLAY;
   setTimeout(() => {
+    let reopen = false;
+    try { reopen = Date.now() - Number(sessionStorage.getItem(LS + "open-picker") || 0) < 15000; sessionStorage.removeItem(LS + "open-picker"); } catch (e) {}
+    if (reopen) openPicker();
     if (script) { if (!started) build(); return; }
     $("wTitle").textContent = "ドライブ実況ワイプ";
     $("wInfo").textContent = "見る台本を選んでください。";

@@ -202,11 +202,17 @@
   #pickTop .tools { display: flex; gap: 8px; margin-top: 8px; }
   #pickQ { flex: 1; min-width: 0; width: auto; padding: 8px 14px; border: 1px solid var(--line); border-radius: 20px; background: var(--panel); color: var(--fg); -webkit-appearance: none; appearance: none; }
   #pickSort { width: auto; flex: 0 0 auto; padding: 8px; }
-  #pickChips { display: flex; gap: 6px; margin-top: 8px; overflow-x: auto; scrollbar-width: none; }
-  #pickChips::-webkit-scrollbar { display: none; }
-  #pickChips button { flex: 0 0 auto; border-radius: 16px; padding: 6px 14px; font-size: 14px; }
-  #pickChips button.on { background: var(--fg); color: var(--bg); border-color: var(--fg); }
-  #pickDlg:not(.has) .tools, #pickDlg:not(.has) #pickChips { display: none; }
+  #pickFilters { position: relative; display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  #pickFilters > button { border-radius: 16px; padding: 6px 12px; font-size: 14px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #pickFilters > button.on { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+  #pickPanel { position: absolute; z-index: 5; top: calc(100% + 4px); left: 0; min-width: 220px; max-width: 100%; max-height: 50dvh; overflow-y: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,.4); padding: 4px 0; }
+  #pickPanel[hidden] { display: none; }
+  #pickPanel label { display: flex; align-items: center; gap: 10px; margin: 0; padding: 10px 14px; font-size: 15px; color: var(--fg); cursor: pointer; }
+  #pickPanel label:hover { background: var(--panel); }
+  #pickPanel input { width: 18px; height: 18px; flex: 0 0 auto; margin: 0; }
+  #pickPanel .n { margin-left: auto; color: var(--sub); font-size: 13px; }
+  #pickPanel .all { background: none; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; width: 100%; text-align: left; padding: 8px 14px; font-size: 13px; color: var(--accent); }
+  #pickDlg:not(.has) .tools, #pickDlg:not(.has) #pickFilters { display: none; }
   #pickHint { margin: 8px 0 0; font-size: 13px; }
   #pickHint:empty { display: none; }
   #pickList { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 8px 0; }
@@ -232,6 +238,8 @@
     #pickTop { padding-top: calc(12px + env(safe-area-inset-top)); }
     #pickFoot { padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
   }
+  /* ホーム画面から開いたとき、iPhoneでは dvh だと下に隙間が残る */
+  @media (display-mode: standalone) and (max-width: 680px) { #pickDlg[open] { height: 100vh; } }
   /* 横持ちのスマホ：見出しごと流して、一覧に高さを使う */
   @media (max-height: 500px) {
     #pickDlg { width: 100%; max-width: 100%; margin: 0; border: 0; border-radius: 0; max-height: none; }
@@ -240,6 +248,7 @@
     #pickList .th { flex-basis: 30%; }
   }
   /* ---- 統合UI ---- */
+  #quick[hidden] { display: none !important; }
   #quick { display: flex; gap: 8px; align-items: flex-end; margin-bottom: 10px; flex-wrap: wrap; }
   #quick > .grow { flex: 1 1 320px; min-width: 0; }
   #quick button { flex: 0 0 auto; }
@@ -503,12 +512,12 @@
 <body>
 
 <header>
-  <h1>ドライブ実況ワイプ<span style="color:var(--sub);font-weight:400"> 検証版</span></h1>
+  <h1>声・アバターの設定</h1>
   <a href="./" style="font-size:14px;color:var(--accent);white-space:nowrap">見る画面へ</a>
 </header>
 
 <main>
-  <div id="quick">
+  <div id="quick" hidden>
     <div class="grow">
       <label for="url">YouTubeのURLを貼る</label>
       <input type="text" id="url" placeholder="https://www.youtube.com/watch?v=..."
@@ -518,11 +527,11 @@
     <button id="btnOpenSaved">保存済みから選ぶ</button>
     <button id="btnSettings">設定</button>
   </div>
-  <p class="hint" style="margin:-6px 0 12px">
+  <p class="hint" hidden>
     保存済みの設定でそのまま台本を作り、できあがったら再生に入ります。音声は再生しながら作られます。
     公開動画のみ対応します（限定公開・非公開はGemini側が受け付けません）。
   </p>
-  <div id="log"></div>
+  <div id="log" hidden></div>
 
   <div id="playArea">
   <div id="stage">
@@ -559,7 +568,7 @@
       <button class="big" id="wBig" aria-label="再生"><svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg></button>
       <button class="sub" id="wPick2">台本を選ぶ</button>
       <button class="sub" id="wMake">台本の作り方</button>
-      <a href="./?edit">声・アバター・接続の設定（詳しい画面）</a>
+      <a href="./?edit">声・アバターの設定</a>
     </div>
     <button id="fsMenu">メニュー</button>
     <button id="exitFull">閉じる</button>
@@ -579,12 +588,12 @@
   
 
   <div id="tabs">
-    <button type="button" class="tabBtn on" data-tab="make">台本づくり</button>
-    <button type="button" class="tabBtn" data-tab="voice">音声</button>
+    <button type="button" class="tabBtn" data-tab="make" hidden>台本づくり</button>
+    <button type="button" class="tabBtn on" data-tab="voice">音声</button>
     <button type="button" class="tabBtn" data-tab="avatar">アバター</button>
     <button type="button" class="tabBtn" data-tab="data">データ</button>
   </div>
-  <section class="tabPane on" id="pane-make">
+  <section class="tabPane" id="pane-make">
   <fieldset>
     <legend>動画</legend>
 
@@ -718,7 +727,7 @@
   <div id="out"></div>
 
   </section>
-  <section class="tabPane" id="pane-voice">
+  <section class="tabPane on" id="pane-voice">
   <fieldset>
     <legend>音声</legend>
     <div class="row">
@@ -1002,7 +1011,7 @@
   </fieldset>
   </section>
   <section class="tabPane" id="pane-data">
-  <fieldset>
+  <fieldset hidden>
     <legend>台本</legend>
     <div class="row">
       <div class="fixed"><input type="file" id="file" accept="application/json,.json"></div>
@@ -1029,14 +1038,11 @@
       <div class="fixed"><button id="btnSyncPull">まとめて読み込む</button></div>
     </div>
     <p class="hint">
-      <b>まとめて保存</b>＝キャラクター（設定・興味・フィード）＋アバター（VRM・調整値）＋読み込み中の台本と用意済みの音声。<br>
-      <b>まとめて読み込む</b>＝キャラクター＋アバター＋この台本の音声。台本そのものは上部の「保存済みから選ぶ」から開きます。
+      <b>まとめて保存</b>＝アバター（VRM・調整値）。<br>
+      <b>まとめて読み込む</b>＝キャラクター＋アバター＋読み込み中の台本の音声。
     </p>
     <p class="hint" id="repoHint">
-      PCで作った音声をスマホで鳴らすための置き場です。<b>台本と音声をあなたのプライベートリポジトリに保存し、別の端末で取り込みます。</b>
-      取り込んだ音声はエンジンの設定に関係なく再生されるので、スマホに内蔵音声しかなくてもPCで作った声で鳴ります。
-      <b>台本の保存・音声の取り込みは自動で行われます</b>（台本は生成時、音声は「まとめて用意」後と台本の読み込み時）。
-      取り込み直したいときだけ「まとめて読み込む」を押してください。
+      台本・音声・アバターを置いている、あなたのリポジトリです。台本と人物像は、ここからは書き換えません。
     </p>
     <details>
       <summary>初回の準備（3ステップ）</summary>
@@ -1073,9 +1079,9 @@
     <div class="hd"><h2>保存済みの台本</h2><button id="pickClose">閉じる</button></div>
     <div class="tools">
       <input type="search" id="pickQ" placeholder="検索" aria-label="台本を検索" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="search">
-      <select id="pickSort" aria-label="並び順"><option value="new">新しい順</option><option value="recent">最近見た順</option><option value="name">名前順</option><option value="short">短い順</option></select>
+      <select id="pickSort" aria-label="並び順"><option value="new">新しい順</option><option value="old">古い順</option><option value="recent">最近見た順</option><option value="name">名前順</option><option value="short">短い順</option><option value="long">長い順</option></select>
     </div>
-    <div id="pickChips"></div>
+    <div id="pickFilters"></div>
     <p class="hint" id="pickHint"></p>
   </div>
   <div id="pickList"></div>
@@ -1126,7 +1132,7 @@
     <button id="wSetClose" class="fixed">閉じる</button>
   </div>
   <p style="margin:18px 0 4px;font-size:14px;font-weight:600">そのほか</p>
-  <p class="hint" style="margin:0">声・アバター・台本づくりは <a href="./?edit">詳しい画面</a> で変えられます（再生は止まります）。</p>
+  <p class="hint" style="margin:0"><a href="./?edit">声・アバターの設定</a>を開くと、再生は止まります。</p>
   <p class="hint" id="wA2hs">iPhoneで上のタブやアドレスバーを消すには、Safariの共有メニューから「ホーム画面に追加」して、ホーム画面から開きます。
     ホーム画面から開いたときはSafariとは記憶が別なので、最初にこの画面で接続を入れ直します。</p>
 </dialog>
@@ -2353,9 +2359,11 @@ async function repoPushCore() {
   }
 
   // 音声がまだなくても台本だけは置く（音声は「まとめて用意」後に自動で追いつく）
-  await ghPut(`scripts/${key}.json`, new TextEncoder().encode(JSON.stringify(script, null, 2)),
-              `更新: 台本 ${key}`, shas[`scripts/${key}.json`]);
-  await window.__noteScriptSaved?.(script);
+  // すでにある台本は書き換えない（AIエージェントが直したものを、端末の古い内容で戻してしまうため）
+  if (!shas[`scripts/${key}.json`]) {
+    await ghPut(`scripts/${key}.json`, new TextEncoder().encode(JSON.stringify(script, null, 2)), `追加: 台本 ${key}`);
+    await window.__noteScriptSaved?.(script);
+  }
   if (items.length) {
     const voiceName = $("voice").selectedOptions[0]?.textContent || $("voice").value;
     const meta = {
@@ -2501,12 +2509,8 @@ $("btnSyncPush").onclick = async () => {
   const done = [], failed = [];
   try {
     repoReady();
-    try { await window.__charPush?.(); done.push("キャラクター"); } catch (e) { failed.push(`キャラクター（${e.message}）`); }
     try { await avatarPush(); done.push("アバター"); } catch (e) { failed.push(`アバター（${e.message}）`); }
-    if (script) {
-      try { await repoPushCore(); done.push("台本と音声"); } catch (e) { failed.push(`台本と音声（${e.message}）`); }
-    }
-    status(`保存：${done.join("・") || "なし"}${script ? "" : "（台本は未読み込みのため対象外）"}`
+    status(`保存：${done.join("・") || "なし"}`
          + (failed.length ? ` ／ 失敗：${failed.join("・")}` : ""), failed.length ? "warn" : "ok");
   } catch (e) {
     status(e.message, "err");
@@ -2770,19 +2774,27 @@ function resumeAt(key) {
   return w && w.t > 15 && w.t < w.d - 20 ? w.t : 0;
 }
 
-const PICK_FILTERS = [
-  ["all", "すべて", () => true],
-  ["fav", "お気に入り", x => !!x.info.fav],
-  ["mid", "途中まで見た", x => resumeAt(x.key) > 0],
-  ["new", "まだ見ていない", x => !watchPos()[x.key]],
-  ["voice", "声あり", x => x.voice],
+// しぼり込みの軸。同じ軸の中は「どれか」、違う軸どうしは「かつ」（MVARと同じ）
+const PICK_AXES = [
+  { id: "fav", toggle: true, name: "お気に入り", of: x => x.info.fav ? "お気に入り" : "" },
+  { id: "seen", name: "視聴", of: x => { const w = watchPos()[x.key]; return !w ? "まだ見ていない" : w.t >= w.d - 20 ? "見終わった" : "途中まで見た"; },
+    values: () => ["まだ見ていない", "途中まで見た", "見終わった"] },
+  { id: "voice", name: "声", of: x => !x.voiceKnown ? "" : x.voice ? "声あり" : "声なし", values: () => ["声あり", "声なし"] },
+  { id: "channel", name: "チャンネル", of: x => x.info.channel || "不明",
+    values: () => [...new Set(pickItems.map(x => x.info.channel || "不明"))].sort((a, b) => a.localeCompare(b, "ja")) },
 ];
-let pickItems = [], pickFilter = "all", pickSeq = 0;
+const pickSel = {};
+for (const a of PICK_AXES) pickSel[a.id] = new Set();
+let pickOpen = "";
+const axisOk = (a, x) => !pickSel[a.id].size || pickSel[a.id].has(a.of(x));
+
+let pickItems = [], pickSeq = 0;
 
 async function openPicker() {
   const seq = ++pickSeq;
   if (!$("pickDlg").open) $("pickDlg").showModal();
   $("pickDlg").classList.remove("has");
+  pickOpen = "";
   $("pickList").innerHTML = "";
   $("pickHint").textContent = "読み込んでいます…";
   let files, idx, voices;
@@ -2824,17 +2836,7 @@ function renderPicker() {
   const pos = watchPos();
   const text = x => norm([x.info.label, x.key, x.info.channel, ...(x.info.topics || [])].join(" "));
   const hit = pickItems.filter(x => words.every(w => text(x).includes(w)));
-  const chips = $("pickChips");
-  chips.innerHTML = "";
-  for (const [id, name, fn] of PICK_FILTERS) {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.textContent = `${name} ${hit.filter(fn).length}`;
-    b.classList.toggle("on", id === pickFilter);
-    b.setAttribute("aria-pressed", id === pickFilter);
-    b.onclick = () => { pickFilter = id; renderPicker(); };
-    chips.appendChild(b);
-  }
+  renderFilters(hit);
   const label = x => x.info.label || x.key;
   const len = x => (x.info.end || 0) - (x.info.start || 0);
   const newest = (a, b) => (b.info.savedAt || "").localeCompare(a.info.savedAt || "");
@@ -2842,13 +2844,71 @@ function renderPicker() {
     new: newest,
     recent: (a, b) => (pos[b.key]?.at || 0) - (pos[a.key]?.at || 0) || newest(a, b),
     name: (a, b) => label(a).localeCompare(label(b), "ja"),
+    old: (a, b) => newest(b, a),
     short: (a, b) => len(a) - len(b),
+    long: (a, b) => len(b) - len(a),
   };
-  const list = hit.filter(PICK_FILTERS.find(f => f[0] === pickFilter)[2]).sort(by[$("pickSort").value] || newest);
+  const list = hit.filter(x => PICK_AXES.every(a => axisOk(a, x))).sort(by[$("pickSort").value] || newest);
   $("pickList").innerHTML = "";
   for (const x of list) $("pickList").appendChild(pickRow(x));
   $("pickHint").textContent = list.length ? "" : "当てはまる台本がありません。";
 }
+
+function renderFilters(hit) {
+  const box = $("pickFilters");
+  const oldScroll = $("pickPanel")?.scrollTop || 0;
+  box.innerHTML = "";
+  const button = (text, on, fn) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = text;
+    b.classList.toggle("on", on);
+    b.onclick = fn;
+    box.appendChild(b);
+    return b;
+  };
+  for (const a of PICK_AXES) {
+    const sel = pickSel[a.id];
+    if (a.toggle) {
+      button((sel.size ? "★ " : "☆ ") + a.name, sel.size > 0, () => { sel.size ? sel.clear() : sel.add(a.name); renderPicker(); })
+        .setAttribute("aria-pressed", sel.size > 0);
+      continue;
+    }
+    const b = button((sel.size ? a.values().filter(v => sel.has(v)).join("・") : a.name) + " ▾", sel.size > 0,
+      () => { pickOpen = pickOpen === a.id ? "" : a.id; renderPicker(); });
+    b.setAttribute("aria-expanded", pickOpen === a.id);
+  }
+  if (PICK_AXES.some(a => pickSel[a.id].size) || $("pickQ").value.trim())
+    button("クリア", false, () => { for (const a of PICK_AXES) pickSel[a.id].clear(); $("pickQ").value = ""; pickOpen = ""; renderPicker(); });
+  const axis = PICK_AXES.find(a => a.id === pickOpen);
+  if (!axis) return;
+  // 件数は、ほかの軸と検索を当てたうえで、その項目に当たる数
+  const others = hit.filter(x => PICK_AXES.every(a => a === axis || axisOk(a, x)));
+  const sel = pickSel[axis.id], vals = axis.values();
+  const panel = document.createElement("div");
+  panel.id = "pickPanel";
+  const all = document.createElement("button");
+  all.type = "button"; all.className = "all"; all.textContent = "全チェック/全解除";
+  all.onclick = () => { if (vals.every(v => sel.has(v))) sel.clear(); else vals.forEach(v => sel.add(v)); renderPicker(); };
+  panel.appendChild(all);
+  for (const v of vals) {
+    const l = document.createElement("label");
+    l.innerHTML = `<input type="checkbox"><span class="v"></span><span class="n"></span>`;
+    l.querySelector(".v").textContent = v;
+    l.querySelector(".n").textContent = others.filter(x => axis.of(x) === v).length;
+    const c = l.querySelector("input");
+    c.checked = sel.has(v);
+    c.onchange = () => { c.checked ? sel.add(v) : sel.delete(v); renderPicker(); };
+    panel.appendChild(l);
+  }
+  box.appendChild(panel);
+  panel.scrollTop = oldScroll;
+}
+// 外を押したらプルダウンを閉じる
+$("pickDlg").addEventListener("pointerdown", e => {
+  if (!pickOpen || e.target.closest("#pickFilters")) return;
+  pickOpen = "";
+  $("pickPanel")?.remove();   // 一覧は描き直さない（押した行が作り直されると、押したことにならない）
+});
 
 function pickRow(x) {
   const { key, info } = x;
@@ -2881,6 +2941,7 @@ function pickRow(x) {
   fav.onclick = async () => {
     const on = !info.fav;
     info.fav = on; paint();
+    if (pickSel.fav.size) renderPicker();
     try { await saveScriptInfo(key, { fav: on }); }
     catch (e) { info.fav = !on; paint(); $("pickHint").textContent = e.message; }
   };
@@ -5278,7 +5339,6 @@ $("btnCopy").onclick = async () => {
   $("interests").onchange = () => lsSet("interests", $("interests").value);
   $("url").value = lsGet("last-url");
   $("url").onchange = () => lsSet("last-url", $("url").value.trim());
-  if (!lsGet("gemini-api-key") && !window.WATCH_MODE) $("dlg").showModal();
   // リポジトリ側を正とする。取れなければ手元の値のまま黙って続ける
   if (lsGet("data-repo") && lsGet("github-pat")) {
     charPull(true).catch(e => charStatus(`リポジトリから読み込めませんでした（${e.message}）。この端末の内容を使います。`, "err"));

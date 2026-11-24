@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
   // ふつうに開くと、見るだけの画面になる。台本づくりや細かい設定の画面は ?edit を付けて開く
+  window.APP_VERSION = 'v0.15.1'.startsWith('v') || /^master-/.test('v0.15.1') ? 'v0.15.1' : '開発版';
   window.WATCH_MODE = !new URLSearchParams(location.search).has("edit");
   if (window.WATCH_MODE) document.documentElement.classList.add("watch");
 </script>
@@ -439,6 +440,9 @@
   html.watch.no-caption #caption, html.watch.no-topic #wTopic, html.watch.no-place #wPlace, html.watch.no-avatar #avatar { visibility: hidden !important; }
   #wShow label { display: flex; align-items: center; gap: 10px; margin: 0; padding: 8px 0; font-size: 15px; color: var(--fg); cursor: pointer; }
   #wShow input { width: 20px; height: 20px; margin: 0; flex: 0 0 auto; }
+  html.watch.no-avbg #avatar { background: none !important; backdrop-filter: none; box-shadow: none; outline: none; }
+  html.watch #caption b, html.watch #caption i { font: inherit; }
+  html.watch #caption i { color: transparent; text-shadow: none; }
   /* 広告のあいだは、映像の上に何もかぶせない */
   html.watch.ad #wTap { pointer-events: none; }
   html.watch.ad #wTopic, html.watch.ad #wPlace, html.watch.ad:not(.booth) #avatar, html.watch.ad #caption { visibility: hidden !important; }
@@ -1224,9 +1228,11 @@
   <p style="margin:0 0 2px;font-size:14px;font-weight:600">画面に表示するもの</p>
   <div id="wShow" style="margin-bottom:16px">
     <label><input type="checkbox" data-show="caption">字幕</label>
+    <label><input type="checkbox" data-show="capstep">字幕を少しずつ出す</label>
     <label><input type="checkbox" data-show="topic">いま話している記事</label>
     <label><input type="checkbox" data-show="place">場所</label>
     <label><input type="checkbox" data-show="avatar">キャラクター</label>
+    <label><input type="checkbox" data-show="avbg">キャラクターの背景</label>
   </div>
   <p style="margin:0 0 6px;font-size:14px;font-weight:600">データの接続</p>
   <p class="hint" style="margin:0 0 8px">台本・音声・アバターを置いているリポジトリと、それを読むためのトークンです。</p>
@@ -1244,6 +1250,7 @@
   <p style="margin:18px 0 4px;font-size:14px;font-weight:600">そのほか</p>
   <p class="hint" style="margin:0"><a href="./?edit">声・アバターの設定</a>を開くと、再生は止まります。</p>
   <p class="hint">再生がおかしいときは、直後に <button type="button" id="wLog" style="padding:2px 8px;font-size:12px">再生の記録をコピー</button> を押して、記録を作者に送ってください。</p>
+  <p class="hint">バージョン: <span id="wVer"></span></p>
   <p class="hint" id="wA2hs">iPhoneで上のタブやアドレスバーを消すには、Safariの共有メニューから「ホーム画面に追加」して、ホーム画面から開きます。
     ホーム画面から開いたときはSafariとは記憶が別なので、最初にこの画面で接続を入れ直します。</p>
 </dialog>
@@ -1606,8 +1613,44 @@ async function decodeClip(c, speed = 1) {
 }
 
 // 取り込んだ音声はエンジンを問わず鳴らせる。スマホに内蔵音声しかなくても再生できる
-async function playClip(c, speed) {
-  return playBuffer(audioCtx(), await decodeClip(c, speed));
+async function playClip(c, speed, caption) {
+  const audio = await decodeClip(c, speed);
+  if (caption) revealCaption(audio.duration);
+  return playBuffer(audioCtx(), audio);
+}
+function silentSay(text) {
+  const sec = text.length / 5.5 + 0.5;
+  revealCaption(sec * 0.8);
+  return new Promise(resolve => {
+    const id = setTimeout(resolve, sec * 1000);
+    cancelSpeak = () => { clearTimeout(id); resolve(); };
+  });
+}
+
+// 字幕を、声に合わせて少しずつ出す。行の折り返しが動かないよう、まだの文字は透明で置いておく
+function setCaption(text) {
+  const el = $("caption");
+  if (!window.WATCH_MODE) { el.textContent = text; return; }
+  const box = document.createElement("span"), on = document.createElement("b"), off = document.createElement("i");
+  off.textContent = text;
+  box.append(on, off);
+  el.replaceChildren(box);
+}
+function revealCaption(sec) {
+  const box = $("caption").firstElementChild, on = box?.querySelector("b"), off = box?.querySelector("i");
+  if (!on || !off) return;
+  const chars = [...(on.textContent + off.textContent)];
+  const mine = box.__run = (box.__run || 0) + 1;
+  const show = n => { on.textContent = chars.slice(0, n).join(""); off.textContent = chars.slice(n).join(""); };
+  if (document.documentElement.classList.contains("no-capstep") || !(sec > 0)) { show(chars.length); return; }
+  const t0 = performance.now(), span = sec * 0.95 * 1000;
+  const step = () => {
+    if (!box.isConnected || box.__run !== mine) return;
+    const n = Math.min(chars.length, Math.ceil((performance.now() - t0) / span * chars.length));
+    show(n);
+    if (n < chars.length) setTimeout(step, 60);
+  };
+  step();
 }
 
 // 波形からの口パクは共通なので、鳴らす部分をひとつにまとめる
@@ -2231,7 +2274,7 @@ let currentImportTake = "";
 function importTag() {
   if (!script) return "";
   const sel = lsGet("import-voice:" + scriptKey(script));
-  if (sel === "__generate") return "__generate";
+  if (sel === "__generate") return window.WATCH_MODE ? currentImportTake : "__generate";
   return currentImportTake || sel;   // 解決前は保存値で引く（初期の取り置き名は人のIDと同じ）
 }
 
@@ -2312,7 +2355,7 @@ async function prefetch(t) {
       if (audioCache.has(c.id)) continue;
       const hit = await cacheGet(c.text);
       if (hit) { audioCache.set(c.id, hit); continue; }
-      if (!eng.synth || pulling) continue;
+      if (!eng.synth || pulling || window.WATCH_MODE) continue;
       try {
         const clip = await eng.synth(c.text, $("voice").value, +$("rate").value);
         audioCache.set(c.id, clip);
@@ -2329,7 +2372,9 @@ async function say(text, cue) {
     if (cue) audioCache.delete(cue.id);
     if (!pre) pre = await cacheGet(text);
     // 取り込んだ音声があれば、選んでいるエンジンに関係なくそれを鳴らす
-    if (pre) return await playClip(pre, +$("rate").value);
+    if (pre) return await playClip(pre, +$("rate").value, true);
+    // 見る画面では声を作らない（音声のAPIは、キーによっては料金がかかる）。読むのに要る時間だけ字幕を出す
+    if (window.WATCH_MODE) return await silentSay(text);
     await engine().speak(text, $("voice").value, +$("rate").value);
   } finally {
     speaking = false;
@@ -2553,12 +2598,12 @@ async function refreshImportVoices(data) {
     + `<option value="__generate">その場で生成（取り込まない）</option>`;
   sel.disabled = false;
   const saved = lsGet("import-voice:" + key);
-  if (saved === "__generate") { sel.value = "__generate"; currentImportTake = ""; return null; }
+  if (saved === "__generate" && !window.WATCH_MODE) { sel.value = "__generate"; currentImportTake = ""; return null; }
   if (!groups.length) { sel.value = "__generate"; currentImportTake = ""; return null; }
   // 選択は人を覚える。その人の中でどの取り置きを使うかは毎回解決する（新しいものに自動で追従）
   const chosen = groups.find(g => g.gid === saved) || groups.find(g => g.use.tag === saved) || groups[0];
   sel.value = chosen.gid;
-  lsSet("import-voice:" + key, chosen.gid);
+  if (saved !== "__generate") lsSet("import-voice:" + key, chosen.gid);
   currentImportTake = chosen.use.tag;
   return chosen.use;
 }
@@ -2587,7 +2632,10 @@ async function autoPullAudio(data) {
   const mine = pulling = new Promise(r => { done = r; });
   try {
     const chosen = await refreshImportVoices(data);
-    if (!chosen) return;             // 音声が無い台本なら黙って何もしない
+    if (!chosen) {                   // 音声が無い台本
+      if (window.WATCH_MODE) window.__watchToast?.("この台本には、まだ声がありません。字幕だけで流します。");
+      return;
+    }
     const { got, have } = await pullVoice(key, chosen.tag, chosen.meta);
     if (got) status(`保存済みの音声を取り込みました（${chosen.label}／新規 ${got}件・取り込み済み ${have}件）。`, "ok");
   } catch (e) {
@@ -2839,16 +2887,17 @@ async function drain() {
           hit = await cacheGet(c.text);
         }
         if (hit) audioCache.set(c.id, hit);
-        else if (eng.synth) {
+        else if (eng.synth && !window.WATCH_MODE) {
           try { audioCache.set(c.id, await eng.synth(c.text, $("voice").value, +$("rate").value)); }
           catch (e) { audioCache.set(c.id, null); }
         }
       }
       setAct(c.act, c.amount);
       gazeTarget = c.kind === "chat" ? 1 : 0.15;   // 雑談は視聴者を見る
-      if ($("showCaption").checked) $("caption").textContent = c.text;
+      if ($("showCaption").checked) setCaption(c.text);
       const vol = player?.getVolume ? player.getVolume() : 100;
-      try { player.setVolume(+$("duck").value); } catch (e) {}
+      // 声が無いときは、動画の音を下げない
+      if (!window.WATCH_MODE || audioCache.get(c.id)) try { player.setVolume(+$("duck").value); } catch (e) {}
       try { await say(c.text, c); } catch (e) { status("音声エラー: " + e.message, "err"); }
       try { player.setVolume(vol); } catch (e) {}
       $("caption").textContent = "";
@@ -3576,7 +3625,7 @@ async function prefetchVoice(key) {
   try {
     const groups = groupVoices(await listVoices(key));
     const saved = lsGet("import-voice:" + key);
-    if (saved === "__generate" || !groups.length) return;
+    if (!groups.length) return;
     const g = groups.find(g => g.gid === saved) || groups[0];
     await pullVoice(key, g.use.tag, g.use.meta, true);
   } catch (e) {}
@@ -6327,8 +6376,9 @@ $("btnCopy").onclick = async () => {
     $("wSetMsg").className = "hint";
     $("wSet").showModal();
   }
+  $("wVer").textContent = window.APP_VERSION;
   $("wLog").onclick = async () => {
-    const text = `${navigator.userAgent}\n${script ? scriptKey(script) : "-"}\n秒 状態 時間 長さ 判定 開始\n` + playLog.slice(-400).filter((x, i, a) => i % 2 === 0 || /ad/.test(x)).join("\n");
+    const text = `${window.APP_VERSION} ${navigator.userAgent}\n${script ? scriptKey(script) : "-"}\n秒 状態 時間 長さ 判定 開始\n` + playLog.slice(-400).filter((x, i, a) => i % 2 === 0 || /ad/.test(x)).join("\n");
     try { await navigator.clipboard.writeText(text); $("wLog").textContent = "コピーしました"; } catch (e) { $("wLog").textContent = "コピーできませんでした"; }
     setTimeout(() => { $("wLog").textContent = "再生の記録をコピー"; }, 3000);
   };

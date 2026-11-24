@@ -198,7 +198,11 @@
   #pickDlg[open] { display: flex; flex-direction: column; height: 85dvh; }
   #pickTop { padding: 12px 16px 8px; border-bottom: 1px solid var(--line); }
   #pickTop .hd { display: flex; align-items: center; gap: 8px; }
-  #pickTop h2 { flex: 1; margin: 0; font-size: 17px; }
+  #pickTabs { flex: 1; display: flex; gap: 4px; }
+  #pickTabs button { background: none; border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 8px 10px; font-size: 16px; font-weight: 600; color: var(--sub); }
+  #pickTabs button.on { color: var(--fg); border-bottom-color: var(--fg); }
+  #pickBack { background: none; border: 0; padding: 8px 10px 8px 0; font-size: 20px; line-height: 1; }
+  #pickBack[hidden] { display: none; }
   #pickTop .tools { display: flex; gap: 8px; margin-top: 8px; }
   #pickQ { flex: 1; min-width: 0; width: auto; padding: 8px 14px; border: 1px solid var(--line); border-radius: 20px; background: var(--panel); color: var(--fg); -webkit-appearance: none; appearance: none; }
   #pickSort { width: auto; flex: 0 0 auto; padding: 8px; }
@@ -212,7 +216,9 @@
   #pickPanel input { width: 18px; height: 18px; flex: 0 0 auto; margin: 0; }
   #pickPanel .n { margin-left: auto; color: var(--sub); font-size: 13px; }
   #pickPanel .all { background: none; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; width: 100%; text-align: left; padding: 8px 14px; font-size: 13px; color: var(--accent); }
-  #pickDlg:not(.has) .tools, #pickDlg:not(.has) #pickFilters { display: none; }
+  #pickDlg:not(.has) .tools, #pickDlg:not(.has) #pickFilters, #pickDlg:not(.has) #pickTabs,
+  #pickDlg:not([data-view="scripts"]) .tools, #pickDlg:not([data-view="scripts"]) #pickFilters { display: none; }
+  #pickDlg:not(.has) .hd { justify-content: flex-end; }
   #pickHint { margin: 8px 0 0; font-size: 13px; }
   #pickHint:empty { display: none; }
   #pickList { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 8px 0; }
@@ -230,6 +236,43 @@
   #pickList .ops { flex: 0 0 40px; display: flex; flex-direction: column; }
   #pickList .ops button { background: none; border: 0; padding: 0; width: 40px; height: 40px; font-size: 20px; line-height: 1; color: var(--sub); }
   #pickList .ops .fav.on { color: #f5b301; }
+  #pickList .th .cnt { position: absolute; left: 5px; bottom: 6px; padding: 1px 6px; border-radius: 4px; background: rgba(0,0,0,.8); color: #fff; font-size: 12px; }
+  #pickList .kids { margin: 0 8px 8px 28px; border-left: 2px solid var(--line); }
+  #pickList .kids .pick { padding: 6px 0 6px 12px; }
+  #pickList .kids .go { gap: 10px; }
+  #pickList .kids .play { flex: 0 0 auto; font-size: 12px; line-height: 21px; color: var(--sub); }
+  #pickList .kids .nm { font-size: 14px; }
+  #pickList .kids .ops { flex-direction: row; flex-basis: 80px; }
+  #pickList .track { display: block; height: 3px; margin-top: 5px; border-radius: 2px; background: var(--line); overflow: hidden; }
+  #pickList .track .pos { display: block; height: 100%; background: #f33; }
+  #pickList .add { display: block; background: none; border: 0; padding: 10px 16px; font-size: 14px; color: var(--accent); text-align: left; }
+  #pickList .kids .add { padding: 8px 12px; }
+  #pickList .stack { overflow: visible; }
+  #pickList .stack img { border-radius: 8px; position: relative; }
+  #pickList .stack::before { content: ""; position: absolute; left: 6%; right: 6%; top: -4px; height: 8px; border-radius: 6px 6px 0 0; background: var(--sub); opacity: .5; }
+  #pickList .plHead { display: flex; gap: 16px; padding: 12px 16px 16px; flex-wrap: wrap; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+  #pickList .plHead .th { flex: 1 1 240px; max-width: 320px; }
+  #pickList .plInfo { flex: 1 1 240px; min-width: 0; }
+  #pickList .plInfo h3 { margin: 0 0 4px; font-size: 20px; overflow-wrap: anywhere; }
+  #pickList .plInfo .sub { margin: 0; }
+  #pickList .plBtns { display: flex; gap: 8px; margin-top: 12px; }
+  #pickList .plBtns button { border-radius: 20px; padding: 8px 16px; font-size: 15px; }
+  #pickList .plBtns .playAll { background: var(--fg); color: var(--bg); border-color: var(--fg); font-weight: 600; }
+  #pickList .plBtns .more { padding: 8px 14px; }
+  #pickList .plHead .menu { padding: 0; width: 100%; }
+  #pickList .plRow .pick { padding-left: 4px; }
+  #pickList .plRow .th { flex-basis: 36%; }
+  #pickList .grip { flex: 0 0 32px; align-self: center; background: none; border: 0; padding: 10px 0; font-size: 18px; line-height: 1; color: var(--sub); cursor: grab; touch-action: none; }
+  #pickList .plRow.drag { opacity: .6; background: var(--panel); }
+  .dlgToast { position: fixed; left: 50%; bottom: calc(76px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 20; max-width: 90%; padding: 10px 16px; border-radius: 8px; background: #111; color: #fff; border: 1px solid rgba(255,255,255,.25); font-size: 14px; box-shadow: 0 4px 16px rgba(0,0,0,.4); }
+  #makeKind label { display: flex; align-items: center; gap: 10px; margin: 0; padding: 6px 0; font-size: 15px; color: var(--fg); }
+  #makeKind input[type=radio] { width: 18px; height: 18px; margin: 0; flex: 0 0 auto; }
+  #saveLists { max-height: 45dvh; overflow-y: auto; }
+  #saveLists label { display: flex; align-items: center; gap: 12px; margin: 0; padding: 10px 0; font-size: 15px; color: var(--fg); cursor: pointer; }
+  #saveLists input { width: 20px; height: 20px; flex: 0 0 auto; margin: 0; }
+  #saveLists .n { margin-left: auto; color: var(--sub); font-size: 13px; }
+  #saveNewRow { display: flex; gap: 8px; margin-top: 10px; }
+  #saveNewRow input { flex: 1; min-width: 0; width: auto; }
   #pickList .menu { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 16px 10px; }
   #pickList .menu button, #pickList .menu a { font-size: 14px; line-height: 1.5; padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px; color: var(--fg); text-decoration: none; background: var(--panel); }
   @media (max-width: 680px) {
@@ -350,6 +393,7 @@
     max-height: 85dvh; overflow-y: auto; -webkit-overflow-scrolling: touch;
   }
   dialog::backdrop { background: rgba(0,0,0,.5); }
+  #makeDlg a, #wSet a { color: var(--accent); }
   html:not(.watch) #pickMake { display: none; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   td { padding: 3px 8px 3px 0; vertical-align: top; }
@@ -395,6 +439,10 @@
   html.watch.no-caption #caption, html.watch.no-topic #wTopic, html.watch.no-place #wPlace, html.watch.no-avatar #avatar { visibility: hidden !important; }
   #wShow label { display: flex; align-items: center; gap: 10px; margin: 0; padding: 8px 0; font-size: 15px; color: var(--fg); cursor: pointer; }
   #wShow input { width: 20px; height: 20px; margin: 0; flex: 0 0 auto; }
+  /* 広告のあいだは、映像の上に何もかぶせない */
+  html.watch.ad #wTap { pointer-events: none; }
+  html.watch.ad #wTopic, html.watch.ad #wPlace, html.watch.ad:not(.booth) #avatar, html.watch.ad #caption { visibility: hidden !important; }
+  html.watch.ad:not(.booth):not(.list-open) #wBar { opacity: 0; pointer-events: none; }
   /* 動画の枠そのものを16:9にする。横長の枠に任せると、iPhoneの横持ちで映像が片側に寄ることがある */
   html.watch:not(.booth) #ytbox { inset: 0; margin: auto; width: min(100cqw, 100cqh * 16 / 9); height: min(100cqh, 100cqw * 9 / 16); }
   html.watch #overlay { width: min(100cqw, 100cqh * 16 / 9); height: auto; max-height: none; }
@@ -402,10 +450,42 @@
   html.watch #tlWrap { display: none; position: relative; }
   html.watch.list-open #tlWrap { display: block; flex: 0 0 min(360px, 42%); background: var(--bg); }
   html.watch #timeline { border: 0; border-radius: 0; }
+  #wPl, #wPlBar { display: none; }
+  html.watch.pl-open #timeline { display: none; }
+  html.watch.pl-open #wPl { display: flex; flex-direction: column; position: absolute; inset: 0; color: var(--fg); background: var(--bg); }
+  html.watch.pl-on #wPlBar { display: flex; align-items: center; gap: 4px; }
+  #wPlBar button { background: none; border: 0; color: #fff; padding: 6px 8px; min-height: 40px; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; border-radius: 8px; }
+  #wPlBar button:disabled { opacity: .35; }
+  #wPlBar svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  #wPlName { flex: 1 1 auto; min-width: 0; justify-content: flex-start !important; background: rgba(255,255,255,.14) !important; }
+  #wPlName span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #wPl .hd { display: flex; align-items: flex-start; gap: 8px; padding: 12px 8px 4px 14px; }
+  #wPl .hd b { font-size: 16px; overflow-wrap: anywhere; }
+  #wPl .hd .n { color: var(--sub); font-size: 13px; margin-left: 6px; white-space: nowrap; }
+  #wPl .hd > span { flex: 1; min-width: 0; }
+  #wPl .hd button, #wPl .tl button { background: none; border: 0; min-width: 44px; min-height: 44px; padding: 8px; font-size: 18px; line-height: 1; }
+  #wPl .tl { display: flex; gap: 4px; padding: 0 8px 6px; border-bottom: 1px solid var(--line); }
+  #wPl .tl button { font-size: 14px; color: var(--sub); padding: 8px 10px; border-radius: 8px; }
+  #wPl .tl button.on { color: var(--fg); background: var(--panel); font-weight: 600; }
+  #wPl .rows { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: env(safe-area-inset-bottom); }
+  #wPl .it { display: flex; gap: 12px; width: 100%; padding: 8px 14px; background: none; border: 0; border-radius: 0; text-align: left; color: inherit; font-weight: 400; align-items: flex-start; }
+  #wPl .it.now { background: var(--panel); }
+  #wPl .it .th { position: relative; flex: 0 0 38%; max-width: 160px; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden; background: var(--line); }
+  #wPl .it img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  #wPl .it .len { position: absolute; right: 4px; bottom: 5px; padding: 1px 5px; border-radius: 4px; background: rgba(0,0,0,.8); color: #fff; font-size: 11px; }
+  #wPl .it .pos { position: absolute; left: 0; bottom: 0; height: 3px; background: #f33; }
+  #wPl .it .tx { flex: 1; min-width: 0; }
+  #wPl .it .nm { font-size: 14px; font-weight: 600; line-height: 1.4; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+  #wPl .it .sub { font-size: 12px; color: var(--sub); line-height: 1.5; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
   html.watch #timeline .cue.topicHead { cursor: default; font-size: 12px; color: var(--sub); background: var(--panel); font-weight: 600; }
   @media (max-width: 680px) and (orientation: portrait) {
     html.watch #playArea { flex-direction: column; }
-    html.watch.list-open #stage { flex: 0 0 auto; width: 100%; height: auto; aspect-ratio: 16 / 9; }
+    /* 一覧を出したときは、映像・操作の帯・一覧を縦に並べる */
+    html.watch.list-open #playArea > #stage { flex: 0 0 auto; width: 100%; height: calc(100vw * 9 / 16 + var(--bar-h, 96px)); aspect-ratio: auto; }
+    html.watch.list-open:not(.booth) #ytbox { inset: 0 0 auto 0; margin: 0; width: 100%; height: calc(100vw * 9 / 16); }
+    html.watch.list-open:not(.booth) #overlay { position: absolute; inset: 0 0 auto 0; width: 100%; height: calc(100vw * 9 / 16); aspect-ratio: auto; }
+    html.watch.list-open:not(.booth) #wTap { bottom: auto; height: calc(100vw * 9 / 16); }
+    html.watch.list-open:not(.booth) #wBar { opacity: 1; pointer-events: auto; background: none; padding-top: 6px; }
     html.watch.list-open #tlWrap { flex: 1 1 0; min-height: 0; }
     html.watch #timeline { position: absolute; max-height: none; margin: 0; }
   }
@@ -556,6 +636,9 @@
     <div id="wToast" class="w"></div>
     <div id="wBar" class="w">
       <div id="wProg"><div id="wSegs"></div><div id="wPlayed"></div><div id="wHead"></div><div id="wTip"></div></div>
+      <div id="wPlBar"><button id="wPrev" title="前の台本" aria-label="前の台本"><svg viewBox="0 0 24 24"><path d="M6 5v14M19 5L9 12l10 7z"/></svg></button>
+        <button id="wPlName"></button>
+        <button id="wNext" title="次の台本" aria-label="次の台本"><svg viewBox="0 0 24 24"><path d="M18 5v14M5 5l10 7-10 7z"/></svg></button></div>
       <div id="wBtns">
         <button id="wPlay" title="再生・一時停止" aria-label="再生・一時停止"></button>
         <button id="wBack" title="10秒戻る" aria-label="10秒戻る"><svg viewBox="0 0 24 24"><path d="M4 5v5h5"/><path d="M4.6 14a8 8 0 1 0 1.7-7.6L4 10"/></svg></button>
@@ -578,7 +661,7 @@
     <button id="fsMenu">メニュー</button>
     <button id="exitFull">閉じる</button>
   </div>
-  <div id="tlWrap"><div id="timeline"></div></div>
+  <div id="tlWrap"><div id="timeline"></div><div id="wPl"></div></div>
   </div>
   <div id="status"></div>
   <div id="stageBar">
@@ -1081,7 +1164,9 @@
 
 <dialog id="pickDlg">
   <div id="pickTop">
-    <div class="hd"><h2>保存済みの台本</h2><button id="pickClose">閉じる</button></div>
+    <div class="hd"><button id="pickBack" aria-label="プレイリストの一覧へ戻る" hidden>←</button>
+      <div id="pickTabs"><button type="button" data-view="scripts">台本</button><button type="button" data-view="lists">プレイリスト</button></div>
+      <button id="pickClose">閉じる</button></div>
     <div class="tools">
       <input type="search" id="pickQ" placeholder="検索" aria-label="台本を検索" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="search">
       <select id="pickSort" aria-label="並び順"><option value="new">新しい順</option><option value="old">古い順</option><option value="recent">最近見た順</option><option value="name">名前順</option><option value="short">短い順</option><option value="long">長い順</option></select>
@@ -1092,6 +1177,14 @@
   <div id="pickList"></div>
   <div id="pickFoot"><button id="pickMake">台本の作り方</button>
     <button id="pickFix" class="primary" style="display:none">接続を直す</button></div>
+</dialog>
+
+<!-- プレイリストに保存 -->
+<dialog id="saveDlg">
+  <h2 style="margin-top:0;font-size:17px">プレイリストに保存</h2>
+  <div id="saveLists"></div>
+  <div id="saveNewRow"><input type="text" id="saveName" placeholder="新しいプレイリストの名前" aria-label="新しいプレイリストの名前"><button id="saveNew">作る</button></div>
+  <div class="row" style="margin-top:16px"><button id="saveClose" class="fixed">閉じる</button></div>
 </dialog>
 
 <!-- 台本の作り方（接続の前と後で中身が替わる） -->
@@ -1106,15 +1199,20 @@
   <div id="makeOld">
     <ol style="padding-left:1.4em;margin:0">
       <li><label for="makeUrl" style="font-size:inherit;color:inherit">YouTube のドライブ動画の URL を入れます。</label>
-        <input type="text" inputmode="url" id="makeUrl" placeholder="https://www.youtube.com/watch?v=…" autocapitalize="off" autocorrect="off" spellcheck="false"></li>
+        <input type="text" inputmode="url" id="makeUrl" placeholder="https://www.youtube.com/watch?v=…" autocapitalize="off" autocorrect="off" spellcheck="false">
+        <p class="hint">動画が決まっていないときは、URL を入れずに［コピー］を押します。動画の候補を AI エージェントに頼む文がコピーされます。</p></li>
+      <li id="makeKind" style="margin-top:12px;display:none">もう台本がある動画です。作り足す台本の話題を選びます。
+        <label><input type="radio" name="makeKind" value="latest" checked>最新の記事</label>
+        <label><input type="radio" name="makeKind" value="theme">テーマを決める</label>
+        <input type="text" id="makeTheme" placeholder="例：猫、鉄道、昔のゲーム" aria-label="テーマ" style="display:none"></li>
       <li style="margin-top:12px">［コピー］を押して、AI エージェントに送る文をコピーします。
         <textarea id="makeText" readonly rows="3" style="width:100%;box-sizing:border-box"></textarea>
         <div class="row"><button id="makeCopy" class="fixed primary">コピー</button></div></li>
-      <li style="margin-top:12px"><a href="https://claude.ai/code" target="_blank" rel="noopener">Claude Code</a> を開いて、リポジトリ <code id="makeRepo"></code> を選び、コピーした文を送ります。</li>
-      <li style="margin-top:12px">台本と声ができると、AI エージェントから返事が来ます。アプリの最初の画面で［台本を選ぶ］を押して、台本を選びます。</li>
+      <li style="margin-top:12px"><a href="https://claude.ai/code" target="_blank" rel="noopener">Claude Code</a> を開いて、リポジトリ <code id="makeRepo"></code> を選び、コピーした文を送ります。
+        <p class="hint">リポジトリが表示されないときは、<a href="https://code.claude.com/docs/en/claude-code-on-the-web" target="_blank" rel="noopener">GitHub のアカウントをつなぐ手順</a>を開きます。</p></li>
+      <li style="margin-top:12px">台本と声ができると、AI エージェントから返事が来ます。アプリの最初の画面で［台本を選ぶ］を押して、できた台本を押します。
+        <p class="hint">台本が何本もある動画では、動画を押すと、台本が表示されます。</p></li>
     </ol>
-    <p class="hint">リポジトリが表示されないときは、<a href="https://code.claude.com/docs/en/claude-code-on-the-web" target="_blank" rel="noopener">GitHub のアカウントを Claude Code につなぐ手順</a>を開きます。</p>
-    <p class="hint">URL を入れないと、送る文は、動画の候補を探してもらう文になります。</p>
     <p class="hint"><a href="https://github.com/kyunkyunpeachdisco-maker/drive-wipe-data-template#台本を作るたびにやること" target="_blank" rel="noopener">Claude Code 以外の AI エージェントで台本を作る手順</a></p>
   </div>
   <div class="row" style="margin-top:16px"><button id="makeClose" class="fixed">閉じる</button></div>
@@ -1145,6 +1243,7 @@
   </div>
   <p style="margin:18px 0 4px;font-size:14px;font-weight:600">そのほか</p>
   <p class="hint" style="margin:0"><a href="./?edit">声・アバターの設定</a>を開くと、再生は止まります。</p>
+  <p class="hint">再生がおかしいときは、直後に <button type="button" id="wLog" style="padding:2px 8px;font-size:12px">再生の記録をコピー</button> を押して、記録を作者に送ってください。</p>
   <p class="hint" id="wA2hs">iPhoneで上のタブやアドレスバーを消すには、Safariの共有メニューから「ホーム画面に追加」して、ホーム画面から開きます。
     ホーム画面から開いたときはSafariとは記憶が別なので、最初にこの画面で接続を入れ直します。</p>
 </dialog>
@@ -1308,16 +1407,23 @@ function buildCues(data, withComments) {
     }
   }
   out.sort((a, b) => a.at - b.at);
-  out.forEach((c, i) => c.id = i);
+  out.forEach((c, i) => c.id = cueBase + i);
   return out;
 }
 
+// 発話の番号は台本ごとに別の範囲にする。同じ番号を使うと、先読みした前の台本の声が、次の台本で鳴ってしまう
+let cueBase = 0;
 function loadScript(data, remember = true) {
   if (!data || !Array.isArray(data.items)) throw new Error("台本の形式が違います（items がありません）。");
   if (!data.videoId) throw new Error("videoId がありません。");
   // 開き直すたびに読み込ませるのは手間なので、端末に残す
   if (remember) idbSet("script", data).catch(() => {});
   script = data;
+  cueBase += 100000;
+  noteSeek();
+  queue = []; audioCache.clear();
+  try { cancelSpeak(); } catch (e) {}
+  $("caption").textContent = "";
   cues = buildCues(data, $("useComments").checked);
   const spoken = cues.filter(c => !c.comment).length;
   $("loaded").textContent =
@@ -1399,6 +1505,9 @@ function setupPlayer(videoId) {
     events: {
       onReady: () => {
         status("動画を読み込みました。");
+        // 自分の操作で位置を動かしたことを覚える（広告で時間が飛んだのと区別する）
+        const rawSeek = player.seekTo.bind(player);
+        player.seekTo = (...a) => { noteSeek(); return rawSeek(...a); };
         if (script && script.videoId !== videoId) player.cueVideoById({ videoId: script.videoId, startSeconds: startPos() });
         if (pendingStart) { pendingStart = false; startVideo(); }
       },
@@ -1408,6 +1517,7 @@ function setupPlayer(videoId) {
           seekWant = 0;
           tick();
         }
+        if (e.data === YT.PlayerState.ENDED && started) { lastT = -1; adHold = null; plEnded(); }
         // 一時停止したまま喋り続けると映像とずれるので止める
         if (e.data === YT.PlayerState.PAUSED || e.data === YT.PlayerState.ENDED) {
           queue = [];
@@ -2202,7 +2312,7 @@ async function prefetch(t) {
       if (audioCache.has(c.id)) continue;
       const hit = await cacheGet(c.text);
       if (hit) { audioCache.set(c.id, hit); continue; }
-      if (!eng.synth) continue;
+      if (!eng.synth || pulling) continue;
       try {
         const clip = await eng.synth(c.text, $("voice").value, +$("rate").value);
         audioCache.set(c.id, clip);
@@ -2294,7 +2404,7 @@ async function ghPut(path, bytes, message, sha) {
 
 // 台本1本ぶんの置き場所。動画IDと区間で決まる
 function scriptKey(d) {
-  return `${d.videoId}_${Math.round(d.start || 0)}-${Math.round(d.covered ?? d.end ?? 0)}`;
+  return `${d.videoId}_${Math.round(d.start || 0)}-${Math.round(d.covered ?? d.end ?? 0)}${d.edition ? "_" + d.edition : ""}`;
 }
 
 const GUIDE = `# データリポジトリ
@@ -2396,7 +2506,7 @@ async function repoPushCore() {
 
 // 台本を読み込んだら、その台本の音声も自動で取り込む。
 // 取り込み済みは飛ばすので、2回目以降は一覧を1回取るだけで終わる
-let autoPullKey = "";
+let autoPullKey = "", pulling = null;
 // audio/<key>/ 配下の声フォルダを列挙する（声ごとに index.json を持つ）
 async function listVoices(key) {
   const out = [];
@@ -2453,18 +2563,18 @@ async function refreshImportVoices(data) {
   return chosen.use;
 }
 
-async function pullVoice(key, tag, meta) {
+async function pullVoice(key, tag, meta, quiet) {
   const items = meta.items || [];
   let got = 0, have = 0;
   for (const it of items) {
     if (await idbGet(`i:${tag}:` + it.h)) { have++; continue; }
-    status(`保存済みの音声を取り込んでいます... ${got + have + 1}/${items.length}`);
+    if (!quiet) status(`保存済みの音声を取り込んでいます... ${got + have + 1}/${items.length}`);
     const bytes = await ghGetRaw(`audio/${key}/${tag}/${it.h}.${it.ext}`);
     if (!bytes) continue;
     await idbSet(`i:${tag}:` + it.h, makeClip(it.enc, bytes, it.rate, it.ext));
     got++;
   }
-  if (got) clearAudioCache();
+  if (got && !quiet) clearAudioCache();
   return { got, have };
 }
 
@@ -2473,6 +2583,8 @@ async function autoPullAudio(data) {
   const key = scriptKey(data);
   if (autoPullKey === key) return;   // 同じ台本で何度も走らせない
   autoPullKey = key;
+  let done;
+  const mine = pulling = new Promise(r => { done = r; });
   try {
     const chosen = await refreshImportVoices(data);
     if (!chosen) return;             // 音声が無い台本なら黙って何もしない
@@ -2480,6 +2592,9 @@ async function autoPullAudio(data) {
     if (got) status(`保存済みの音声を取り込みました（${chosen.label}／新規 ${got}件・取り込み済み ${have}件）。`, "ok");
   } catch (e) {
     status(`音声の取り込みに失敗しました（${e.message}）。データタブの「まとめて読み込む」で再試行できます。`, "warn");
+  } finally {
+    done();
+    if (pulling === mine) pulling = null;
   }
 }
 
@@ -2650,10 +2765,37 @@ let lastT = -1;
 let draining = false;
 
 let tickRAF = 0;
+// いまの動画の再生時間。広告のあいだは null を返す。
+// 広告中は YouTube から「再生中」の合図が来ないが、時間だけは広告のものになることがある（iPhone）
+let seekOk = 0, adHold = null;
+function noteSeek() { seekOk = Date.now() + 8000; adHold = null; }
+function contentTime() {
+  if (!player || !player.getCurrentTime || !player.getPlayerState) return null;
+  if (player.getPlayerState() !== 1) return null;
+  const t = player.getCurrentTime();
+  // 長さや動画IDが台本のものと違えば、別の映像（広告）
+  const d = player.getDuration?.() || 0, want = script?.meta?.duration || 0;
+  if (d && want && Math.abs(d - want) > Math.max(5, want * 0.02)) return null;
+  const id = player.getVideoData?.()?.video_id;
+  if (id && script && id !== script.videoId) return null;
+  // 途中の広告：操作していないのに時間が大きく戻ったら、元の位置に帰ってくるまで待つ
+  if (window.WATCH_MODE && lastT >= 0 && Date.now() > seekOk) {
+    if (adHold) {
+      if (t < adHold.from - 6 && Date.now() - adHold.since < 180000) return null;
+      adHold = null;
+    } else if (t < lastT - 5) {
+      adHold = { from: lastT, since: Date.now() };
+      return null;
+    }
+  }
+  return t;
+}
+
 function tick() {
   cancelAnimationFrame(tickRAF);   // 一時停止→再開のたびにループが増えるのを防ぐ
   if (!started || !player || !player.getCurrentTime) return;
-  const t = player.getCurrentTime();
+  const t = contentTime();
+  if (t === null) { tickRAF = requestAnimationFrame(tick); return; }
 
   // シーク検出。巻き戻したら読み直し、飛ばしたら読まずに消化済みにする
   if (lastT < 0) {
@@ -2690,7 +2832,12 @@ async function drain() {
       // 音声が用意できていなければここで作る。字幕は鳴り始めに合わせて出す
       const eng = engine();
       if (!audioCache.has(c.id)) {
-        const hit = await cacheGet(c.text);
+        let hit = await cacheGet(c.text);
+        // 保存済みの声を取り込んでいる途中なら、少し待つ（待たずに作ると、最初の数件だけ違う声になる）
+        if (!hit && pulling) {
+          await Promise.race([pulling, new Promise(r => setTimeout(r, 6000))]);
+          hit = await cacheGet(c.text);
+        }
         if (hit) audioCache.set(c.id, hit);
         else if (eng.synth) {
           try { audioCache.set(c.id, await eng.synth(c.text, $("voice").value, +$("rate").value)); }
@@ -2779,6 +2926,36 @@ window.__noteScriptSaved = async data => {
   } catch (e) {}   // 一覧の更新に失敗しても台本の保存は成立している
 };
 
+// リポジトリのJSONを、最新を読んでから書き換える。ほかの端末やAIエージェントの書き込みとぶつかったら、読み直してやり直す
+const jsonQueue = {};
+async function readJson(path) {
+  const res = await fetch(`${GH}/repos/${repoReady()}/contents/${path}`, { headers: ghHeaders(), cache: "no-store" });
+  if (res.status === 404) return { data: null, sha: undefined };
+  if (!res.ok) throw new Error(await ghError(res));
+  const j = await res.json();
+  const bytes = Uint8Array.from(atob((j.content || "").replace(/\s/g, "")), c => c.charCodeAt(0));
+  return { data: JSON.parse(new TextDecoder().decode(bytes)), sha: j.sha };
+}
+function changeJson(path, message, fn) {
+  const run = async () => {
+    for (let n = 0; ; n++) {
+      const { data, sha } = await readJson(path);
+      const next = fn(data);
+      const res = await fetch(`${GH}/repos/${repoReady()}/contents/${path}`, {
+        method: "PUT", headers: { ...ghHeaders(), "content-type": "application/json" },
+        body: JSON.stringify({ message, content: b64encode(new TextEncoder().encode(JSON.stringify(next, null, 2) + "\n")), ...(sha ? { sha } : {}) })
+      });
+      if (res.ok) return next;
+      if ((res.status === 409 || res.status === 422) && n < 3) { await new Promise(r => setTimeout(r, 400 * (n + 1))); continue; }
+      throw new Error(await ghError(res));
+    }
+  };
+  // 続けて押したときは、順番に1つずつ書く
+  const p = (jsonQueue[path] || Promise.resolve()).catch(() => {}).then(run);
+  jsonQueue[path] = p;
+  return p;
+}
+
 // どこまで見たか（この端末だけの記録）。player- で始めると設定の保存に混ざるので別の名前にする
 function watchPos() { try { return JSON.parse(lsGet("watch-pos", "{}")) || {}; } catch (e) { return {}; } }
 function resumeAt(key) {
@@ -2801,6 +2978,9 @@ let pickOpen = "";
 const axisOk = (a, x) => !pickSel[a.id].size || pickSel[a.id].has(a.of(x));
 
 let pickItems = [], pickSeq = 0;
+let pickView = "scripts", pickListId = "";   // scripts＝台本 / lists＝プレイリストの一覧 / list＝プレイリスト1つ
+const pickOpenVideos = new Set();            // 開いている動画（台本が何本もあるもの）
+let playlists = [];
 
 async function openPicker() {
   const seq = ++pickSeq;
@@ -2809,23 +2989,26 @@ async function openPicker() {
   pickOpen = "";
   $("pickList").innerHTML = "";
   $("pickHint").textContent = "読み込んでいます…";
-  let files, idx, voices;
+  let lists;
   try {
     repoReady();
-    [files, idx, voices] = await Promise.all([ghList("scripts"), readScriptIndex(), ghList("audio").catch(() => null)]);
+    let files, idx, voices;
+    [files, idx, voices, lists] = await Promise.all([ghList("scripts"), readScriptIndex(), ghList("audio").catch(() => null), readPlaylists().catch(() => null)]);
+    if (seq !== pickSeq) return;
+    files = files.filter(f => f.name.endsWith(".json") && f.name !== "_index.json");
+    if (!files.length) { $("pickHint").textContent = "まだ台本が保存されていません。台本を作ってから「リポジトリに保存」を押してください。"; return; }
+    const dirs = voices && new Set(voices.filter(v => v.type === "dir").map(v => v.name));
+    pickItems = files.map(f => {
+      const key = f.name.replace(/\.json$/, "");
+      const info = idx[key] || {};
+      return { key, path: f.path, info, voice: !!dirs && dirs.has(key), voiceKnown: !!dirs, videoId: info.videoId || key.slice(0, 11) };
+    });
   } catch (e) { if (seq === pickSeq) $("pickHint").textContent = e.message; return; }
-  if (seq !== pickSeq) return;
-  files = files.filter(f => f.name.endsWith(".json") && f.name !== "_index.json");
-  if (!files.length) { $("pickHint").textContent = "まだ台本が保存されていません。台本を作ってから「リポジトリに保存」を押してください。"; return; }
-  const dirs = voices && new Set(voices.filter(v => v.type === "dir").map(v => v.name));
-  pickItems = files.map(f => {
-    const key = f.name.replace(/\.json$/, "");
-    const info = idx[key] || {};
-    return { key, path: f.path, info, voice: !!dirs && dirs.has(key), voiceKnown: !!dirs,
-             videoId: info.videoId || key.replace(/_\d+-\d+$/, "") };
-  });
+  if (lists) playlists = lists;
   $("pickDlg").classList.add("has");
+  if (pickView === "list" && !playlists.some(l => l.id === pickListId)) pickView = "lists";
   renderPicker();
+  if (!lists) $("pickHint").textContent = "プレイリストを読み込めませんでした。";
   // 名前が無い台本は動画名を引いて埋める。次からは一覧ファイルから出る
   for (const x of pickItems.filter(x => !x.info.label)) {
     const t = await ytTitle(x.videoId);
@@ -2836,34 +3019,230 @@ async function openPicker() {
   }
 }
 
-async function saveScriptInfo(key, patch) {
-  const all = await readScriptIndex();
-  all[key] = { ...(all[key] || {}), ...patch };
-  await writeScriptIndex(all);
+function saveScriptInfo(key, patch) {
+  return changeJson(SCRIPT_INDEX, "更新: 台本の一覧", d => ({ ...(d || {}), [key]: { ...((d || {})[key] || {}), ...patch } }));
 }
 
+/* ---------- 一覧の部品 ---------- */
+const scriptLen = x => Math.max(0, (x.info.end || 0) - (x.info.start || 0));
+const siblings = x => pickItems.filter(y => y.videoId === x.videoId);
+function videoTitle(x) {
+  const s = siblings(x);
+  return s.find(y => y.info.videoTitle)?.info.videoTitle || s.find(y => y.info.writer !== "claude-code" && y.info.label)?.info.label
+      || s.find(y => y.info.label)?.info.label || x.key;
+}
+function scriptDate(x) {
+  const d = x.info.savedAt ? new Date(x.info.savedAt) : null;
+  return d && !isNaN(d) ? `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}` : "";
+}
+const scriptTopics = x => (x.info.topics || []).filter(Boolean).join("、");
+// 同じ動画の台本どうしを見分ける題。自分で付けた名前 → 台本の題 → 話している記事 → 日付
+function scriptTitle(x) {
+  if (x.info.label && x.info.label !== videoTitle(x)) return x.info.label;
+  return x.info.title || scriptTopics(x) || (scriptDate(x) ? `${scriptDate(x)} の台本` : x.key);
+}
+const isOnly = x => siblings(x).length < 2;
+const mainName = x => isOnly(x) ? (x.info.label || x.key) : videoTitle(x);
+function totalTime(keys) {
+  const s = keys.reduce((n, k) => n + scriptLen(pickItems.find(x => x.key === k) || { info: {} }), 0);
+  return fmtTime(s);
+}
+function el(html) { const t = document.createElement("template"); t.innerHTML = html.trim(); return t.content.firstElementChild; }
+function setThumb(img, videoId) {
+  img.onerror = () => { img.style.visibility = "hidden"; };
+  if (videoId) img.src = `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/mqdefault.jpg`;
+  else img.style.visibility = "hidden";
+}
+function setProgress(bar, key) {
+  const w = watchPos()[key];
+  if (w && w.d > 0) bar.style.width = Math.min(100, w.t / w.d * 100) + "%"; else bar.remove();
+}
+// ダイアログの中にも出せる、小さな知らせ
+let dlgToastTimer = 0;
+function dlgToast(msg) {
+  document.querySelector(".dlgToast")?.remove();
+  const box = document.querySelector("#saveDlg[open]") || document.querySelector("#pickDlg[open]");
+  if (!box) { window.__watchToast?.(msg); return; }
+  const t = el('<div class="dlgToast" role="status"></div>');
+  t.textContent = msg;
+  box.appendChild(t);
+  clearTimeout(dlgToastTimer);
+  dlgToastTimer = setTimeout(() => t.remove(), 4000);
+}
+// 行の下に開く操作
+function toggleMenu(wrap, button, build) {
+  const old = wrap.querySelector(":scope > .menu");
+  button.setAttribute("aria-expanded", !old);
+  if (old) { old.remove(); return; }
+  const m = el('<div class="menu"></div>');
+  for (const [text, fn] of build()) {
+    let b;
+    if (typeof fn === "string") { b = el('<a target="_blank" rel="noopener"></a>'); b.href = fn; }
+    else { b = el('<button type="button"></button>'); b.onclick = fn; }
+    b.textContent = text;
+    m.appendChild(b);
+  }
+  wrap.appendChild(m);
+}
+function scriptMenu(x, extra = []) {
+  return [
+    ["プレイリストに保存", () => openSave(x)],
+    ...extra,
+    ...(isOnly(x) && window.__openMake ? [["この動画で台本を作り足す", () => makeFor(x)]] : []),
+    ["名前を変更", async () => {
+      const cur = isOnly(x) ? (x.info.label || x.key) : scriptTitle(x);
+      const name = prompt("表示名を入れてください。", cur);
+      if (name === null || !name.trim() || name.trim() === cur) return;
+      const before = x.info.label;
+      x.info.label = name.trim();
+      renderPicker();
+      try { await saveScriptInfo(x.key, { label: name.trim() }); }
+      catch (e) { x.info.label = before; renderPicker(); $("pickHint").textContent = e.message; }
+    }],
+    ["YouTubeで開く", "https://www.youtube.com/watch?v=" + encodeURIComponent(x.videoId)],
+  ];
+}
+function makeFor(x) {
+  $("pickDlg").close();
+  window.__openMake("https://www.youtube.com/watch?v=" + x.videoId);
+}
+function favButton(b, x) {
+  const paint = () => {
+    b.textContent = x.info.fav ? "★" : "☆";
+    b.classList.toggle("on", !!x.info.fav);
+    b.setAttribute("aria-pressed", !!x.info.fav);
+  };
+  paint();
+  b.onclick = async () => {
+    const on = !x.info.fav;
+    x.info.fav = on; paint();
+    if (pickSel.fav.size) renderPicker();
+    try { await saveScriptInfo(x.key, { fav: on }); }
+    catch (e) { x.info.fav = !on; paint(); $("pickHint").textContent = e.message; }
+  };
+}
+
+// 台本を読み込んで再生する
+async function playScript(key) {
+  const bytes = await ghGetRaw(`scripts/${key}.json`);
+  if (!bytes) throw new Error("台本が見つかりません。");
+  loadScript(JSON.parse(new TextDecoder().decode(bytes)));
+  $("btnStart").click();
+}
+async function pickPlay(x) {
+  try { primeAudio(); } catch (e) {}   // 押した直後でないと、iPhoneでは音を出せるようにならない
+  $("pickHint").textContent = "読み込んでいます…";
+  try {
+    await playScript(x.key);
+    plStop();
+    $("pickDlg").close();
+  } catch (e) { $("pickHint").textContent = e.message; }
+}
+
+/* ---------- 台本の一覧 ---------- */
 function renderPicker() {
+  const d = $("pickDlg"), list = $("pickList");
+  const keep = d.dataset.view === pickView && (pickView !== "list" || d.dataset.list === pickListId) ? list.scrollTop : 0;
+  d.dataset.view = pickView;
+  d.dataset.list = pickListId;
+  $("pickBack").hidden = pickView !== "list";
+  for (const b of document.querySelectorAll("#pickTabs button")) {
+    const on = b.dataset.view === (pickView === "list" ? "lists" : pickView);
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-pressed", on);
+  }
+  list.innerHTML = "";
+  $("pickHint").textContent = "";
+  if (pickView === "lists") renderLists();
+  else if (pickView === "list") renderList();
+  else renderScripts();
+  list.scrollTop = keep;
+}
+
+function renderScripts() {
   const norm = s => s.normalize("NFKC").toLowerCase();
   const words = norm($("pickQ").value).split(/\s+/).filter(Boolean);
   const pos = watchPos();
-  const text = x => norm([x.info.label, x.key, x.info.channel, ...(x.info.topics || [])].join(" "));
+  const text = x => norm([x.info.label, x.info.title, x.info.videoTitle, x.key, x.info.channel, ...(x.info.topics || [])].join(" "));
   const hit = pickItems.filter(x => words.every(w => text(x).includes(w)));
   renderFilters(hit);
-  const label = x => x.info.label || x.key;
-  const len = x => (x.info.end || 0) - (x.info.start || 0);
   const newest = (a, b) => (b.info.savedAt || "").localeCompare(a.info.savedAt || "");
   const by = {
     new: newest,
     recent: (a, b) => (pos[b.key]?.at || 0) - (pos[a.key]?.at || 0) || newest(a, b),
-    name: (a, b) => label(a).localeCompare(label(b), "ja"),
+    name: (a, b) => mainName(a).localeCompare(mainName(b), "ja"),
     old: (a, b) => newest(b, a),
-    short: (a, b) => len(a) - len(b),
-    long: (a, b) => len(b) - len(a),
+    short: (a, b) => scriptLen(a) - scriptLen(b),
+    long: (a, b) => scriptLen(b) - scriptLen(a),
   };
   const list = hit.filter(x => PICK_AXES.every(a => axisOk(a, x))).sort(by[$("pickSort").value] || newest);
-  $("pickList").innerHTML = "";
-  for (const x of list) $("pickList").appendChild(pickRow(x));
-  $("pickHint").textContent = list.length ? "" : "当てはまる台本がありません。";
+  const narrowed = words.length > 0 || PICK_AXES.some(a => pickSel[a.id].size);
+  // 動画ごとにまとめる。並びは、当てはまった台本のうち先頭のもので決まる
+  const groups = new Map();
+  for (const x of list) groups.set(x.videoId, [...(groups.get(x.videoId) || []), x]);
+  for (const [videoId, xs] of groups)
+    $("pickList").appendChild(isOnly(xs[0]) ? scriptRow(xs[0]) : videoRow(videoId, xs, narrowed));
+  if (!list.length) $("pickHint").textContent = "当てはまる台本がありません。";
+}
+
+function scriptRow(x) {
+  const wrap = el(`<div><div class="pick"><button type="button" class="go"><span class="th"><img alt="" loading="lazy"><span class="len"></span><span class="pos"></span></span>
+    <span class="tx"><span class="nm"></span><span class="sub"></span></span></button>
+    <span class="ops"><button type="button" class="fav" aria-label="お気に入り"></button><button type="button" class="more" aria-label="メニュー" aria-expanded="false">⋮</button></span></div></div>`);
+  const q = c => wrap.querySelector(c);
+  setThumb(q("img"), x.videoId);
+  if (scriptLen(x)) q(".len").textContent = fmtTime(scriptLen(x)); else q(".len").remove();
+  setProgress(q(".pos"), x.key);
+  q(".nm").textContent = mainName(x);
+  q(".sub").textContent = [scriptDate(x), x.voiceKnown && !x.voice ? "声なし" : "", x.info.title, scriptTopics(x)].filter(Boolean).join(" ・ ");
+  favButton(q(".fav"), x);
+  q(".go").onclick = () => pickPlay(x);
+  q(".more").onclick = () => toggleMenu(wrap, q(".more"), () => scriptMenu(x));
+  return wrap;
+}
+
+// 台本が何本もある動画。押すと台本が開く
+function videoRow(videoId, xs, narrowed) {
+  const open = narrowed || pickOpenVideos.has(videoId);
+  const total = siblings(xs[0]).length;
+  const wrap = el(`<div class="video"><div class="pick"><button type="button" class="go" aria-expanded="${open}"><span class="th"><img alt="" loading="lazy"><span class="cnt"></span><span class="len"></span></span>
+    <span class="tx"><span class="nm"></span><span class="sub"></span></span></button>
+    <span class="ops"><button type="button" class="chev" aria-label="台本を開く">${open ? "▴" : "▾"}</button></span></div></div>`);
+  const q = c => wrap.querySelector(c);
+  setThumb(q("img"), videoId);
+  q(".cnt").textContent = `台本 ${total}本`;
+  const lens = [...new Set(xs.map(scriptLen).filter(Boolean))];
+  if (lens.length) q(".len").textContent = fmtTime(Math.max(...lens)); else q(".len").remove();
+  q(".nm").textContent = videoTitle(xs[0]);
+  q(".sub").textContent = [xs[0].info.channel, xs.length < total ? `${xs.length}本が当てはまります` : ""].filter(Boolean).join(" ・ ");
+  const flip = () => { pickOpenVideos.has(videoId) ? pickOpenVideos.delete(videoId) : pickOpenVideos.add(videoId); renderPicker(); };
+  if (!narrowed) q(".go").onclick = q(".chev").onclick = flip;
+  else q(".chev").remove();
+  if (open) {
+    const kids = el('<div class="kids"></div>');
+    for (const x of xs) kids.appendChild(childRow(x));
+    if (window.__openMake) {
+      const add = el('<button type="button" class="add">＋ この動画で台本を作り足す</button>');
+      add.onclick = () => makeFor(xs[0]);
+      kids.appendChild(add);
+    }
+    wrap.appendChild(kids);
+  }
+  return wrap;
+}
+function childRow(x) {
+  const wrap = el(`<div><div class="pick"><button type="button" class="go"><span class="play">▶</span><span class="tx"><span class="nm"></span><span class="sub"></span><span class="track"><span class="pos"></span></span></span></button>
+    <span class="ops"><button type="button" class="fav" aria-label="お気に入り"></button><button type="button" class="more" aria-label="メニュー" aria-expanded="false">⋮</button></span></div></div>`);
+  const q = c => wrap.querySelector(c);
+  const title = scriptTitle(x), topics = scriptTopics(x);
+  q(".nm").textContent = title;
+  q(".sub").textContent = [scriptDate(x), fmtTime(scriptLen(x)), x.voiceKnown && !x.voice ? "声なし" : "", topics !== title ? topics : ""].filter(Boolean).join(" ・ ");
+  setProgress(q(".pos"), x.key);
+  if (!q(".pos")) q(".track").remove();
+  favButton(q(".fav"), x);
+  q(".go").onclick = () => pickPlay(x);
+  q(".more").onclick = () => toggleMenu(wrap, q(".more"), () => scriptMenu(x));
+  return wrap;
 }
 
 function renderFilters(hit) {
@@ -2922,71 +3301,290 @@ $("pickDlg").addEventListener("pointerdown", e => {
   $("pickPanel")?.remove();   // 一覧は描き直さない（押した行が作り直されると、押したことにならない）
 });
 
-function pickRow(x) {
-  const { key, info } = x;
-  const wrap = document.createElement("div");
-  wrap.innerHTML = `<div class="pick"><button type="button" class="go"><span class="th"><img alt="" loading="lazy"><span class="len"></span><span class="pos"></span></span>
+/* ---------- プレイリスト ----------
+   playlists.json に置く。AIエージェントも書き換えるので、毎回最新を読んでから書く */
+const PL_PATH = "playlists.json";
+const PL_LATER = { id: "later", name: "後で見る", items: [] };
+function normLists(d) {
+  const out = (Array.isArray(d?.lists) ? d.lists : []).filter(l => l && l.id)
+    .map(l => ({ ...l, id: String(l.id), name: String(l.name || "名前なし"), items: [...new Set((Array.isArray(l.items) ? l.items : []).map(String))] }));
+  return out.some(l => l.id === "later") ? out : [{ ...PL_LATER, items: [] }, ...out];
+}
+async function readPlaylists() { return normLists((await readJson(PL_PATH)).data); }
+async function changePlaylists(fn) {
+  const next = await changeJson(PL_PATH, "更新: プレイリスト", d => {
+    const lists = normLists(d);
+    return { ...(d || {}), lists: fn(lists) || lists };
+  });
+  playlists = normLists(next);
+  return playlists;
+}
+const listById = id => playlists.find(l => l.id === id);
+const itemOf = key => pickItems.find(x => x.key === key);
+
+// 同じ変更を、先に画面へ、続けてリポジトリの最新へ当てる。失敗したら元に戻す
+async function editLists(fn, done) {
+  const copy = d => JSON.parse(JSON.stringify(d));
+  const before = copy(playlists);
+  const work = copy(playlists);
+  playlists = normLists({ lists: fn(work) || work });
+  const shown = JSON.stringify(playlists);
+  const redraw = () => { if ($("pickDlg").open && !document.querySelector(".plRow.drag")) renderPicker(); };
+  redraw();
+  try {
+    await changePlaylists(fn);
+    if (JSON.stringify(playlists) !== shown) redraw();   // ほかで変わっていた分を出す
+    if (done) dlgToast(done);
+    return true;
+  } catch (e) {
+    playlists = before;
+    redraw();
+    dlgToast("保存できませんでした。" + e.message);
+    return false;
+  }
+}
+// リストを1つ選んで変える
+const onList = (id, fn) => lists => { const t = lists.find(y => y.id === id); if (t) fn(t); };
+
+function renderLists() {
+  const box = $("pickList");
+  for (const l of playlists) {
+    const first = l.items.map(itemOf).find(Boolean);
+    const row = el(`<div><div class="pick"><button type="button" class="go"><span class="th stack"><img alt="" loading="lazy"><span class="len"></span></span>
+      <span class="tx"><span class="nm"></span><span class="sub"></span></span></button></div></div>`);
+    setThumb(row.querySelector("img"), first?.videoId);
+    row.querySelector(".len").textContent = `${l.items.length}本`;
+    row.querySelector(".nm").textContent = l.name;
+    row.querySelector(".sub").textContent = l.items.length ? `プレイリスト ・ ${totalTime(l.items)}` : "プレイリスト";
+    row.querySelector(".go").onclick = () => { pickView = "list"; pickListId = l.id; renderPicker(); };
+    box.appendChild(row);
+  }
+  const add = el('<button type="button" class="add">＋ 新しいプレイリスト</button>');
+  add.onclick = async () => {
+    const name = (prompt("プレイリストの名前を入れてください。", "") || "").trim();
+    if (name) await newList(name);
+  };
+  box.appendChild(add);
+}
+async function newList(name, key) {
+  const l = { id: "p-" + Date.now().toString(36), name, items: key ? [key] : [] };
+  return editLists(lists => lists.some(y => y.id === l.id) ? lists : [...lists, { ...l, items: [...l.items] }], `「${name}」を作りました`);
+}
+
+function renderList() {
+  const l = listById(pickListId), box = $("pickList");
+  if (!l) return;
+  const first = l.items.map(itemOf).find(Boolean);
+  const head = el(`<div class="plHead"><span class="th"><img alt=""></span><div class="plInfo"><h3></h3><p class="sub"></p>
+    <div class="plBtns"><button type="button" class="playAll">▶ すべて再生</button><button type="button" class="shuf">シャッフル</button>${l.id === "later" ? "" : '<button type="button" class="more" aria-label="メニュー" aria-expanded="false">⋮</button>'}</div></div></div>`);
+  setThumb(head.querySelector("img"), first?.videoId);
+  head.querySelector("h3").textContent = l.name;
+  const ok = l.items.filter(itemOf);
+  head.querySelector(".sub").textContent = `プレイリスト ・ ${l.items.length}本` + (ok.length ? ` ・ ${totalTime(ok)}` : "");
+  head.querySelector(".playAll").disabled = head.querySelector(".shuf").disabled = !ok.length;
+  head.querySelector(".playAll").onclick = () => plStart(l, { shuffle: false });
+  head.querySelector(".shuf").onclick = () => plStart(l, { shuffle: true });
+  const more = head.querySelector(".more");
+  if (more) more.onclick = () => toggleMenu(head, more, () => [
+    ["名前を変更", () => {
+      const name = (prompt("プレイリストの名前を入れてください。", l.name) || "").trim();
+      if (!name || name === l.name) return;
+      editLists(onList(l.id, t => { t.name = name; }));
+    }],
+    ["プレイリストを削除", async () => {
+      if (!confirm(`プレイリスト「${l.name}」を削除します。台本は消えません。`)) return;
+      pickView = "lists";
+      await editLists(lists => lists.filter(y => y.id !== l.id), `「${l.name}」を削除しました`);
+    }],
+  ]);
+  box.appendChild(head);
+  if (!l.items.length) {
+    box.appendChild(el('<p class="hint" style="padding:12px 16px">［台本］のタブで、台本の右の［⋮］を押し、［プレイリストに保存］を押して、プレイリストを選びます。</p>'));
+    return;
+  }
+  const rows = el('<div class="plRows"></div>');
+  for (const key of l.items) rows.appendChild(listRow(l, key, rows));
+  box.appendChild(rows);
+}
+function listRow(l, key, rows) {
+  const x = itemOf(key);
+  const wrap = el(`<div class="plRow"><div class="pick"><button type="button" class="grip" aria-label="並べ替え">≡</button><button type="button" class="go"><span class="th"><img alt="" loading="lazy"><span class="len"></span><span class="pos"></span></span>
     <span class="tx"><span class="nm"></span><span class="sub"></span></span></button>
-    <span class="ops"><button type="button" class="fav" aria-label="お気に入り"></button><button type="button" class="more" aria-label="メニュー" aria-expanded="false">⋮</button></span></div>`;
+    <span class="ops"><button type="button" class="more" aria-label="メニュー" aria-expanded="false">⋮</button></span></div></div>`);
+  wrap.dataset.key = key;
   const q = c => wrap.querySelector(c);
-  const img = q("img");
-  img.onerror = () => { img.style.display = "none"; };
-  img.src = `https://i.ytimg.com/vi/${encodeURIComponent(x.videoId)}/mqdefault.jpg`;
-  const len = (info.end || 0) - (info.start || 0);
-  if (len > 0) q(".len").textContent = fmtTime(len); else q(".len").remove();
-  const w = watchPos()[key];
-  if (w && w.d > 0) q(".pos").style.width = Math.min(100, w.t / w.d * 100) + "%"; else q(".pos").remove();
-  q(".nm").textContent = info.label || key;
-  const d = info.savedAt ? new Date(info.savedAt) : null;
-  q(".sub").textContent = [
-    d && !isNaN(d) ? `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}` : "",
-    x.voiceKnown && !x.voice ? "声なし" : "",
-    (info.topics || []).filter(Boolean).join("、"),
-  ].filter(Boolean).join(" ・ ");
-  const fav = q(".fav");
-  const paint = () => {
-    fav.textContent = info.fav ? "★" : "☆";
-    fav.classList.toggle("on", !!info.fav);
-    fav.setAttribute("aria-pressed", !!info.fav);
+  const remove = () => editLists(onList(l.id, t => { t.items = t.items.filter(k => k !== key); }), `「${l.name}」から外しました`);
+  if (x) {
+    setThumb(q("img"), x.videoId);
+    q(".len").textContent = fmtTime(scriptLen(x));
+    setProgress(q(".pos"), key);
+    q(".nm").textContent = mainName(x);
+    q(".sub").textContent = isOnly(x) ? scriptTopics(x) || x.info.channel || "" : scriptTitle(x);
+    q(".go").onclick = () => plStart(l, { key });
+    q(".more").onclick = () => toggleMenu(wrap, q(".more"), () => scriptMenu(x, [["プレイリストから外す", remove]]));
+  } else {
+    setThumb(q("img"), "");
+    q(".len").remove(); q(".pos").remove();
+    q(".nm").textContent = "この台本は見つかりません";
+    q(".sub").textContent = key;
+    q(".more").onclick = () => toggleMenu(wrap, q(".more"), () => [["プレイリストから外す", remove]]);
+  }
+  // 並べ替え：つまみを押して上下に動かす。キーボードでは矢印キー
+  const grip = q(".grip");
+  const commit = () => {
+    const order = [...rows.children].map(r => r.dataset.key);
+    if (order.join() === (listById(l.id)?.items || []).join()) return;
+    editLists(onList(l.id, t => {
+      t.items = [...order.filter(k => t.items.includes(k)), ...t.items.filter(k => !order.includes(k))];   // 並べ替え中に増えたものは残す
+    }));
   };
-  paint();
-  fav.onclick = async () => {
-    const on = !info.fav;
-    info.fav = on; paint();
-    if (pickSel.fav.size) renderPicker();
-    try { await saveScriptInfo(key, { fav: on }); }
-    catch (e) { info.fav = !on; paint(); $("pickHint").textContent = e.message; }
-  };
-  q(".go").onclick = async () => {
-    $("pickHint").textContent = "読み込んでいます…";
-    try {
-      const bytes = await ghGetRaw(x.path);
-      loadScript(JSON.parse(new TextDecoder().decode(bytes)));
-      $("pickDlg").close();
-      $("btnStart").click();
-    } catch (e) { $("pickHint").textContent = e.message; }
-  };
-  q(".more").onclick = () => {
-    const old = q(".menu");
-    q(".more").setAttribute("aria-expanded", !old);
-    if (old) { old.remove(); return; }
-    const m = document.createElement("div");
-    m.className = "menu";
-    m.innerHTML = `<button type="button">名前を変更</button><a target="_blank" rel="noopener">YouTubeで開く</a>`;
-    m.querySelector("a").href = "https://www.youtube.com/watch?v=" + encodeURIComponent(x.videoId);
-    m.querySelector("button").onclick = async () => {
-      const name = prompt("表示名を入れてください。", info.label || key);
-      if (name === null) return;
-      try {
-        await saveScriptInfo(key, { label: name.trim() || key });
-        info.label = name.trim() || key;
-        renderPicker();
-      } catch (e) { $("pickHint").textContent = e.message; }
+  grip.onpointerdown = e => {
+    e.preventDefault();
+    grip.setPointerCapture(e.pointerId);
+    wrap.classList.add("drag");
+    grip.onpointermove = ev => {
+      const box = $("pickList").getBoundingClientRect();
+      if (ev.clientY < box.top + 40) $("pickList").scrollTop -= 12;
+      else if (ev.clientY > box.bottom - 40) $("pickList").scrollTop += 12;
+      for (const r of rows.children) {
+        if (r === wrap) continue;
+        const b = r.getBoundingClientRect(), mid = b.top + b.height / 2;
+        const before = wrap.compareDocumentPosition(r) & Node.DOCUMENT_POSITION_PRECEDING;
+        if (before && ev.clientY < mid) { rows.insertBefore(wrap, r); grip.setPointerCapture(e.pointerId); break; }
+        if (!before && ev.clientY > mid && r.previousElementSibling === wrap) { rows.insertBefore(r, wrap); break; }
+      }
     };
-    wrap.appendChild(m);
+    grip.onpointerup = grip.onpointercancel = () => {
+      grip.onpointermove = grip.onpointerup = grip.onpointercancel = null;
+      wrap.classList.remove("drag");
+      commit();
+    };
+  };
+  grip.onkeydown = e => {
+    if (e.key === "ArrowUp" && wrap.previousElementSibling) rows.insertBefore(wrap, wrap.previousElementSibling);
+    else if (e.key === "ArrowDown" && wrap.nextElementSibling) rows.insertBefore(wrap.nextElementSibling, wrap);
+    else return;
+    e.preventDefault();
+    commit();
   };
   return wrap;
 }
+
+// 保存先を選ぶ
+let saveTarget = null;
+function openSave(x) {
+  saveTarget = x;
+  $("saveName").value = "";
+  renderSave();
+  if (!$("saveDlg").open) $("saveDlg").showModal();
+}
+function renderSave() {
+  const box = $("saveLists");
+  box.innerHTML = "";
+  for (const l of playlists) {
+    const row = el('<label><input type="checkbox"><span class="v"></span><span class="n"></span></label>');
+    row.querySelector(".v").textContent = l.name;
+    row.querySelector(".n").textContent = `${l.items.length}本`;
+    const c = row.querySelector("input");
+    c.checked = l.items.includes(saveTarget.key);
+    c.onchange = async () => {
+      const key = saveTarget.key, on = c.checked;
+      await editLists(onList(l.id, t => { t.items = on ? [...t.items.filter(k => k !== key), key] : t.items.filter(k => k !== key); }),
+        on ? `「${l.name}」に保存しました` : `「${l.name}」から外しました`);
+      if ($("saveDlg").open) renderSave();
+    };
+    box.appendChild(row);
+  }
+}
+$("saveNew").onclick = async () => {
+  const name = $("saveName").value.trim();
+  if (!name) { $("saveName").focus(); return; }
+  $("saveNew").disabled = true;
+  if (await newList(name, saveTarget.key)) { $("saveName").value = ""; dlgToast(`「${name}」を作って保存しました`); }
+  $("saveNew").disabled = false;
+  renderSave();
+};
+$("saveName").onkeydown = e => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); $("saveNew").click(); } };
+$("saveClose").onclick = () => $("saveDlg").close();
+
+/* ---------- プレイリストの再生 ---------- */
+let pl = null, plSeq = 0;   // { id, name, base:[台本], order:[台本], i, loop:"off"|"all"|"one", shuffle }
+function shuffled(a) {
+  a = [...a];
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+function plStart(l, { shuffle = false, key = "" }) {
+  try { primeAudio(); } catch (e) {}
+  const base = l.items.filter(itemOf);
+  if (!base.length) return;
+  const order = shuffle ? shuffled(base) : base;
+  pl = { id: l.id, name: l.name, base, order, i: 0, loop: "off", shuffle };
+  $("pickDlg").close();
+  plGo(key ? Math.max(0, order.indexOf(key)) : 0);
+}
+function plStop() {
+  if (!pl) return;
+  pl = null; plSeq++;
+  window.__plRender?.();
+}
+async function plGo(i, tries = 0) {
+  if (!pl) return;
+  const my = ++plSeq;
+  pl.i = i; pl.done = false;
+  window.__plRender?.();
+  try { await playScript(pl.order[i]); }
+  catch (e) {
+    if (my !== plSeq || !pl) return;
+    // 読み込めない台本は飛ばす
+    window.__watchToast?.(`飛ばしました：${itemOf(pl.order[i]) ? mainName(itemOf(pl.order[i])) : pl.order[i]}（${e.message}）`);
+    if (tries + 1 < pl.order.length && i + 1 < pl.order.length) plGo(i + 1, tries + 1);
+  }
+}
+function plMove(d) {
+  if (!pl) return;
+  let i = pl.i + d;
+  if (i < 0 || i >= pl.order.length) {
+    if (pl.loop !== "all") return;
+    i = (i + pl.order.length) % pl.order.length;
+  }
+  plGo(i);
+}
+// 1本終わったとき
+function plEnded() {
+  if (!pl) return;
+  if (pl.loop === "one") { plGo(pl.i); return; }
+  if (pl.i + 1 < pl.order.length || pl.loop === "all") plMove(1);
+  else if (!pl.done) { pl.done = true; window.__watchToast?.("プレイリストの最後まで再生しました。"); }
+}
+function plNextKey() {
+  if (!pl || pl.loop === "one") return "";
+  return pl.order[pl.i + 1] || (pl.loop === "all" ? pl.order[0] : "");
+}
+function plShuffle() {
+  const cur = pl.order[pl.i];
+  pl.shuffle = !pl.shuffle;
+  pl.order = pl.shuffle ? [cur, ...shuffled(pl.base.filter(k => k !== cur))] : [...pl.base];
+  pl.i = pl.order.indexOf(cur);
+  window.__plRender?.();
+}
+// 次の台本の声を先に取り込んでおく（切り替わってすぐの声が間に合うように）
+let preVoice = "";
+async function prefetchVoice(key) {
+  if (!key || preVoice === key) return;
+  preVoice = key;
+  try {
+    const groups = groupVoices(await listVoices(key));
+    const saved = lsGet("import-voice:" + key);
+    if (saved === "__generate" || !groups.length) return;
+    const g = groups.find(g => g.gid === saved) || groups[0];
+    await pullVoice(key, g.use.tag, g.use.meta, true);
+  } catch (e) {}
+}
+
+for (const b of document.querySelectorAll("#pickTabs button"))
+  b.onclick = () => { pickView = b.dataset.view; pickOpen = ""; renderPicker(); };
+$("pickBack").onclick = () => { pickView = "lists"; renderPicker(); };
 $("pickQ").oninput = renderPicker;
 $("pickSort").value = lsGet("pick-sort", "new");
 $("pickSort").onchange = () => { lsSet("pick-sort", $("pickSort").value); renderPicker(); };
@@ -5069,7 +5667,7 @@ async function prepareInterests(persona, onProgress = () => {}) {
 
 // 置き場所はプレイヤー側と同じ規則にする。動画IDと区間で決まる
 function scriptKey(d) {
-  return `${d.videoId}_${Math.round(d.start || 0)}-${Math.round(d.covered ?? d.end ?? 0)}`;
+  return `${d.videoId}_${Math.round(d.start || 0)}-${Math.round(d.covered ?? d.end ?? 0)}${d.edition ? "_" + d.edition : ""}`;
 }
 
 // ポッドキャスト風で使う「今日の話題」。reads/ の記録から新しい順に拾う
@@ -5419,7 +6017,7 @@ $("btnCopy").onclick = async () => {
     });
     $("wTitle").textContent = script.meta?.title || "";
     const nLines = script.items.filter(it => it.line).length;
-    $("wInfo").textContent = `${fmtTime(total)} ／ 発話 ${nLines}件` + (topics.length ? ` ／ 記事 ${topics.length}本` : "");
+    $("wInfo").textContent = (script.title ? script.title + " ／ " : "") + `${fmtTime(total)} ／ 発話 ${nLines}件` + (topics.length ? ` ／ 記事 ${topics.length}本` : "");
     $("wBig").style.display = "";
     showStart(true);
     update();
@@ -5470,23 +6068,47 @@ $("btnCopy").onclick = async () => {
   setInterval(() => {
     if (!script || !started || !playing() || seekWant) return;
     try {
-      const all = watchPos(), t = player.getCurrentTime() || 0;
+      const all = watchPos(), t = contentTime();
+      if (t === null) return;
       all[scriptKey(script)] = { t: Math.round(t), d: Math.round(total), at: Date.now() };
       lsSet("watch-pos", JSON.stringify(all));
     } catch (e) {}
   }, 5000);
 
+  // 再生中の合図が無いのに時間だけ進んでいたら、広告とみなす
+  let adPrev = -1, adRun = 0;
+  function watchAd() {
+    let st = null, raw = 0;
+    try { st = player.getPlayerState(); raw = player.getCurrentTime() || 0; } catch (e) {}
+    const moving = (st === -1 || st === 3) && raw > adPrev + 0.05 && raw < adPrev + 2;
+    adRun = moving ? adRun + 1 : st === -1 || st === 3 ? Math.max(0, adRun - 1) : 0;
+    adPrev = raw;
+    let other = !!adHold;
+    try {
+      const d = player.getDuration() || 0, want = script.meta?.duration || 0;
+      if (st === 1 && d && want && Math.abs(d - want) > Math.max(5, want * 0.02)) other = true;
+    } catch (e) {}
+    const ad = other || adRun >= 4 || (root.classList.contains("ad") && adRun > 0);
+    if (root.classList.contains("ad") !== ad) root.classList.toggle("ad", ad);
+    if (ad && $("wStart").classList.contains("on")) showStart(false);
+    playLog.push([Math.round(performance.now() / 100) / 10, st, Math.round(raw * 10) / 10, Math.round((player?.getDuration?.() || 0)), ad ? "ad" : "", started ? 1 : 0].join(" "));
+    if (playLog.length > 600) playLog.splice(0, 200);
+  }
+  const playLog = [];
+  window.__playLog = playLog;
+
   function update() {
     if (!script) return;
+    watchAd();
     if (started && playing() && $("wStart").classList.contains("on")) showStart(false);   // 一覧から選んで始まったとき
     let t = 0;
     try { t = player.getCurrentTime() || 0; } catch (e) {}
     const f = total ? Math.min(1, t / total) : 0;
-    if (!dragging) {
+    if (!dragging && !root.classList.contains("ad")) {
       $("wPlayed").style.width = (f * 100) + "%";
       $("wHead").style.left = (f * 100) + "%";
     }
-    $("wTime").textContent = `${fmtTime(t)} / ${fmtTime(total)}`;
+    $("wTime").textContent = root.classList.contains("ad") ? "広告" : `${fmtTime(t)} / ${fmtTime(total)}`;
     $("wPlay").innerHTML = playing() ? ICON_PAUSE : ICON_PLAY;
     // 話題の札：コーナーの間だけ出す
     const ti = topics.findIndex(x => t >= x.start - 1 && t <= x.end);
@@ -5574,6 +6196,7 @@ $("btnCopy").onclick = async () => {
     // 操作の帯を引いても、キャラを置ける高さ（140px）が残るときだけ余白を使う
     const booth = spare - ($("wBar").offsetHeight || 84) >= 140;
     const was = root.classList.contains("booth");
+    root.style.setProperty("--bar-h", ($("wBar").offsetHeight || 96) + "px");
     root.classList.toggle("booth", booth);
     if (!booth) root.classList.remove("booth-tall");
     if (booth) {
@@ -5613,7 +6236,74 @@ $("btnCopy").onclick = async () => {
   $("wPlay").onclick = togglePlay;
   $("wBig").onclick = togglePlay;
   $("wBack").onclick = () => { try { player.seekTo(Math.max(0, player.getCurrentTime() - 10), true); } catch (e) {} poke(); };
-  $("wList").onclick = () => { root.classList.toggle("list-open"); poke(); };
+  // セリフの一覧とプレイリストは、同じ場所に片方だけ出す
+  const listOpen = plain => root.classList.contains("list-open") && root.classList.contains("pl-open") !== plain;
+  $("wList").onclick = () => { const on = !listOpen(true); root.classList.remove("pl-open"); root.classList.toggle("list-open", on); poke(); };
+  const togglePl = () => { const on = !listOpen(false); root.classList.toggle("pl-open", on); root.classList.toggle("list-open", on); plRender(); poke(); };
+
+  window.__watchToast = msg => showToast(msg);
+  function plRender() {
+    const on = !!pl;
+    if (root.classList.contains("pl-on") !== on) {
+      root.classList.toggle("pl-on", on);
+      window.dispatchEvent(new Event("resize"));   // 帯の高さが変わるので置き直す
+    }
+    if (!on) {
+      if (root.classList.contains("pl-open")) root.classList.remove("pl-open", "list-open");
+      return;
+    }
+    const last = pl.i + 1 >= pl.order.length;
+    $("wPrev").disabled = pl.loop !== "all" && pl.i === 0;
+    $("wNext").disabled = pl.loop !== "all" && last;
+    const name = document.createElement("span");
+    name.textContent = `${pl.name}　${pl.i + 1} / ${pl.order.length}`;
+    $("wPlName").replaceChildren(name);
+    $("wPlName").title = "プレイリストを開く";
+    if (!root.classList.contains("pl-open")) return;
+    const box = $("wPl"), keep = box.querySelector(".rows")?.scrollTop;
+    box.innerHTML = '<div class="hd"><span><b></b><span class="n"></span></span><button class="x" aria-label="閉じる">×</button></div><div class="tl"><button class="lp"></button><button class="sf">シャッフル</button></div><div class="rows"></div>';
+    const q = c => box.querySelector(c);
+    q("b").textContent = pl.name;
+    q(".n").textContent = `${pl.i + 1} / ${pl.order.length}`;
+    q(".x").onclick = togglePl;
+    q(".lp").textContent = { off: "リピート", all: "全体をリピート", one: "1本をリピート" }[pl.loop];
+    q(".lp").classList.toggle("on", pl.loop !== "off");
+    q(".lp").onclick = () => { pl.loop = { off: "all", all: "one", one: "off" }[pl.loop]; plRender(); };
+    q(".sf").classList.toggle("on", pl.shuffle);
+    q(".sf").setAttribute("aria-pressed", pl.shuffle);
+    q(".sf").onclick = plShuffle;
+    pl.order.forEach((key, n) => {
+      const x = itemOf(key);
+      const b = el('<button type="button" class="it"><span class="th"><img alt="" loading="lazy"><span class="len"></span><span class="pos"></span></span><span class="tx"><span class="nm"></span><span class="sub"></span></span></button>');
+      b.classList.toggle("now", n === pl.i);
+      if (n === pl.i) b.setAttribute("aria-current", "true");
+      setThumb(b.querySelector("img"), x?.videoId);
+      b.querySelector(".len").textContent = x ? fmtTime(scriptLen(x)) : "";
+      setProgress(b.querySelector(".pos"), key);
+      b.querySelector(".nm").textContent = x ? mainName(x) : key;
+      b.querySelector(".sub").textContent = x ? (isOnly(x) ? scriptTopics(x) : scriptTitle(x)) : "";
+      b.onclick = () => { try { primeAudio(); } catch (e) {} plGo(n); };
+      q(".rows").appendChild(b);
+    });
+    if (keep !== undefined) q(".rows").scrollTop = keep;
+    else q(".it.now")?.scrollIntoView({ block: "nearest" });
+  }
+  window.__plRender = plRender;
+  $("wPlName").onclick = togglePl;
+  $("wPrev").onclick = () => { try { primeAudio(); } catch (e) {} plMove(-1); poke(); };
+  $("wNext").onclick = () => { try { primeAudio(); } catch (e) {} plMove(1); poke(); };
+  // 次の台本の声を、終わる2分前から取り込んでおく。記録が動画の途中までなら、そこで次へ進む
+  let endWait = 0;
+  setInterval(() => {
+    if (!pl || !script || !started || !playing() || seekWant) return;
+    let t = 0, dur = 0;
+    try { t = contentTime(); dur = player.getDuration() || 0; } catch (e) { return; }
+    if (t === null) return;
+    if (scriptKey(script) !== pl.order[pl.i]) return;
+    const end = script.covered || total;
+    if (end - t < 120) prefetchVoice(plNextKey());
+    if (end && dur - end > 20 && t > end + 3 && Date.now() > endWait) { endWait = Date.now() + 15000; plEnded(); }
+  }, 2000);
   $("wPick").onclick = () => { try { player.pauseVideo(); } catch (e) {} openPicker(); };
   $("wPick2").onclick = () => openPicker();
   function showToast(msg, ms) {
@@ -5637,6 +6327,11 @@ $("btnCopy").onclick = async () => {
     $("wSetMsg").className = "hint";
     $("wSet").showModal();
   }
+  $("wLog").onclick = async () => {
+    const text = `${navigator.userAgent}\n${script ? scriptKey(script) : "-"}\n秒 状態 時間 長さ 判定 開始\n` + playLog.slice(-400).filter((x, i, a) => i % 2 === 0 || /ad/.test(x)).join("\n");
+    try { await navigator.clipboard.writeText(text); $("wLog").textContent = "コピーしました"; } catch (e) { $("wLog").textContent = "コピーできませんでした"; }
+    setTimeout(() => { $("wLog").textContent = "再生の記録をコピー"; }, 3000);
+  };
   // 画面に表示するもの。この端末で覚える
   for (const c of document.querySelectorAll("#wShow input")) {
     const k = c.dataset.show;
@@ -5677,18 +6372,34 @@ $("btnCopy").onclick = async () => {
   $("pickFix").onclick = () => { $("pickDlg").close(); openSet(noRepo() ? "リポジトリとトークンを入れて「保存して読み込む」を押してください。" : "トークンを貼り直して「保存して読み込む」を押してください。"); };
 
   // 台本の作り方
+  let madeVideos = new Set();   // もう台本がある動画
   function makeText() {
     const u = $("makeUrl").value.trim();
-    $("makeText").value = u ? "この動画で台本と声を作って。" + u : "候補を出して";
+    const id = (u.match(/(?:[?&]v=|youtu\.be\/|\/(?:shorts|embed|live)\/)([\w-]{11})/) || [])[1];
+    const again = !!id && madeVideos.has(id);
+    $("makeKind").style.display = again ? "" : "none";
+    const kind = document.querySelector("[name=makeKind]:checked").value, theme = $("makeTheme").value.trim();
+    $("makeTheme").style.display = kind === "theme" ? "" : "none";
+    $("makeText").value = !u ? "候補を出して"
+      : !again ? "この動画で台本と声を作って。" + u
+      : `この動画の台本と声を、${kind === "theme" ? `「${theme || "（テーマ）"}」` : "最新"}の記事で作り足して。` + u;
     $("makeCopy").textContent = "コピー";
   }
-  function openMake() {
+  async function openMake(url) {
     $("makeNew").style.display = noRepo() ? "" : "none";
     $("makeOld").style.display = noRepo() ? "none" : "";
     $("makeRepo").textContent = lsGet("data-repo") || "";
+    if (typeof url === "string") $("makeUrl").value = url;
+    madeVideos = new Set(pickItems.map(x => x.videoId));
     makeText();
-    $("makeDlg").showModal();
+    if (!$("makeDlg").open) $("makeDlg").showModal();
+    if (noRepo() || pickItems.length) return;
+    for (const v of Object.values(await readScriptIndex())) if (v.videoId) madeVideos.add(v.videoId);
+    makeText();
   }
+  window.__openMake = url => openMake(url);
+  for (const r of document.querySelectorAll("[name=makeKind]")) r.onchange = makeText;
+  $("makeTheme").oninput = makeText;
   $("wMake").onclick = openMake;
   $("pickMake").onclick = () => { $("pickDlg").close(); openMake(); };
   $("makeUrl").oninput = makeText;

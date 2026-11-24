@@ -392,6 +392,11 @@
   html.watch #stage { flex: 1 1 auto; min-width: 0; min-height: 0; width: auto; height: 100%; aspect-ratio: auto; border-radius: 0; }
   /* ワイプと字幕は、枠ではなく映像そのもの（16:9）に合わせて置く。枠が縦長でも映像の上に乗る */
   html.watch #stage { container-type: size; }
+  html.watch.no-caption #caption, html.watch.no-topic #wTopic, html.watch.no-place #wPlace, html.watch.no-avatar #avatar { visibility: hidden !important; }
+  #wShow label { display: flex; align-items: center; gap: 10px; margin: 0; padding: 8px 0; font-size: 15px; color: var(--fg); cursor: pointer; }
+  #wShow input { width: 20px; height: 20px; margin: 0; flex: 0 0 auto; }
+  /* 動画の枠そのものを16:9にする。横長の枠に任せると、iPhoneの横持ちで映像が片側に寄ることがある */
+  html.watch:not(.booth) #ytbox { inset: 0; margin: auto; width: min(100cqw, 100cqh * 16 / 9); height: min(100cqh, 100cqw * 9 / 16); }
   html.watch #overlay { width: min(100cqw, 100cqh * 16 / 9); height: auto; max-height: none; }
   /* セリフの一覧は、出したときだけ横に並ぶ。映像は隠さず、そのぶん縮む */
   html.watch #tlWrap { display: none; position: relative; }
@@ -1118,6 +1123,13 @@
 <!-- 見る画面の設定（再生中でも開ける） -->
 <dialog id="wSet">
   <h2 style="margin-top:0;font-size:17px">設定</h2>
+  <p style="margin:0 0 2px;font-size:14px;font-weight:600">画面に表示するもの</p>
+  <div id="wShow" style="margin-bottom:16px">
+    <label><input type="checkbox" data-show="caption">字幕</label>
+    <label><input type="checkbox" data-show="topic">いま話している記事</label>
+    <label><input type="checkbox" data-show="place">場所</label>
+    <label><input type="checkbox" data-show="avatar">キャラクター</label>
+  </div>
   <p style="margin:0 0 6px;font-size:14px;font-weight:600">データの接続</p>
   <p class="hint" style="margin:0 0 8px">台本・音声・アバターを置いているリポジトリと、それを読むためのトークンです。</p>
   <label for="wRepo">リポジトリ</label>
@@ -5624,6 +5636,14 @@ $("btnCopy").onclick = async () => {
     $("wSetMsg").textContent = msg || (lsGet("github-pat") ? "トークンは保存されています。" : "トークンがまだ入っていません。");
     $("wSetMsg").className = "hint";
     $("wSet").showModal();
+  }
+  // 画面に表示するもの。この端末で覚える
+  for (const c of document.querySelectorAll("#wShow input")) {
+    const k = c.dataset.show;
+    c.checked = lsGet("show-" + k, "1") !== "0";
+    const apply = () => root.classList.toggle("no-" + k, !c.checked);
+    apply();
+    c.onchange = () => { lsSet("show-" + k, c.checked ? "1" : "0"); apply(); };
   }
   $("wSetBtn").onclick = () => openSet();
   $("wSetClose").onclick = () => $("wSet").close();

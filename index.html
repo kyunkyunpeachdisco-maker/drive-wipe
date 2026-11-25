@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>
   // ふつうに開くと、見るだけの画面になる。台本づくりや細かい設定の画面は ?edit を付けて開く
-  window.APP_VERSION = 'v0.21.1'.startsWith('v') || /^master-/.test('v0.21.1') ? 'v0.21.1' : '開発版';
+  window.APP_VERSION = 'v0.21.2'.startsWith('v') || /^master-/.test('v0.21.2') ? 'v0.21.2' : '開発版';
   // ?v=持ち主/リポジトリ/台本の名前 で開くと、その人が公開した台本を、接続なしで再生する
   (() => {
     const q = new URLSearchParams(location.search);
@@ -3233,27 +3233,28 @@ const face = $("face"), fx = face.getContext("2d");
 let wheel = 0, wheelTarget = 0;     // ハンドル角（-1〜1）
 let gaze = 0, gazeTarget = 0;       // 0=前方 / 1=カメラ
 let blink = 0, nextBlink = 1500;
-// ときどきこちらを見る（見る画面だけ）。曲がっているあいだは道路を見る
-let glance = 0, glanceT = 6000, roadT = 0, chatT = 0;
-const LOOK_GAP = { few: [24000, 48000], mid: [9000, 20000], many: [4000, 9000] };
+// 運転中なので、ふだんは道路を見る。話しているあいだも、ちらっとこちらを見るだけ（見る画面だけ）
+let glance = 0, glanceT = 6000, wasChat = false;
+const LOOK_GAP = {   // こちらを見る間隔（ミリ秒）。雑談のときと、そうでないとき
+  few:  { chat: [14000, 26000], road: [35000, 70000] },
+  mid:  { chat: [6500, 12000],  road: [18000, 36000] },
+  many: { chat: [3500, 6500],   road: [8000, 16000] },
+};
 function wantedGaze(dt) {
   if (!window.WATCH_MODE) return gazeTarget;
-  if (talkBusy) return 1;   // 小話のあいだは、車を止めてこちらを向いている見立て
-  const turning = Math.abs(wheelTarget) > 0.3;
-  if (gazeTarget > 0.5) {   // 雑談：こちらを見て話し、合間に道路へ目を戻す
-    if (roadT > 0) { roadT -= dt; return 0.1; }
-    chatT -= dt;
-    if (chatT <= 0) { roadT = 900 + Math.random() * 1100; chatT = 2600 + Math.random() * 2800; }
-    return turning ? 0.2 : 1;
-  }
-  if (glance > 0) { glance -= dt; return turning ? gazeTarget : 1; }
+  if (talkFace) return 1;   // 小話のあいだは、車を止めてこちらを向いている見立て
+  if (talkBusy) return 0;   // 小話のあと、前を向いてから走り出す
+  const turning = Math.abs(wheelTarget) > 0.3, chat = gazeTarget > 0.5, rest = chat ? 0.05 : gazeTarget;
+  if (glance > 0) { glance -= dt; return turning ? rest : 1; }
+  const [a, b] = (LOOK_GAP[lsGet("look", "mid")] || LOOK_GAP.mid)[chat ? "chat" : "road"];
+  if (chat && !wasChat) glanceT = Math.min(glanceT, b);   // 話しはじめたら、間隔を短いほうに切り替える
+  wasChat = chat;
   glanceT -= dt;
   if (glanceT <= 0) {
-    const [a, b] = LOOK_GAP[lsGet("look", "mid")] || LOOK_GAP.mid;
     glanceT = a + Math.random() * (b - a);
-    if (!turning) glance = 1100 + Math.random() * 1100;
+    if (!turning) glance = 800 + Math.random() * 500;
   }
-  return gazeTarget;
+  return rest;
 }
 let lastFrame = performance.now();
 
@@ -3298,7 +3299,7 @@ function setHand(name) {
 }
 function handStep(dt) {
   handAmt = handWant ? Math.min(1, handAmt + dt / 350) : Math.max(0, handAmt - dt / 450);
-  const want = talkBusy ? 1 : 0;
+  const want = talkFace ? 1 : 0;
   faceCam = want ? Math.min(1, faceCam + dt / 500) : Math.max(0, faceCam - dt / 600);
   return { hand: { name: handName, amt: smooth01(handAmt), t: (performance.now() - handAt) / 1000 }, faceCam: smooth01(faceCam) };
 }
@@ -3528,7 +3529,7 @@ function tick() {
    広告が出たら、talks/index.json の話を1つ選んで話す。広告が先に終わったら、映像を止めたまま話し終えて、
    ひとこと言ってから映像に戻る。広告そのもの（音・画面）には手を加えない。 */
 let talks = [], talkTag = "", talkDir = "", talkIds = null;   // 話、声の取り置きの名前、置き場、声のあるセリフ
-let talkBusy = false, talkHeldAt = 0, talkSeq = 0, talkAdOver = false;
+let talkBusy = false, talkFace = false, talkQuiet = 0, talkHeldAt = 0, talkSeq = 0, talkAdOver = false;
 let talkSeen = false;          // この台本で、映像が1度でも流れたか
 let talked = [];               // この台本を見ているあいだに話した、記事の話
 const TALK_HOLD_MAX = 10000;   // 映像を止めて待たせるのは、ここまで。過ぎたら、区切りのよい所で戻る
@@ -3616,7 +3617,8 @@ function talkHoldVideo() {
   try { player.pauseVideo(); } catch (e) {}
 }
 function talkEnd() {
-  talkBusy = false; talkHeldAt = 0;
+  if (talkBusy) talkQuiet = Date.now() + 1500;
+  talkBusy = talkFace = false; talkHeldAt = 0;
   document.documentElement.classList.remove("talk");
   setMood("", ""); setHand("");
   $("caption").textContent = "";
@@ -3633,7 +3635,7 @@ async function runTalk() {
   // 出発前の話は、はじめから見るときだけ。途中から見るときは、途中の話
   const first = pickTalk(phase === "start" && startPos() < 30 ? "start" : "mid");
   if (!first) return;
-  talkBusy = true; talkHeldAt = 0; talkAdOver = false;
+  talkBusy = talkFace = true; talkHeldAt = 0; talkAdOver = false;
   root.classList.add("talk");
   dropQueue();
   // 話しかけのセリフがあれば、言い終わるのを待つ
@@ -3669,8 +3671,14 @@ async function runTalk() {
       // 広告がまだ続いていて、次の話まで少し間をあける
       for (let i = 0; i < 6 && live() && !talkAdOver; i++) await sleep(250);
     }
-    const b = live() && talkHeldAt ? bridgeTalk(phase === "start" ? "go" : "back") : null;
-    if (b) await speak(b.lines[0]);
+    if (live() && talkHeldAt) {
+      // 話し終えて、ひと息おいてから声をかけ、前を向いてから走り出す
+      await sleep(900);
+      const b = live() ? bridgeTalk(phase === "start" ? "go" : "back") : null;
+      if (b) await speak(b.lines[0]);
+      talkFace = false;
+      if (live()) await sleep(1400);
+    }
   } finally {
     // やめたときの片づけは talkCancel がしている
     const held = live() && !!talkHeldAt;
@@ -3709,6 +3717,8 @@ async function drain() {
           catch (e) { audioCache.set(c.id, null); }
         }
       }
+      // 広告や小話が終わってすぐには話さず、ひと息おく
+      if (talkQuiet > Date.now()) await Promise.race([dropped, sleep(talkQuiet - Date.now())]);
       if (gen !== sayGen) continue;   // 待つ間に、台本が替わった・位置が動いた・止められた
       setAct(c.act, c.amount);
       gazeTarget = c.kind === "chat" ? 1 : 0.15;   // 雑談は視聴者を見る
@@ -7209,7 +7219,8 @@ $("btnCopy").onclick = async () => {
     const kv = (k, val) => { if (!val) return; const r = mk("div", "kv"); r.append(mk("span", "", k), mk("span", "", val)); more.appendChild(r); };
     kv("声", v?.name ? (v.engine === "voicevox" ? "VOICEVOX:" + String(v.name).replace(/[（(].*$/, "") : v.name) : "");
     if (vm && !root.classList.contains("no-avatar")) kv("キャラクター", [vm.title || vm.name, vm.author || (vm.authors || []).join("、")].filter(Boolean).join(" ／ "));
-    const day = new Date(s.generatedAt || "");
+    // 日付だけのもの（公開された台本）は、見る人の時差でずれないように、そのままの日付で出す
+    const day = new Date(/^\d{4}-\d\d-\d\d$/.test(s.generatedAt || "") ? s.generatedAt + "T00:00:00" : s.generatedAt || "");
     if (!isNaN(day)) kv("台本を作った日", `${day.getFullYear()}/${day.getMonth() + 1}/${day.getDate()}`);
     return true;
   }
@@ -7330,7 +7341,7 @@ $("btnCopy").onclick = async () => {
   }
   // 広告のあいだに話す。横持ちでは、キャラクターが映像の上にあって出せないので話さない
   function adTalk(ad) {
-    if (!ad) { adTalkT = 0; return; }
+    if (!ad) { if (adTalkT) talkQuiet = Math.max(talkQuiet, Date.now() + 1500); adTalkT = 0; return; }
     if (talkBusy || adTalkT < 0 || !started || document.hidden || !root.classList.contains("booth") || root.classList.contains("no-talk")) return;
     if (!adTalkT) adTalkT = Date.now();
     if (Date.now() - adTalkT > 700) { adTalkT = -1; runTalk(); }   // 1回の広告につき1度

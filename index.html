@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>
   // ふつうに開くと、見るだけの画面になる。台本づくりや細かい設定の画面は ?edit を付けて開く
-  window.APP_VERSION = 'v0.17.0'.startsWith('v') || /^master-/.test('v0.17.0') ? 'v0.17.0' : '開発版';
+  window.APP_VERSION = 'v0.18.0'.startsWith('v') || /^master-/.test('v0.18.0') ? 'v0.18.0' : '開発版';
   // ?v=持ち主/リポジトリ/台本の名前 で開くと、その人が公開した台本を、接続なしで再生する
   (() => {
     const q = new URLSearchParams(location.search);
@@ -419,6 +419,8 @@
   }
   dialog::backdrop { background: rgba(0,0,0,.5); }
   #makeDlg a, #wSet a { color: var(--accent); }
+  /* 送る文。入力欄に見えないように、引用の形で出す */
+  #makeText { margin: 8px 0; padding: 10px 12px; border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; background: rgba(255,255,255,.07); font-size: 16px; line-height: 1.6; overflow-wrap: anywhere; user-select: all; -webkit-user-select: all; }
   html:not(.watch) #pickMake { display: none; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   td { padding: 3px 8px 3px 0; vertical-align: top; }
@@ -498,6 +500,39 @@
   html.watch.no-avatar #wTab { display: none; }
   html.watch #caption b, html.watch #caption i { font: inherit; }
   html.watch #caption i { color: transparent; text-shadow: none; }
+  /* 概要 */
+  #wDesc { border: 0; padding: 0; color: #fff; background: #0f0f0f; border-radius: 16px 16px 0 0; width: 100%; max-width: 560px; height: calc(100dvh - 56.25vw - 8px); min-height: 55dvh; max-height: 92dvh; margin: auto auto 0; overflow: hidden; }
+  #wDesc[open] { display: flex; flex-direction: column; animation: shUp .22s ease-out; }
+  #wDesc::backdrop { background: rgba(0,0,0,.2); }
+  @media (max-height: 500px), (min-width: 900px) { #wDesc { margin: auto 16px 8px auto; width: 420px; height: auto; min-height: 0; max-height: calc(100dvh - 16px); border-radius: 16px; } }
+  #wDesc .grab { flex: 0 0 auto; padding: 10px 0 6px; cursor: pointer; }
+  #wDesc .grab::before { content: ""; display: block; width: 40px; height: 4px; margin: 0 auto; border-radius: 2px; background: #5a5a5a; }
+  #wDesc .body { overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 4px 16px 28px; }
+  #wDesc .hd { display: flex; align-items: flex-start; gap: 8px; }
+  #wDesc h2 { flex: 1 1 auto; margin: 0; font-size: 20px; line-height: 1.35; font-weight: 700; overflow-wrap: anywhere; }
+  #iClose { flex: 0 0 40px; width: 40px; height: 40px; min-height: 0; padding: 8px; margin: -4px -8px 0 0; background: none; border: 0; border-radius: 50%; color: #fff; }
+  #iClose svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+  #wDesc .sub { margin: 6px 0 0; font-size: 14px; color: #aaa; overflow-wrap: anywhere; }
+  #wDesc .sub:empty { display: none; }
+  #wDesc .stats { display: flex; margin: 18px 0 6px; text-align: center; }
+  #wDesc .stats div { flex: 1 1 0; min-width: 0; }
+  #wDesc .stats b { display: block; font-size: 18px; font-weight: 700; }
+  #wDesc .stats i { display: block; font-style: normal; font-size: 12px; color: #aaa; margin-top: 2px; }
+  #wDesc h3 { margin: 22px 0 10px; font-size: 17px; font-weight: 700; }
+  #wDesc a { color: inherit; text-decoration: none; }
+  #wDesc .media { display: flex; gap: 12px; align-items: flex-start; }
+  #wDesc .media img { flex: 0 0 132px; width: 132px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; background: #222; }
+  #wDesc .media span, #wDesc .art a, #wDesc .art > span { flex: 1 1 auto; min-width: 0; display: block; }
+  #wDesc b { display: block; font-size: 15px; font-weight: 500; line-height: 1.4; overflow-wrap: anywhere; }
+  #wDesc .media i, #wDesc .art i { display: block; font-style: normal; font-size: 13px; color: #aaa; line-height: 1.5; overflow-wrap: anywhere; }
+  #wDesc i.go { color: #3ea6ff; }
+  #wDesc .art, #wDesc .chap { display: flex; gap: 12px; align-items: flex-start; padding: 8px; margin: 0 -8px; border-radius: 10px; }
+  #wDesc .art.now, #wDesc .chap.now { background: #1c2b3a; }
+  #wDesc .chip { flex: 0 0 auto; min-width: 52px; min-height: 0; padding: 3px 8px; border: 0; border-radius: 6px; background: #17293d; color: #3ea6ff; font-size: 13px; font-weight: 500; line-height: 1.5; }
+  #wDesc .chap b { flex: 1 1 auto; min-width: 0; padding-top: 2px; }
+  #wDesc .kv { display: flex; gap: 16px; padding: 10px 0; font-size: 15px; }
+  #wDesc .kv span:first-child { flex: 0 0 auto; color: #aaa; }
+  #wDesc .kv span:last-child { flex: 1 1 auto; min-width: 0; text-align: right; overflow-wrap: anywhere; }
   /* 共有URLで開いたとき：自分の台本を選ぶ・作る・つなぐ入口は出さない */
   html.shared #wPick, html.shared #wPick2, html.shared #wMake, html.shared #wStart > a[href="./?edit"],
   html.shared #wSet [data-page="repo"], html.shared #wSet a[href="./?edit"], html.shared #wA2hs { display: none !important; }
@@ -509,9 +544,9 @@
   #shareUrl { width: 100%; box-sizing: border-box; font-size: 16px; }
   #shareDlg p { margin: 8px 0; }
   /* 広告のあいだは、映像の上に何もかぶせない */
-  html.watch.ad #wTap { pointer-events: none; }
-  html.watch.ad #wTopic, html.watch.ad #wPlace, html.watch.ad #avatar.over, html.watch.ad #caption { visibility: hidden !important; }
-  html.watch.ad:not(.booth):not(.list-open) #wBar { opacity: 0; pointer-events: none; }
+  html.watch.brk #wTap { pointer-events: none; }
+  html.watch.brk #wTopic, html.watch.brk #wPlace, html.watch.brk #avatar.over, html.watch.brk #caption { visibility: hidden !important; }
+  html.watch.brk:not(.booth):not(.list-open) #wBar { opacity: 0; pointer-events: none; }
   /* 動画の枠そのものを16:9にする。横長の枠に任せると、iPhoneの横持ちで映像が片側に寄ることがある */
   html.watch:not(.booth) #ytbox { inset: 0; margin: auto; width: min(100cqw, 100cqh * 16 / 9); height: min(100cqh, 100cqw * 9 / 16); }
   html.watch #overlay { width: min(100cqw, 100cqh * 16 / 9); height: auto; max-height: none; }
@@ -714,6 +749,7 @@
         <span id="wTime">0:00 / 0:00</span>
         <span id="wNow"></span>
         <button id="wList" title="セリフの一覧" aria-label="セリフの一覧"><svg viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg></button>
+        <button id="wInfoBtn" title="概要" aria-label="概要"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5h.01"/></svg></button>
         <button id="wPick" title="台本を選ぶ" aria-label="台本を選ぶ"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button>
         <button id="wSetBtn" title="設定" aria-label="設定"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
         <button id="wFs" title="全画面" aria-label="全画面"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
@@ -725,6 +761,7 @@
       <button class="big" id="wBig" aria-label="再生"><svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg></button>
       <button class="sub" id="wPick2">台本を選ぶ</button>
       <button class="sub" id="wMake">台本の作り方</button>
+      <button class="sub" id="wInfoBtn2">概要</button>
       <div id="wAbout"></div>
       <a id="wMine" href="https://github.com/kyunkyunpeachdisco-maker/drive-wipe-data-template#readme" target="_blank" rel="noopener">ドライブ実況ワイプの説明を読む</a>
       <a href="./?edit">声・アバターの設定</a>
@@ -1250,6 +1287,24 @@
     <button id="pickFix" class="primary" style="display:none">接続を直す</button></div>
 </dialog>
 
+<!-- 概要 -->
+<dialog id="wDesc" aria-label="概要">
+  <div class="grab"></div>
+  <div class="body">
+    <div class="hd"><h2 id="iTitle"></h2><button type="button" id="iClose" aria-label="閉じる"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <p class="sub" id="iSub"></p>
+    <div class="stats" id="iStats"></div>
+    <h3>元の動画</h3>
+    <a class="media" id="iVideo" target="_blank" rel="noopener noreferrer"><img alt="" id="iThumb"><span><b id="iVTitle"></b><i id="iVCh"></i><i class="go">YouTube で開く</i></span></a>
+    <h3 id="iArtsH">取り上げた記事</h3>
+    <div id="iArts"></div>
+    <h3 id="iChapH">チャプター</h3>
+    <div id="iChap"></div>
+    <h3>詳細</h3>
+    <div id="iMore"></div>
+  </div>
+</dialog>
+
 <!-- URLで共有 -->
 <dialog id="shareDlg">
   <h2 style="margin-top:0;font-size:17px">URLで共有</h2>
@@ -1292,7 +1347,7 @@
         <label><input type="radio" name="makeKind" value="theme">テーマを決める</label>
         <input type="text" id="makeTheme" placeholder="例：猫、鉄道、昔のゲーム" aria-label="テーマ" style="display:none"></li>
       <li style="margin-top:12px">［コピー］を押して、AI エージェントに送る文をコピーします。
-        <textarea id="makeText" readonly rows="3" style="width:100%;box-sizing:border-box"></textarea>
+        <div id="makeText" role="textbox" aria-readonly="true" aria-label="AI エージェントに送る文"></div>
         <div class="row"><button id="makeCopy" class="fixed primary">コピー</button></div></li>
       <li style="margin-top:12px"><a href="https://claude.ai/code" target="_blank" rel="noopener">Claude Code</a> を開いて、リポジトリ <code id="makeRepo"></code> を選び、コピーした文を送ります。
         <p class="hint">リポジトリが表示されないときは、<a href="https://code.claude.com/docs/en/claude-code-on-the-web" target="_blank" rel="noopener">GitHub のアカウントをつなぐ手順</a>を開きます。</p></li>
@@ -1591,6 +1646,7 @@ async function loadSharedAudio(data) {
     const r = await fetch(`${S.base}audio/${key}/index.json`, { cache: "no-cache" });
     if (!r.ok) { if (script === data) window.__watchToast?.("この台本には、声がありません。字幕だけで流します。"); return; }
     const j = await r.json();
+    if (script === data) voiceNow = { engine: j.engine || "", name: j.name || "" };
     const map = new Map();
     for (const it of j.items || []) if (/^[0-9a-f]{6,64}$/.test(it.h) && /^[a-z0-9]{2,5}$/.test(it.ext || "")) map.set(it.h, it);
     if (script === data) shareAudio = map;
@@ -2759,6 +2815,7 @@ async function repoPushCore() {
 // 台本を読み込んだら、その台本の音声も自動で取り込む。
 // 取り込み済みは飛ばすので、2回目以降は一覧を1回取るだけで終わる
 let pulling = null;
+let voiceNow = null;   // いま使っている声（概要に出す）
 // audio/<key>/ 配下の声フォルダを列挙する（声ごとに index.json を持つ）
 async function listVoices(key) {
   const out = [];
@@ -2838,6 +2895,7 @@ async function autoPullAudio(data) {
   const mine = pulling = new Promise(r => { done = r; });
   try {
     const chosen = await refreshImportVoices(data);
+    voiceNow = chosen ? { engine: chosen.meta?.engine || "", name: chosen.meta?.voiceName || chosen.label || "" } : null;
     if (!chosen) {                   // 音声が無い台本
       if (window.WATCH_MODE) window.__watchToast?.("この台本には、まだ声がありません。字幕だけで流します。");
       return;
@@ -4249,6 +4307,12 @@ try {
 if (THREE && VRMLoaderPlugin) {
   const canvas = $("vrm");
   const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+  const note = m => window.__playLog?.push(`${Math.round(performance.now() / 100) / 10} ${m}`);
+  canvas.addEventListener("webglcontextlost", () => note("キャラクターの描画が失われた"));
+  canvas.addEventListener("webglcontextrestored", () => note("キャラクターの描画が戻った"));
+  document.addEventListener("visibilitychange", () => note(document.hidden ? "画面が隠れた" : "画面が戻った"));
+  addEventListener("pagehide", () => note("ページを離れた"));
+  addEventListener("pageshow", e => note(e.persisted ? "ページに戻った（保存から）" : "ページを開いた"));
   renderer.setClearAlpha(0);
   const scene = new THREE.Scene();
   const FOV = 34;
@@ -4564,6 +4628,38 @@ if (THREE && VRMLoaderPlugin) {
   }
   window.addEventListener("resize", resize);
 
+  // キャラクターの絵は 4096 ピクセル角のものが多く、そのままだと映像用のメモリを数百MB使う。
+  // スマホでは広告の動画と重なったときに画面全体が白く抜けるので、表示に足りる大きさまで小さくしてから使う
+  const TEX_MAX = matchMedia("(pointer: coarse)").matches ? 1024 : 2048;
+  async function shrinkTextures(root) {
+    const seen = new Set(), jobs = [];
+    const add = t => { if (t && t.isTexture && t.image && !seen.has(t)) { seen.add(t); jobs.push(t); } };
+    root.traverse(o => {
+      for (const m of [].concat(o.material || [])) {
+        for (const k in m) add(m[k]);
+        for (const k in m.uniforms || {}) add(m.uniforms[k]?.value);
+      }
+    });
+    let n = 0;
+    const done = new Map();   // 同じ絵を何枚もの材質が使う
+    for (const t of jobs) {
+      const im = t.image, w = im.width, h = im.height;
+      if (!w || !h || Math.max(w, h) <= TEX_MAX) continue;
+      try {
+        if (!done.has(im)) {
+          const k = TEX_MAX / Math.max(w, h);
+          // 透明な縁の色が黒ずまないように、色を透明度と掛け合わせない形のまま縮める
+          done.set(im, await createImageBitmap(im, { resizeWidth: Math.round(w * k), resizeHeight: Math.round(h * k), resizeQuality: "high", premultiplyAlpha: "none", colorSpaceConversion: "none" }));
+        }
+        t.image = done.get(im);
+        t.needsUpdate = true;
+        n++;
+      } catch (e) { /* 縮められない端末では、元の大きさのまま使う */ }
+    }
+    for (const im of done.keys()) im.close?.();
+    window.__texShrunk = n;
+  }
+
   window.loadVRM = async function (buf) {
     const loader = new GLTFLoader();
     loader.register(p => new VRMLoaderPlugin(p));
@@ -4573,6 +4669,7 @@ if (THREE && VRMLoaderPlugin) {
       const gltf = await loader.loadAsync(url);
       const v = gltf.userData.vrm;
       if (!v) throw new Error("VRMとして読めませんでした");
+      await shrinkTextures(gltf.scene);
       if (vrm) { scene.remove(vrm.scene); VRMUtils.deepDispose?.(vrm.scene); }
       VRMUtils.removeUnnecessaryVertices(gltf.scene);
       VRMUtils.combineSkeletons(gltf.scene);
@@ -4582,6 +4679,7 @@ if (THREE && VRMLoaderPlugin) {
       // モデルの子にすると前に置いたつもりが背後に回る
       scene.add(wheelMesh);
       vrm = v;
+      window.__vrmMeta = v.meta || null;
       applyFlip();
       v.scene.updateMatrixWorld(true);
 
@@ -4749,7 +4847,8 @@ if (THREE && VRMLoaderPlugin) {
   function loop() {
     requestAnimationFrame(loop);
     if (window.WATCH_MODE) {
-      const now = performance.now(), hid = getComputedStyle($("avatar")).visibility === "hidden" || $("avatar").classList.contains("stash");
+      const now = performance.now(), hid = getComputedStyle($("avatar")).visibility === "hidden" || $("avatar").classList.contains("stash")
+        || document.hidden || document.documentElement.classList.contains("brk");
       if (hid || now - lastDraw < 30) return;
       lastDraw = now;
     }
@@ -4773,7 +4872,7 @@ if (THREE && VRMLoaderPlugin) {
       fwdPoint.set(0, headY - 0.02, 4);
       lookTarget.position.lerpVectors(fwdPoint, camera.position, Math.min(1, s.gaze));
     }
-    // 目だけでは分かりにくいので、首もカメラのほうへ向ける
+    // 運転中なので、顔はほとんど前のまま。首は少しだけ向けて、あとは目で見る
     let turnYaw = 0, turnPitch = 0;
     if (window.WATCH_MODE && s.gaze > 0.01) {
       const hd = vrm.humanoid?.getNormalizedBoneNode("head");
@@ -4781,8 +4880,8 @@ if (THREE && VRMLoaderPlugin) {
         hd.getWorldPosition(gazeV);
         const cx = camera.position.x - gazeV.x, cy = camera.position.y - gazeV.y, cz = camera.position.z - gazeV.z;
         const yaw = Math.atan2(fwdSign * cx, fwdSign * cz);
-        turnYaw = Math.max(-0.95, Math.min(0.95, yaw)) * s.gaze;
-        turnPitch = -Math.max(-0.3, Math.min(0.3, Math.atan2(cy, Math.hypot(cx, cz)))) * s.gaze * fwdSign;
+        turnYaw = Math.max(-0.95, Math.min(0.95, yaw)) * s.gaze * 0.3;
+        turnPitch = -Math.max(-0.3, Math.min(0.3, Math.atan2(cy, Math.hypot(cx, cz)))) * s.gaze * fwdSign * 0.3;
       }
     }
 
@@ -6460,6 +6559,80 @@ $("btnCopy").onclick = async () => {
     update();
   }
 
+  // 概要：元の動画、取り上げた記事、チャプター、声やキャラクターの名前
+  const httpUrl = u => typeof u === "string" && /^https?:\/\//.test(u);
+  const siteOf = u => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (e) { return ""; } };
+  const mk = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  function jumpTo(t) {
+    $("wDesc").close();
+    if (!started) { $("btnStart").click(); showStart(false); setTimeout(() => { seekWant = 0; try { player.seekTo(t, true); } catch (err) {} }, 600); }
+    else { try { player.seekTo(t, true); player.playVideo(); } catch (err) {} }
+    poke();
+  }
+  function timeChip(t) { const b = mk("button", "chip", fmtTime(t)); b.type = "button"; b.onclick = () => jumpTo(t); return b; }
+  function renderInfo() {
+    if (!script) return false;
+    const s = script, m = s.meta || {};
+    let now = -1;
+    try { if (started) now = player.getCurrentTime(); } catch (e) {}
+    $("iTitle").textContent = s.title || m.title || s.videoId;
+    $("iSub").textContent = s.title ? (m.title || "") : "";
+    const arts = (s.topics || []).map(t => ({ start: t.start, end: t.end, title: t.title, article: t.article || "", url: httpUrl(t.url) ? t.url : "" }));
+    for (const a of s.sources || []) if (httpUrl(a?.url) && !arts.some(x => x.url === a.url)) arts.push({ title: a.title || a.url, article: "", url: a.url });
+    const stats = $("iStats");
+    stats.replaceChildren();
+    for (const [v, k] of [[fmtTime(total), "長さ"], [String(cues.length), "セリフ"], [String(arts.length), "記事"]]) {
+      const d = mk("div"); d.append(mk("b", "", v), mk("i", "", k)); stats.appendChild(d);
+    }
+    $("iVideo").href = "https://www.youtube.com/watch?v=" + encodeURIComponent(s.videoId);
+    $("iThumb").src = `https://i.ytimg.com/vi/${encodeURIComponent(s.videoId)}/mqdefault.jpg`;
+    $("iVTitle").textContent = m.title || s.videoId;
+    $("iVCh").textContent = m.channelTitle || "";
+    const box = $("iArts");
+    box.replaceChildren();
+    for (const a of arts) {
+      const row = mk("div", "art" + (a.start != null && now >= a.start - 1 && now <= a.end ? " now" : ""));
+      if (a.start != null) row.appendChild(timeChip(a.start));
+      const body = mk(a.url ? "a" : "span");
+      if (a.url) { body.href = a.url; body.target = "_blank"; body.rel = "noopener noreferrer"; }
+      body.appendChild(mk("b", "", a.title));
+      if (a.article && a.article !== a.title) body.appendChild(mk("i", "", a.article));
+      if (a.url) body.appendChild(mk("i", "go", siteOf(a.url) + " で読む"));
+      row.appendChild(body);
+      box.appendChild(row);
+    }
+    $("iArtsH").hidden = box.hidden = !arts.length;
+    const ch = (s.chapters || []).filter(c => c && c.label && c.t < total);
+    const cb = $("iChap");
+    cb.replaceChildren();
+    ch.forEach((c, i) => {
+      const end = ch[i + 1] ? ch[i + 1].t : Infinity;
+      const row = mk("div", "chap" + (now >= c.t && now < end ? " now" : ""));
+      row.append(timeChip(c.t), mk("b", "", c.label));
+      cb.appendChild(row);
+    });
+    $("iChapH").hidden = cb.hidden = !ch.length;
+    const more = $("iMore"), v = s.voice || voiceNow, vm = window.__vrmMeta;
+    more.replaceChildren();
+    const kv = (k, val) => { if (!val) return; const r = mk("div", "kv"); r.append(mk("span", "", k), mk("span", "", val)); more.appendChild(r); };
+    kv("声", v?.name ? (v.engine === "voicevox" ? "VOICEVOX:" + String(v.name).replace(/[（(].*$/, "") : v.name) : "");
+    if (vm && !root.classList.contains("no-avatar")) kv("キャラクター", [vm.title || vm.name, vm.author || (vm.authors || []).join("、")].filter(Boolean).join(" ／ "));
+    const day = new Date(s.generatedAt || "");
+    if (!isNaN(day)) kv("台本を作った日", `${day.getFullYear()}/${day.getMonth() + 1}/${day.getDate()}`);
+    return true;
+  }
+  function openInfo() {
+    if (!renderInfo()) return;
+    const d = $("wDesc");
+    if (!d.open) d.showModal();
+    const cur = d.querySelector(".art.now");
+    d.querySelector(".body").scrollTop = cur ? Math.max(0, cur.offsetTop - 120) : 0;
+  }
+  $("wInfoBtn").onclick = $("wInfoBtn2").onclick = openInfo;
+  $("iClose").onclick = () => $("wDesc").close();
+  document.querySelector("#wDesc .grab").onclick = () => $("wDesc").close();
+  $("wDesc").addEventListener("click", e => { if (e.target === $("wDesc")) $("wDesc").close(); });
+
   // 声のクレジットと、話している記事（公開された台本に入っている）
   function showAbout() {
     const box = $("wAbout");
@@ -6481,7 +6654,7 @@ $("btnCopy").onclick = async () => {
       }
       box.append(p, ul);
     }
-    box.classList.toggle("on", box.childNodes.length > 0);
+    box.classList.toggle("on", !!window.SHARE && box.childNodes.length > 0);
   }
   window.__shareFailed = () => {
     $("wTitle").textContent = "ドライブ実況ワイプ";
@@ -6555,8 +6728,8 @@ $("btnCopy").onclick = async () => {
       const d = player.getDuration() || 0, want = script.meta?.duration || 0;
       if (st === 1 && d && want && Math.abs(d - want) > Math.max(5, want * 0.02)) other = true;
     } catch (e) {}
-    const ad = other || adRun >= 4 || (root.classList.contains("ad") && adRun > 0);
-    if (root.classList.contains("ad") !== ad) root.classList.toggle("ad", ad);
+    const ad = other || adRun >= 4 || (root.classList.contains("brk") && adRun > 0);
+    if (root.classList.contains("brk") !== ad) root.classList.toggle("brk", ad);   // 名前を ad にすると、広告を消す道具がページごと隠すことがある
     if (ad && $("wStart").classList.contains("on")) showStart(false);
     playLog.push([Math.round(performance.now() / 100) / 10, st, Math.round(raw * 10) / 10, Math.round((player?.getDuration?.() || 0)), ad ? "ad" : "", started ? 1 : 0].join(" "));
     if (playLog.length > 600) playLog.splice(0, 200);
@@ -6571,11 +6744,11 @@ $("btnCopy").onclick = async () => {
     let t = 0;
     try { t = player.getCurrentTime() || 0; } catch (e) {}
     const f = total ? Math.min(1, t / total) : 0;
-    if (!dragging && !root.classList.contains("ad")) {
+    if (!dragging && !root.classList.contains("brk")) {
       $("wPlayed").style.width = (f * 100) + "%";
       $("wHead").style.left = (f * 100) + "%";
     }
-    $("wTime").textContent = root.classList.contains("ad") ? "広告" : `${fmtTime(t)} / ${fmtTime(total)}`;
+    $("wTime").textContent = root.classList.contains("brk") ? "広告" : `${fmtTime(t)} / ${fmtTime(total)}`;
     $("wPlay").innerHTML = playing() ? ICON_PAUSE : ICON_PLAY;
     // 話題の札：コーナーの間だけ出す
     const ti = topics.findIndex(x => t >= x.start - 1 && t <= x.end);
@@ -7076,7 +7249,7 @@ $("btnCopy").onclick = async () => {
     $("makeKind").style.display = again ? "" : "none";
     const kind = document.querySelector("[name=makeKind]:checked").value, theme = $("makeTheme").value.trim();
     $("makeTheme").style.display = kind === "theme" ? "" : "none";
-    $("makeText").value = !u ? "候補を出して"
+    $("makeText").textContent = !u ? "候補を出して"
       : !again ? "この動画で台本と声を作って。" + u
       : `この動画の台本と声を、${kind === "theme" ? `「${theme || "（テーマ）"}」` : "最新"}の記事で作り足して。` + u;
     $("makeCopy").textContent = "コピー";
@@ -7103,8 +7276,8 @@ $("btnCopy").onclick = async () => {
   $("makeClose").onclick = () => $("makeDlg").close();
   $("makeCopy").onclick = async () => {
     let ok = false;
-    try { await navigator.clipboard.writeText($("makeText").value); ok = true; }
-    catch (e) { $("makeText").select(); try { ok = document.execCommand("copy"); } catch (e2) {} }
+    try { await navigator.clipboard.writeText($("makeText").textContent); ok = true; }
+    catch (e) { getSelection().selectAllChildren($("makeText")); try { ok = document.execCommand("copy"); } catch (e2) {} }
     $("makeCopy").textContent = ok ? "コピーしました" : "コピーできませんでした";
   };
 
@@ -7124,7 +7297,12 @@ $("btnCopy").onclick = async () => {
     poke();
   };
   // 映像を押す：帯が隠れていれば出す。出ていれば再生・一時停止
-  $("wTap").onclick = () => { if (!root.classList.contains("ui-on")) poke(); else togglePlay(); };
+  $("wTap").onclick = e => {
+    // 「いま話している記事」の札を押したら、概要を開く（札は、この層の下にある）
+    const tp = $("wTopic"), r = tp.getBoundingClientRect();
+    if (tp.classList.contains("on") && !root.classList.contains("no-topic") && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) { openInfo(); return; }
+    if (!root.classList.contains("ui-on")) poke(); else togglePlay();
+  };
   $("stage").addEventListener("mousemove", poke);
   document.addEventListener("keydown", e => {
     if (/input|textarea|select/i.test(e.target.tagName) || document.querySelector("dialog[open]")) return;

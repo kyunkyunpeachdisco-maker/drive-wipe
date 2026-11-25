@@ -5,8 +5,32 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>
   // ふつうに開くと、見るだけの画面になる。台本づくりや細かい設定の画面は ?edit を付けて開く
-  window.APP_VERSION = 'v0.16.0'.startsWith('v') || /^master-/.test('v0.16.0') ? 'v0.16.0' : '開発版';
-  window.WATCH_MODE = !new URLSearchParams(location.search).has("edit");
+  window.APP_VERSION = 'v0.17.0'.startsWith('v') || /^master-/.test('v0.17.0') ? 'v0.17.0' : '開発版';
+  // ?v=持ち主/リポジトリ/台本の名前 で開くと、その人が公開した台本を、接続なしで再生する
+  (() => {
+    const q = new URLSearchParams(location.search);
+    const m = (q.get("v") || "").match(/^([A-Za-z0-9-]{1,39})\/([\w.-]{1,100})\/([\w-]{1,80})$/);
+    if (!m) return;
+    let base = `https://${m[1].toLowerCase()}.github.io/${m[2]}/`;
+    // 手元で試すときだけ、置き場を差し替えられる
+    if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) && /^http:\/\/(localhost|127\.0\.0\.1)[:/]/.test(q.get("vb") || "")) base = q.get("vb");
+    const S = window.SHARE = { owner: m[1], repo: m[2], key: m[3], base, settings: {} };
+    // アバターの調整値は、画面を組み立てる前に要る。先に取ってから、1回だけ読み込み直す（見る人の設定には書き込まない）
+    const k = "drive-wipe-share:" + base;
+    let c = null;
+    try { c = sessionStorage.getItem(k); } catch (e) { c = "{}"; }
+    if (c === null) {
+      fetch(base + "avatar/settings.json", { cache: "no-cache" }).then(r => r.ok ? r.text() : "{}").catch(() => "{}").then(t => {
+        try { JSON.parse(t); } catch (e) { t = "{}"; }
+        try { sessionStorage.setItem(k, t); } catch (e) { return; }
+        location.replace(location.href);
+      });
+    } else {
+      try { for (const [a, b] of Object.entries(JSON.parse(c))) if (a.startsWith("player-") && typeof b === "string") S.settings[a] = b; } catch (e) {}
+    }
+  })();
+  window.WATCH_MODE = !!window.SHARE || !new URLSearchParams(location.search).has("edit");
+  if (window.SHARE) document.documentElement.classList.add("shared");
   if (window.WATCH_MODE) document.documentElement.classList.add("watch");
 </script>
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -474,6 +498,16 @@
   html.watch.no-avatar #wTab { display: none; }
   html.watch #caption b, html.watch #caption i { font: inherit; }
   html.watch #caption i { color: transparent; text-shadow: none; }
+  /* 共有URLで開いたとき：自分の台本を選ぶ・作る・つなぐ入口は出さない */
+  html.shared #wPick, html.shared #wPick2, html.shared #wMake, html.shared #wStart > a[href="./?edit"],
+  html.shared #wSet [data-page="repo"], html.shared #wSet a[href="./?edit"], html.shared #wA2hs { display: none !important; }
+  #wAbout { display: none; max-width: min(560px, 88%); font-size: 12px; line-height: 1.7; opacity: .9; text-align: left; }
+  #wAbout.on { display: block; }
+  #wAbout a { color: #cfd0ff; font-size: 12px; overflow-wrap: anywhere; }
+  #wAbout ul { margin: 2px 0 6px; padding-left: 1.2em; }
+  html:not(.shared) #wMine { display: none; }
+  #shareUrl { width: 100%; box-sizing: border-box; font-size: 16px; }
+  #shareDlg p { margin: 8px 0; }
   /* 広告のあいだは、映像の上に何もかぶせない */
   html.watch.ad #wTap { pointer-events: none; }
   html.watch.ad #wTopic, html.watch.ad #wPlace, html.watch.ad #avatar.over, html.watch.ad #caption { visibility: hidden !important; }
@@ -691,6 +725,8 @@
       <button class="big" id="wBig" aria-label="再生"><svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg></button>
       <button class="sub" id="wPick2">台本を選ぶ</button>
       <button class="sub" id="wMake">台本の作り方</button>
+      <div id="wAbout"></div>
+      <a id="wMine" href="https://github.com/kyunkyunpeachdisco-maker/drive-wipe-data-template#readme" target="_blank" rel="noopener">ドライブ実況ワイプの説明を読む</a>
       <a href="./?edit">声・アバターの設定</a>
     </div>
     <button id="fsMenu">メニュー</button>
@@ -1214,6 +1250,21 @@
     <button id="pickFix" class="primary" style="display:none">接続を直す</button></div>
 </dialog>
 
+<!-- URLで共有 -->
+<dialog id="shareDlg">
+  <h2 style="margin-top:0;font-size:17px">URLで共有</h2>
+  <p id="shareWhat"></p>
+  <p class="hint">共有すると、URL を知っている人は誰でも台本を見られます。公開されるのは、セリフと声とキャラクター、動画と台本の題、取り上げた記事の題とリンクです。リポジトリのほかの中身は、公開されません。</p>
+  <input type="text" id="shareUrl" readonly aria-label="共有のURL">
+  <p class="hint" id="shareMsg"></p>
+  <div class="row" style="margin-top:12px">
+    <button id="shareOn" class="fixed primary">共有する</button>
+    <button id="shareCopy" class="fixed primary">URLをコピー</button>
+    <button id="shareOff" class="fixed">共有をやめる</button>
+    <button id="shareClose" class="fixed">閉じる</button>
+  </div>
+</dialog>
+
 <!-- プレイリストに保存 -->
 <dialog id="saveDlg">
   <h2 style="margin-top:0;font-size:17px">プレイリストに保存</h2>
@@ -1427,8 +1478,15 @@
 
 const LS = "drive-wipe-";
 const $ = id => document.getElementById(id);
-function lsGet(k, d = "") { try { return localStorage.getItem(LS + k) ?? d; } catch (e) { return d; } }
-function lsSet(k, v) { try { localStorage.setItem(LS + k, v); } catch (e) {} }
+// 共有URLで開いたときは、アバターの調整値（player-）を、見る人の端末に書き込まない・読まない
+function lsGet(k, d = "") {
+  if (window.SHARE && k.startsWith("player-")) return window.SHARE.settings[k] ?? d;
+  try { return localStorage.getItem(LS + k) ?? d; } catch (e) { return d; }
+}
+function lsSet(k, v) {
+  if (window.SHARE && k.startsWith("player-")) { window.SHARE.settings[k] = String(v); return; }
+  try { localStorage.setItem(LS + k, v); } catch (e) {}
+}
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 }
@@ -1508,8 +1566,45 @@ function loadScript(data, remember = true) {
   status("読み込みました。「再生を開始」を押してください。", "ok");
 }
 
+// 共有URLで開いたとき：公開された台本を読む。見る人の端末に残っている台本は書き換えない
+let shareAudio = null;   // 本文のハッシュ → 声のファイルの情報
+async function loadShared() {
+  const S = window.SHARE;
+  try {
+    const r = await fetch(`${S.base}scripts/${S.key}.json`, { cache: "no-cache" });
+    if (!r.ok) throw new Error(r.status === 404 ? "この URL では、何も公開されていません。" : `台本を読み込めませんでした（${r.status}）。`);
+    const d = await r.json();
+    if (!d || !Array.isArray(d.items) || !/^[\w-]{11}$/.test(d.videoId || "")) throw new Error("台本の形が違います。");
+    loadScript(d, false);
+  } catch (e) {
+    S.error = e.message || "台本を読み込めませんでした。";
+    window.__shareFailed?.();
+  }
+}
+async function loadSharedAudio(data) {
+  const S = window.SHARE, key = S.key;
+  let done;
+  const mine = pulling = new Promise(r => { done = r; });
+  shareAudio = null;
+  currentImportTake = "share:" + S.owner + "/" + S.repo + "/" + key;
+  try {
+    const r = await fetch(`${S.base}audio/${key}/index.json`, { cache: "no-cache" });
+    if (!r.ok) { if (script === data) window.__watchToast?.("この台本には、声がありません。字幕だけで流します。"); return; }
+    const j = await r.json();
+    const map = new Map();
+    for (const it of j.items || []) if (/^[0-9a-f]{6,64}$/.test(it.h) && /^[a-z0-9]{2,5}$/.test(it.ext || "")) map.set(it.h, it);
+    if (script === data) shareAudio = map;
+  } catch (e) {
+    if (script === data) window.__watchToast?.("声を読み込めませんでした。字幕だけで流します。");
+  } finally {
+    done();
+    if (pulling === mine) pulling = null;
+  }
+}
+
 // 前回の台本を復元する。動画もそのまま出る
 async function restoreScript() {
+  if (window.SHARE) return loadShared();
   try {
     const d = await idbGet("script");
     if (d) { loadScript(d, false); status(`前回の台本を復元しました（${d.meta?.title || d.videoId}）。`, "ok"); }
@@ -2371,6 +2466,7 @@ async function textHash(text) {
 let currentImportTake = "";
 function importTag() {
   if (!script) return "";
+  if (window.SHARE) return currentImportTake;
   const sel = lsGet("import-voice:" + scriptKey(script));
   if (sel === "__generate") return window.WATCH_MODE ? currentImportTake : "__generate";
   return currentImportTake || sel;   // 解決前は保存値で引く（初期の取り置き名は人のIDと同じ）
@@ -2383,8 +2479,19 @@ async function cacheGet(text) {
     if (tag === "__generate") return (await idbGet("a:" + voiceKey(text))) || null;
     // 取り込んだ音声を優先する。スマホに内蔵音声しかなくても、PCで作った声で鳴る
     if (tag) {
-      const im = await idbGet(`i:${tag}:` + await textHash(text));
+      const h = await textHash(text);
+      const im = await idbGet(`i:${tag}:` + h);
       if (im) return im;
+      // 公開された台本の声は、要るときに1つずつ取ってくる
+      const it = window.SHARE && shareAudio?.get(h);
+      if (it) {
+        const r = await fetch(`${window.SHARE.base}audio/${window.SHARE.key}/${it.h}.${it.ext}`);
+        if (!r.ok) return null;
+        const clip = makeClip(it.enc, new Uint8Array(await r.arrayBuffer()), it.rate, it.ext);
+        idbSet(`i:${tag}:` + h, clip).catch(() => {});
+        return clip;
+      }
+      if (window.SHARE) return null;
     }
     // 旧形式（声のフォルダ分けより前）の取り込みぶん
     const legacy = await idbGet("i:" + await textHash(text));
@@ -2724,6 +2831,7 @@ async function pullVoice(key, tag, meta, quiet) {
 }
 
 async function autoPullAudio(data) {
+  if (window.SHARE) return loadSharedAudio(data);
   if (!lsGet("data-repo") || !lsGet("github-pat")) return;
   const key = scriptKey(data);
   let done;
@@ -3289,6 +3397,7 @@ function toggleMenu(wrap, button, build) {
 function scriptMenu(x, extra = []) {
   return [
     ["プレイリストに保存", () => openSave(x)],
+    ["URLで共有", () => openShare(x)],
     ...extra,
     ...(isOnly(x) && window.__openMake ? [["この動画で台本を作り足す", () => makeFor(x)]] : []),
     ["名前を変更", async () => {
@@ -3674,6 +3783,105 @@ function listRow(l, key, rows) {
   };
   return wrap;
 }
+
+// URLで共有：share/list.txt に台本の名前を書くと、リポジトリの Actions（share）が公開の置き場に出す
+const SHARE_LIST = "share/list.txt";
+async function readText(path) {
+  const res = await fetch(`${GH}/repos/${repoReady()}/contents/${path}`, { headers: ghHeaders(), cache: "no-store" });
+  if (res.status === 404) return { text: "", sha: undefined };
+  if (!res.ok) throw new Error(await ghError(res));
+  const j = await res.json();
+  return { text: new TextDecoder().decode(Uint8Array.from(atob((j.content || "").replace(/\s/g, "")), c => c.charCodeAt(0))), sha: j.sha };
+}
+async function changeText(path, message, fn) {
+  for (let n = 0; ; n++) {
+    const { text, sha } = await readText(path);
+    const next = fn(text);
+    if (next === text) return next;
+    const res = await fetch(`${GH}/repos/${repoReady()}/contents/${path}`, {
+      method: "PUT", headers: { ...ghHeaders(), "content-type": "application/json" },
+      body: JSON.stringify({ message, content: b64encode(new TextEncoder().encode(next)), ...(sha ? { sha } : {}) })
+    });
+    if (res.ok) return next;
+    if ((res.status === 409 || res.status === 422) && n < 3) { await new Promise(r => setTimeout(r, 400 * (n + 1))); continue; }
+    throw new Error(await ghError(res));
+  }
+}
+const sharedKeys = text => text.split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith("#"));
+function shareInfo(key) {
+  const [owner, repo] = lsGet("data-repo").split("/");
+  return { base: `https://${owner.toLowerCase()}.github.io/${repo}/`, url: `${location.origin}${location.pathname}?v=${owner}/${repo}/${key}` };
+}
+let shareTarget = null, shareSeq = 0;
+async function openShare(x) {
+  shareTarget = x;
+  const seq = ++shareSeq, d = $("shareDlg");
+  $("shareWhat").textContent = isOnly(x) ? mainName(x) : `${mainName(x)}（${scriptTitle(x)}）`;
+  $("shareUrl").value = shareInfo(x.key).url;
+  $("shareUrl").hidden = $("shareOn").hidden = $("shareOff").hidden = $("shareCopy").hidden = true;
+  $("shareMsg").textContent = "確かめています…";
+  if (!d.open) d.showModal();
+  try {
+    const [list, flows] = await Promise.all([readText(SHARE_LIST), ghList(".github/workflows")]);
+    if (seq !== shareSeq) return;
+    if (!flows.some(f => f.name === "share.yml")) {
+      $("shareMsg").textContent = "リポジトリには、共有の仕組みがまだ入っていません。AI エージェントに「道具を更新して」と頼んでから、［URLで共有］をもう一度押してください。";
+      return;
+    }
+    showShare(sharedKeys(list.text).includes(x.key));
+    if (!$("shareOn").hidden) return;
+    watchShare(seq, true);
+  } catch (e) { if (seq === shareSeq) $("shareMsg").textContent = e.message; }
+}
+function showShare(on) {
+  $("shareOn").hidden = on;
+  $("shareUrl").hidden = $("shareOff").hidden = $("shareCopy").hidden = !on;
+  $("shareMsg").textContent = on ? "" : "まだ共有していません。";
+  $("shareCopy").textContent = "URLをコピー";
+}
+// 公開の置き場に出たか（消えたか）を、数秒おきに確かめる
+async function watchShare(seq, want) {
+  const { base } = shareInfo(shareTarget.key), key = shareTarget.key;
+  for (let n = 0; n < 30 && seq === shareSeq && $("shareDlg").open; n++) {
+    let has = null;
+    try {
+      const r = await fetch(base + "index.json?t=" + Date.now(), { cache: "no-store" });
+      has = r.ok ? ((await r.json()).items || []).some(i => i.key === key) : r.status === 404 ? false : null;
+    } catch (e) {}
+    if (seq !== shareSeq) return;
+    if (has === want) { $("shareMsg").textContent = want ? "公開されています。" : "公開をやめました。"; return; }
+    $("shareMsg").textContent = want ? "公開の準備をしています。1〜2分かかります…" : "公開をやめています。1〜2分かかります…";
+    await new Promise(r => setTimeout(r, 8000));
+  }
+  if (seq === shareSeq && $("shareDlg").open) $("shareMsg").textContent = want
+    ? "まだ公開されていません。リポジトリの［Settings］→［Pages］で、Source が［GitHub Actions］になっているか確かめてください。Source を直したあとは、［共有をやめる］を押してから、もう一度［共有する］を押してください。非公開のリポジトリで共有するには、GitHub の有料プランが要ります。"
+    : "まだ公開されたままです。少し待ってから、もう一度開いて確かめてください。";
+}
+async function setShare(on) {
+  const seq = ++shareSeq, key = shareTarget.key;
+  $("shareOn").disabled = $("shareOff").disabled = true;
+  try {
+    await changeText(SHARE_LIST, on ? `共有: ${key}` : `共有をやめる: ${key}`, text => {
+      const lines = text.split(/\r?\n/).filter(l => l.trim() !== key);
+      while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
+      if (!lines.length) lines.push("# URLで見せる台本の名前を、1行に1つ（アプリの［URLで共有］が書き換えます）");
+      if (on) lines.push(key);
+      return lines.join("\n") + "\n";
+    });
+    showShare(on);
+    watchShare(seq, on);
+  } catch (e) { $("shareMsg").textContent = e.message; }
+  $("shareOn").disabled = $("shareOff").disabled = false;
+}
+$("shareOn").onclick = () => setShare(true);
+$("shareOff").onclick = () => { if (confirm("台本の共有をやめます。URL を知っている人は、台本を見られなくなります。")) setShare(false); };
+$("shareClose").onclick = () => { shareSeq++; $("shareDlg").close(); };
+$("shareCopy").onclick = async () => {
+  let ok = false;
+  try { await navigator.clipboard.writeText($("shareUrl").value); ok = true; }
+  catch (e) { $("shareUrl").select(); try { ok = document.execCommand("copy"); } catch (e2) {} }
+  $("shareCopy").textContent = ok ? "コピーしました" : "コピーできませんでした";
+};
 
 // 保存先を選ぶ
 let saveTarget = null;
@@ -4644,7 +4852,10 @@ if (THREE && VRMLoaderPlugin) {
         q.onsuccess = () => res(q.result); q.onerror = () => res(null);
       });
     })();
-    if (saved) await window.loadVRM(saved);
+    if (window.SHARE) {
+      const r = await fetch(window.SHARE.base + "avatar/model.vrm");
+      if (r.ok) await window.loadVRM(await r.arrayBuffer());
+    } else if (saved) await window.loadVRM(saved);
   } catch (e) { /* 復元できなければ簡易アバターのまま */ }
 }
 </script>
@@ -4661,9 +4872,11 @@ const $ = id => document.getElementById(id);
 /* ---------- localStorage ---------- */
 let warnedStorage = false;
 function lsGet(k, d = "") {
+  if (window.SHARE && k.startsWith("player-")) return window.SHARE.settings[k] ?? d;
   try { return localStorage.getItem(LS + k) ?? d; } catch (e) { return d; }
 }
 function lsSet(k, v) {
+  if (window.SHARE && k.startsWith("player-")) { window.SHARE.settings[k] = String(v); return; }
   try { localStorage.setItem(LS + k, v); }
   catch (e) {
     if (!warnedStorage) { warnedStorage = true; alert("設定を保存できませんでした（プライベートモード等）。今回のセッションのみ有効です。"); }
@@ -6242,9 +6455,40 @@ $("btnCopy").onclick = async () => {
     const nLines = script.items.filter(it => it.line).length;
     $("wInfo").textContent = (script.title ? script.title + " ／ " : "") + `${fmtTime(total)} ／ 発話 ${nLines}件` + (topics.length ? ` ／ 記事 ${topics.length}本` : "");
     $("wBig").style.display = "";
+    showAbout();
     showStart(true);
     update();
   }
+
+  // 声のクレジットと、話している記事（公開された台本に入っている）
+  function showAbout() {
+    const box = $("wAbout");
+    box.replaceChildren();
+    const v = script.voice, src = (script.sources || []).filter(a => /^https?:\/\//.test(a?.url || ""));
+    if (v?.engine === "voicevox" && v.name) {
+      const p = document.createElement("div");
+      p.textContent = "声：VOICEVOX:" + String(v.name).replace(/[（(].*$/, "");
+      box.appendChild(p);
+    }
+    if (src.length) {
+      const p = document.createElement("div"), ul = document.createElement("ul");
+      p.textContent = "取り上げた記事";
+      for (const a of src) {
+        const li = document.createElement("li"), l = document.createElement("a");
+        l.href = a.url; l.target = "_blank"; l.rel = "noopener noreferrer";
+        l.textContent = a.title || a.url;
+        li.appendChild(l); ul.appendChild(li);
+      }
+      box.append(p, ul);
+    }
+    box.classList.toggle("on", box.childNodes.length > 0);
+  }
+  window.__shareFailed = () => {
+    $("wTitle").textContent = "ドライブ実況ワイプ";
+    $("wInfo").textContent = window.SHARE.error;
+    $("wBig").style.display = "none";
+    showStart(true);
+  };
 
   // 札は映像の上に置く（左右に黒い帯があっても、帯ではなく映像の角に出す）
   $("overlay").appendChild($("wTopic"));
@@ -6899,6 +7143,7 @@ $("btnCopy").onclick = async () => {
     if (reopen) openPicker();
     if (script) { if (!started) build(); return; }
     $("wTitle").textContent = "ドライブ実況ワイプ";
+    if (window.SHARE) { $("wInfo").textContent = window.SHARE.error || "読み込んでいます…"; $("wBig").style.display = "none"; showStart(true); return; }
     $("wInfo").textContent = "見る台本を選んでください。";
     $("wBig").style.display = "none";
     showStart(true);

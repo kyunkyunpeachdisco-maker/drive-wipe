@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>
   // ふつうに開くと、見るだけの画面になる。台本づくりや細かい設定の画面は ?edit を付けて開く
-  window.APP_VERSION = 'v0.21.4'.startsWith('v') || /^master-/.test('v0.21.4') ? 'v0.21.4' : '開発版';
+  window.APP_VERSION = 'v0.22.0'.startsWith('v') || /^master-/.test('v0.22.0') ? 'v0.22.0' : '開発版';
   // ?v=持ち主/リポジトリ/台本の名前 で開くと、その人が公開した台本を、接続なしで再生する
   (() => {
     const q = new URLSearchParams(location.search);
@@ -513,6 +513,7 @@
   #wSet input.sw:checked::after { transform: translateX(18px); }
   #wSet .seg { display: flex; gap: 6px; padding: 4px 20px 8px; }
   #wSet .seg button { flex: 1; border: 0; border-radius: 10px; padding: 9px 0; background: #333; color: #ddd; font-size: 14px; }
+  #wSet .seg.wSecs button { min-height: 44px; padding: 0; }
   #wSet .seg button[aria-checked="true"] { background: #fff; color: #111; font-weight: 600; }
   html.watch.no-avbg #avatar { background: none !important; box-shadow: none; }
   html.watch.no-avatar #wTab { display: none; }
@@ -613,6 +614,11 @@
     html.watch.list-open:not(.booth) #overlay { position: absolute; inset: 0 0 auto 0; width: 100%; height: calc(100vw * 9 / 16); aspect-ratio: auto; }
     html.watch.list-open:not(.booth) #wTap { bottom: auto; height: calc(100vw * 9 / 16); }
     html.watch.list-open:not(.booth) #wBar { opacity: 1; pointer-events: auto; background: none; padding-top: 6px; }
+    html.watch.list-open #wBtns { flex-wrap: wrap; }
+    html.watch.list-open #wBtns::before { content: ""; order: -1; flex: 0 0 100%; }
+    html.watch.list-open #wTime { order: -3; margin: 0 6px 0 2px; }
+    html.watch.list-open #wNow { order: -2; }
+    html.watch.list-open #wList { margin-left: auto; }
     html.watch.list-open #tlWrap { flex: 1 1 0; min-height: 0; }
     html.watch #timeline { position: absolute; max-height: none; margin: 0; }
   }
@@ -659,6 +665,12 @@
   html.watch.booth #wBar { opacity: 1; pointer-events: auto; background: none; padding-top: 6px; }
   html.watch.booth:not(.ui-on) #stage { cursor: auto; }
   html.watch.booth #wTap { bottom: auto; height: var(--b-vh); }
+  /* 縦持ちの帯：時間と今の話題を1行目、押すものを2行目に */
+  html.watch.booth #wBtns { flex-wrap: wrap; }
+  html.watch.booth #wBtns::before { content: ""; order: -1; flex: 0 0 100%; }
+  html.watch.booth #wTime { order: -3; margin: 0 6px 0 2px; }
+  html.watch.booth #wNow { order: -2; }
+  html.watch.booth #wList { margin-left: auto; }
   html.watch #caption span {
     background: rgba(0,0,0,.66); padding: .12em .5em; border-radius: 4px;
     -webkit-box-decoration-break: clone; box-decoration-break: clone;
@@ -697,6 +709,7 @@
   }
   #wBtns button:hover { background: rgba(255,255,255,.14); }
   #wBtns svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  #wBtns svg.secs { width: 28px; height: 28px; fill: currentColor; stroke: none; }
   #wTime { font-size: 13px; font-variant-numeric: tabular-nums; margin: 0 6px; white-space: nowrap; }
   #wNow { flex: 1 1 auto; min-width: 0; font-size: 13px; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* 再生前と一時停止中の入口 */
@@ -727,6 +740,56 @@
     display: inline-flex; align-items: center; justify-content: center;
   }
   #wStart .big svg { width: 34px; height: 34px; fill: currentColor; margin-left: 4px; }
+  /* 動画の上の操作。動画を押すと出て、3秒で消える */
+  .wVid { position: absolute; inset: 0; z-index: 4; color: #fff; pointer-events: none; }
+  html.watch.booth .wVid { bottom: auto; height: var(--b-vh); }
+  @media (max-width: 680px) and (orientation: portrait) { html.watch.list-open:not(.booth) .wVid { bottom: auto; height: calc(100vw * 9 / 16); } }
+  #wTap, .wVid button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  @media (pointer: coarse) {
+    #wTap { transition: background .2s; }
+    html.watch.ui-on:not(.pre):not(.brk):not(.skip):not(.ended) #wTap { background: rgba(0,0,0,.3); }
+  }
+  #wCtl { opacity: 0; visibility: hidden; transition: opacity .2s, visibility .2s; }
+  html.watch.ui-on:not(.pre):not(.brk):not(.skip):not(.ended) #wCtl.on { opacity: 1; visibility: visible; }
+  html.watch.ui-on:not(.pre):not(.brk):not(.skip):not(.ended) #wPlace, html.watch.ended .wCard { opacity: 0; }
+  #wToast { pointer-events: none; }
+  #wCtl .mid { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); display: flex; align-items: center; justify-content: center; gap: clamp(4px, 3vw, 28px); }
+  html.watch.ui-on:not(.pre):not(.brk):not(.skip):not(.ended) #wCtl.on button { pointer-events: auto; }
+  #wCtl button { border: 0; padding: 0; color: #fff; display: inline-flex; align-items: center; justify-content: center; }
+  #wCtl .mid button { width: 52px; height: 52px; border-radius: 50%; background: rgba(0,0,0,.45); }
+  #wCtl .mid #cPlay { width: 64px; height: 64px; }
+  #wCtl .mid button:active { background: rgba(255,255,255,.25); }
+  #wCtl .mid button[aria-disabled="true"] { opacity: .35; }
+  #wCtl .mid svg { width: 32px; height: 32px; fill: currentColor; pointer-events: none; }
+  #wCtl .mid #cPlay svg { width: 42px; height: 42px; }
+  .secs text { font: 700 8px system-ui, sans-serif; text-anchor: middle; fill: currentColor; stroke: none; }
+  #wAuto { position: absolute; top: 4px; right: 6px; min-height: 44px; padding: 0 8px !important; gap: 8px; background: none; font-size: 13px; text-shadow: 0 0 4px #000; }
+  #wAuto i { position: relative; width: 36px; height: 20px; border-radius: 10px; background: rgba(110,110,110,.9); transition: background .2s; }
+  #wAuto i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .2s; }
+  #wAuto[aria-checked="true"] i { background: #5d5cde; }
+  #wAuto[aria-checked="true"] i::after { transform: translateX(16px); }
+  html.shared #cPrev, html.shared #cNext, html.shared #wAuto, html.shared #setAutoRow { display: none !important; }
+  /* 2回たたいて、とばしたときの表示 */
+  #wSkip { overflow: hidden; opacity: 0; transition: opacity .25s; }
+  #wSkip.on { opacity: 1; transition: none; }
+  #wSkip span { position: absolute; top: 0; bottom: 0; width: 42%; display: flex; align-items: center; justify-content: center; gap: 12px; font-size: 19px; font-weight: 700; background: rgba(255,255,255,.16); text-shadow: 0 0 6px #000; }
+  #wSkip.l span { left: 0; border-radius: 0 50% 50% 0 / 0 100% 100% 0; }
+  #wSkip.r span { right: 0; border-radius: 50% 0 0 50% / 100% 0 0 100%; }
+  #wSkip b { font-size: 30px; font-weight: 400; line-height: 1; margin-top: -4px; }
+  /* 終わったとき：次の動画の予告 */
+  html.watch #wEnd { display: none; }
+  html.watch.ended:not(.brk) #wEnd { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 12px 16px; pointer-events: auto; background: rgba(0,0,0,.82); }
+  html.watch:not(.booth):not(.list-open) #wEnd { padding-bottom: var(--bar-h, 96px); }
+  #wEnd .nx { display: flex; gap: 12px; align-items: center; width: 100%; max-width: 440px; }
+  #wEnd .nx img { flex: 0 0 42%; width: 42%; max-width: 180px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; background: #333; }
+  #wEnd .nx > span { flex: 1; min-width: 0; }
+  #wEnd .nx .lb { display: block; font-size: 13px; color: #ccc; }
+  #wEnd .nx b, #wEnd .nx i { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; line-height: 1.4; font-size: 15px; }
+  #wEnd .nx i { -webkit-line-clamp: 1; font-style: normal; font-size: 13px; color: #ccc; }
+  #wEnd .bt { display: flex; gap: 10px; }
+  #wEnd .bt button { min-height: 44px; padding: 0 20px; border: 0; border-radius: 22px; background: rgba(255,255,255,.2); color: #fff; font-size: 15px; font-weight: 600; }
+  #wEnd .bt .main { background: #fff; color: #111; }
+  #wEnd [hidden] { display: none !important; }
   #wToast {
     position: absolute; left: 50%; top: 14px; transform: translateX(-50%); z-index: 6; display: none;
     background: rgba(0,0,0,.8); color: #fff; font-size: 13px; padding: 6px 12px; border-radius: 8px; max-width: 70%;
@@ -814,6 +877,21 @@
     <div id="wTopic" class="w wCard"><span class="lb"></span><span class="tt"></span></div>
     <div id="wPlace" class="w wCard"></div>
     <div id="wToast" class="w"></div>
+    <div id="wCtl" class="w wVid">
+      <button type="button" id="wAuto" role="switch"><span>自動再生</span><i></i></button>
+      <div class="mid">
+        <button type="button" id="cPrev" title="前へ" aria-label="前へ"><svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg></button>
+        <button type="button" id="cBack"><svg class="secs" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/><text x="12" y="16"></text></svg></button>
+        <button type="button" id="cPlay" title="再生・一時停止" aria-label="再生・一時停止"></button>
+        <button type="button" id="cFwd"><svg class="secs" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z"/><text x="12" y="16"></text></svg></button>
+        <button type="button" id="cNext" title="次へ" aria-label="次へ"><svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6zM16 6v12h2V6z"/></svg></button>
+      </div>
+    </div>
+    <div id="wSkip" class="w wVid"><span></span></div>
+    <div id="wEnd" class="w wVid">
+      <div class="nx"><img alt=""><span><span class="lb"></span><b></b><i></i></span></div>
+      <div class="bt"><button type="button" id="eCancel">キャンセル</button><button type="button" id="eAgain">もう一度見る</button><button type="button" id="eNext" class="main"></button></div>
+    </div>
     <div id="wBar" class="w">
       <div id="wProg"><div id="wSegs"></div><div id="wPlayed"></div><div id="wHead"></div><div id="wTip"></div></div>
       <div id="wPlBar"><button id="wPrev" title="前の台本" aria-label="前の台本"><svg viewBox="0 0 24 24"><path d="M6 5v14M19 5L9 12l10 7z"/></svg></button>
@@ -821,7 +899,7 @@
         <button id="wNext" title="次の台本" aria-label="次の台本"><svg viewBox="0 0 24 24"><path d="M18 5v14M5 5l10 7-10 7z"/></svg></button></div>
       <div id="wBtns">
         <button id="wPlay" title="再生・一時停止" aria-label="再生・一時停止"></button>
-        <button id="wBack" title="10秒戻る" aria-label="10秒戻る"><svg viewBox="0 0 24 24"><path d="M4 5v5h5"/><path d="M4.6 14a8 8 0 1 0 1.7-7.6L4 10"/></svg></button>
+        <button id="wBack"><svg class="secs" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/><text x="12" y="16"></text></svg></button>
         <span id="wTime">0:00 / 0:00</span>
         <span id="wNow"></span>
         <button id="wList" title="セリフの一覧" aria-label="セリフの一覧"><svg viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg></button>
@@ -1584,6 +1662,9 @@
   <div class="page on" data-name="main">
     <button type="button" class="sh" data-page="quality"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M19 7h1M4 17h1M11 17h9"/><circle cx="16" cy="7" r="2.4"/><circle cx="8" cy="17" r="2.4"/></svg><span class="l">画質</span><span class="v" id="svQ"></span></button>
     <button type="button" class="sh" data-page="speed"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke-dasharray="3.2 2.6"/><path d="M10 8.5v7l5.5-3.5z" fill="currentColor"/></svg><span class="l">再生速度</span><span class="v" id="svS"></span></button>
+    <button type="button" class="sh" data-page="skip"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5v5h5"/><path d="M4.6 14a8 8 0 1 0 1.7-7.6L4 10"/></svg><span class="l">とばす秒数</span><span class="v" id="svK"></span></button>
+    <label class="sh" id="setAutoRow"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="6"/><path d="M10 9.5v5l4-2.5z" fill="currentColor"/></svg><span class="l">自動再生</span><input type="checkbox" class="sw" id="setAuto"></label>
+    <label class="sh"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 2.5l3.5 3L17 8.5"/><path d="M3.5 11V9.5a4 4 0 0 1 4-4h13M7 21.5l-3.5-3L7 15.5"/><path d="M20.5 13v1.5a4 4 0 0 1-4 4h-13"/></svg><span class="l">ループ</span><input type="checkbox" class="sw" id="setLoop"></label>
     <button type="button" class="sh" data-page="vol"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5v5h3.5L12 19V5L7.5 9.5z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg><span class="l">声の大きさ</span><span class="v" id="svV"></span></button>
     <button type="button" class="sh" data-page="caption"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 11h4M14 11h3M7 15h7M17 15h0"/></svg><span class="l">字幕</span><span class="v" id="svC"></span></button>
     <button type="button" class="sh" data-page="avatar"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20c.8-4 3.8-6 7.5-6s6.7 2 7.5 6"/></svg><span class="l">キャラクター</span><span class="v" id="svA"></span></button>
@@ -1599,6 +1680,14 @@
   <div class="page" data-name="speed">
     <button type="button" class="sh bk" data-page="main"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span class="l">再生速度</span></button>
     <div id="wSpeed" role="radiogroup"></div>
+  </div>
+  <div class="page" data-name="skip">
+    <button type="button" class="sh bk" data-page="main"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span class="l">とばす秒数</span></button>
+    <p class="note" style="margin-bottom:0">戻る</p>
+    <div class="seg wSecs" data-k="skip-back" role="radiogroup" aria-label="戻る秒数"></div>
+    <p class="note" style="margin-bottom:0">進む</p>
+    <div class="seg wSecs" data-k="skip-fwd" role="radiogroup" aria-label="進む秒数"></div>
+    <p class="note">動画は、左側を2回たたくと戻り、右側を2回たたくと進みます。</p>
   </div>
   <div class="page" data-name="vol">
     <button type="button" class="sh bk" data-page="main"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span class="l">声の大きさ</span></button>
@@ -2148,14 +2237,20 @@ function voiceLevel() {
   const t = talkBusy ? VOL_TALK : VOL_VOICE, v = lsGet(talkBusy ? "vol-talk" : "vol-voice", "mid");
   return v in t ? t[v] : t.mid;
 }
-let voiceChain = null;
+let voiceChain = null, voiceMaster = null, voiceMute = false;
+function voiceEnd(ctx) {
+  if (!window.WATCH_MODE) return ctx.destination;
+  if (!voiceMaster || voiceMaster.context !== ctx) { voiceMaster = ctx.createGain(); voiceMaster.connect(ctx.destination); }
+  voiceMaster.gain.value = voiceMute ? 0 : 1;
+  return voiceMaster;
+}
 function voiceOut(ctx) {
   const lv = voiceLevel();
-  if (!lv) return ctx.destination;
+  if (!lv) return voiceEnd(ctx);
   if (!voiceChain || voiceChain.ctx !== ctx) {
     const pre = ctx.createGain(), comp = ctx.createDynamicsCompressor(), post = ctx.createGain();
     comp.threshold.value = -12; comp.knee.value = 6; comp.ratio.value = 12; comp.attack.value = 0.003; comp.release.value = 0.15;
-    pre.connect(comp); comp.connect(post); post.connect(ctx.destination);
+    pre.connect(comp); comp.connect(post); post.connect(voiceEnd(ctx));
     voiceChain = { ctx, pre, post };
   }
   voiceChain.pre.gain.value = lv[0];
@@ -4156,6 +4251,7 @@ function renderPicker() {
   list.scrollTop = keep;
 }
 
+let pickOrder = [];   // 一覧に出ている動画の順。[動画ID, [台本]]
 function renderScripts() {
   const norm = s => s.normalize("NFKC").toLowerCase();
   const words = norm($("pickQ").value).split(/\s+/).filter(Boolean);
@@ -4177,6 +4273,7 @@ function renderScripts() {
   // 動画ごとにまとめる。並びは、当てはまった台本のうち先頭のもので決まる
   const groups = new Map();
   for (const x of list) groups.set(x.videoId, [...(groups.get(x.videoId) || []), x]);
+  pickOrder = [...groups].map(([videoId, xs]) => [videoId, xs.map(x => x.key)]);
   for (const [videoId, xs] of groups)
     $("pickList").appendChild(isOnly(xs[0]) ? scriptRow(xs[0]) : videoRow(videoId, xs, narrowed));
   if (!list.length) $("pickHint").textContent = "当てはまる台本がありません。";
@@ -4646,10 +4743,21 @@ function plMove(d) {
   }
   plGo(i);
 }
-// 1本終わったとき
-function plEnded() {
-  if (!pl) return;
+// 次の動画：一覧と同じ並びで、いまの動画の次。台本が何本もあれば、見終わっていない台本から選ぶ
+function nextVideo() {
+  if (!script) return null;
+  const vids = pickOrder.map(([v, keys]) => [v, keys.map(itemOf).filter(Boolean)]).filter(([, xs]) => xs.length);
+  const i = vids.findIndex(([v]) => v === script.videoId);
+  const hit = [...vids.slice(i + 1), ...vids.slice(0, Math.max(i, 0))].find(([v]) => v !== script.videoId);
+  if (!hit) return null;
+  const pos = watchPos(), left = hit[1].filter(x => { const w = pos[x.key]; return !w || w.t < w.d - 20; });
+  return (left.length ? left : hit[1]).reduce((a, b) => (b.info.savedAt || "") > (a.info.savedAt || "") ? b : a);
+}
+// 1本終わったとき。part は、動画の途中で台本が終わったとき
+function plEnded(part = false) {
+  if (!pl) { window.__ended?.(part); return; }
   if (pl.loop === "one") { plGo(pl.i); return; }
+  if (window.__ended && lsGet("autoplay", "1") === "0" && plNextKey()) { window.__ended(part); return; }
   if (pl.i + 1 < pl.order.length || pl.loop === "all") plMove(1);
   else if (!pl.done) { pl.done = true; window.__watchToast?.("プレイリストの最後まで再生しました。"); }
 }
@@ -7199,6 +7307,9 @@ $("btnCopy").onclick = async () => {
   const root = document.documentElement;
   const ICON_PLAY = '<svg viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z" fill="currentColor"/></svg>';
   const ICON_PAUSE = '<svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg>';
+  const BIG_PLAY = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+  const BIG_PAUSE = '<svg viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>';
+  const BIG_AGAIN = `<svg viewBox="0 0 24 24"><path d="${$("cBack").querySelector("path").getAttribute("d")}"/></svg>`;
   let topics = [];      // {start, end, title} 記事のコーナー
   let places = [];      // {at, place}
   let total = 0;
@@ -7255,6 +7366,7 @@ $("btnCopy").onclick = async () => {
     row.classList.add("on");
     $("wBig").style.display = "";
     showAbout();
+    hideEnd();
     showStart(true);
     update();
   }
@@ -7380,10 +7492,18 @@ $("btnCopy").onclick = async () => {
 
   // 台本が読み込まれるたびに作り直す
   const _load = loadScript;
-  loadScript = function (data, remember) { talkCancel(); started = false; _load(data, remember); build(); loadTalks(data); };
+  loadScript = function (data, remember) {
+    const old = script && started ? { key: scriptKey(script), videoId: script.videoId } : null;
+    talkCancel(); started = false; _load(data, remember);
+    if (backTo && backTo === scriptKey(data)) seenKeys.pop();
+    else if (old && old.videoId !== data.videoId) seenKeys.push(old.key);
+    backTo = "";
+    build(); loadTalks(data);
+  };
 
   function showStart(on) { $("wStart").classList.toggle("on", on); root.classList.toggle("pre", on); }
-  function playing() { try { return player.getPlayerState() === 1; } catch (e) { return false; } }
+  function ytState() { try { return player.getPlayerState(); } catch (e) { return null; } }
+  function playing() { return ytState() === 1; }
 
   function togglePlay() {
     if (!script) { if (!window.SHARE) openPicker(); return; }
@@ -7396,6 +7516,7 @@ $("btnCopy").onclick = async () => {
       poke();
       return;
     }
+    if (ytState() === 0) { replay(); return; }
     try { playing() ? player.pauseVideo() : player.playVideo(); } catch (e) {}
     poke();
   }
@@ -7404,8 +7525,17 @@ $("btnCopy").onclick = async () => {
   let hideTimer = 0;
   function poke() {
     root.classList.add("ui-on");
+    syncCtl();
+    hideSoon();
+  }
+  function hideSoon() {
     clearTimeout(hideTimer);
-    hideTimer = setTimeout(() => { if (playing()) root.classList.remove("ui-on"); }, 3000);
+    hideTimer = setTimeout(() => {
+      hideTimer = 0;
+      const st = ytState();
+      if (st === 1) root.classList.remove("ui-on");
+      else if (st === 3 && started) hideSoon();   // 読み込みが済んだら消す
+    }, 3000);
   }
 
   // 端末を回したときなど、枠の大きさが変わったら配置し直す。通知に頼ると取りこぼすことがあるので、自分で見張る
@@ -7505,9 +7635,181 @@ $("btnCopy").onclick = async () => {
     if (started && pl && t - pl.at < 180) { pc.textContent = pl.place; pc.classList.add("on"); }
     else pc.classList.remove("on");
     $("wNow").textContent = ti >= 0 ? (topics[ti].title || "") : (pl && t - pl.at < 180 ? pl.place : "");
-    if (started && !playing() && !$("wStart").classList.contains("on")) root.classList.add("ui-on");
+    const st = ytState(), again = started && st === 0, icon = playing() ? BIG_PAUSE : again ? BIG_AGAIN : BIG_PLAY;
+    if (ctlIcon !== icon) { ctlIcon = icon; $("cPlay").innerHTML = icon; }
+    $("wCtl").classList.toggle("on", started);
+    // 動画が止まっているあいだは、操作を出したままにする（読み込みや広告と、小話で待たせているあいだは出さない）
+    if (started && (st === 2 || st === 0 || st === 5) && !$("wStart").classList.contains("on") && !(talkBusy && talkHeldAt)) {
+      if (!root.classList.contains("ui-on")) syncCtl();
+      root.classList.add("ui-on");
+    }
+    if (playing() && root.classList.contains("ui-on") && !hideTimer) hideSoon();
+    if (ending) { if (!playing()) ending.stopped = true; else if (ending.stopped) hideEnd(); }
   }
   setInterval(update, 250);
+
+  // ---- 動画の上の操作（YouTube にならう） ----
+  let ctlIcon = "", skipRun = null, skipTimer = 0, ctlAt = 0;
+  var seenKeys = [], backTo = "";   // この起動のあいだに見た動画の台本
+  var ending = null, endDone = -1;
+  const SECS = [5, 10, 15, 20, 30, 60];
+  const secsOf = d => { const n = +lsGet(d < 0 ? "skip-back" : "skip-fwd", "10"); return SECS.includes(n) ? n : 10; };
+  const autoOn = () => lsGet("autoplay", "1") !== "0";
+  const loopOn = () => pl ? pl.loop === "one" : lsGet("loop", "0") === "1";
+  function syncSecs() {
+    for (const [id, d] of [["wBack", -1], ["cBack", -1], ["cFwd", 1]]) {
+      const n = secsOf(d), name = `${n}秒${d < 0 ? "戻る" : "進む"}`;
+      $(id).querySelector("text").textContent = n;
+      $(id).title = name; $(id).setAttribute("aria-label", name);
+    }
+  }
+  function syncCtl(now) {
+    if (!now && performance.now() - ctlAt < 400) return;
+    ctlAt = performance.now();
+    $("wAuto").setAttribute("aria-checked", autoOn());
+    $("cPrev").setAttribute("aria-disabled", !canPrev());   // disabled にすると、2回たたいた2回目が届かない
+    $("cNext").setAttribute("aria-disabled", !nextItem());
+  }
+  function nextItem() {
+    if (window.SHARE) return null;
+    return pl ? itemOf(plNextKey() || (pl.loop === "one" ? pl.order[pl.i + 1] : "")) || null : nextVideo();
+  }
+  const prevKey = () => [...seenKeys].reverse().find(itemOf) || "";
+  const canPrev = () => !window.SHARE && (pl ? pl.loop === "all" || pl.i > 0 : !!prevKey());
+  async function playKey(key) {
+    const my = ++plSeq;
+    showToast("読み込んでいます…", 20000);
+    try { if (await playScript(key, my) && $("wToast").textContent === "読み込んでいます…") $("wToast").classList.remove("on"); }
+    catch (e) { if (my === plSeq) { backTo = ""; showToast(`台本を読み込めませんでした。${e.message}`); if (ending) { stopCount(); drawEnd(); } } }
+  }
+  function goNext() {
+    const x = nextItem();
+    if (!x) return;
+    try { primeAudio(); } catch (e) {}
+    pl ? plMove(1) : playKey(x.key);
+  }
+  function goPrev() {
+    if (!canPrev()) return;
+    try { primeAudio(); } catch (e) {}
+    if (pl) { plMove(-1); return; }
+    const key = prevKey();
+    while (seenKeys[seenKeys.length - 1] !== key) seenKeys.pop();
+    backTo = key;
+    playKey(key);
+  }
+  // 再生位置をとばす。続けて押したら、足していく
+  function skip(d, show) {
+    if (!script || !started) return;
+    if (talkBusy && talkHeldAt) { togglePlay(); return; }
+    talkCancel();
+    const now = performance.now(), same = skipRun && now - skipRun.at < 900 && Math.sign(skipRun.sum) === Math.sign(d);
+    let t = 0, dur = 0;
+    try { t = player.getCurrentTime() || 0; dur = player.getDuration() || 0; } catch (e) {}
+    const want = script.meta?.duration || 0;
+    const max = dur && (!want || Math.abs(dur - want) <= Math.max(5, want * 0.02)) ? dur : total;
+    const to = Math.max(0, Math.min(max || Infinity, (same ? skipRun.to : t) + d));
+    skipRun = { to, sum: (same ? skipRun.sum : 0) + d, at: now };
+    try { player.seekTo(to, true); if (ytState() === 0) player.playVideo(); } catch (e) {}
+    if (show) flash(skipRun.sum, show === "tap"); else poke();
+    if (show === "key") poke();
+  }
+  function flash(sum, hide) {
+    const box = $("wSkip");
+    box.classList.toggle("l", sum < 0); box.classList.toggle("r", sum > 0);
+    box.firstElementChild.innerHTML = sum < 0 ? `<b>‹</b>−${-sum}` : `+${sum}<b>›</b>`;
+    box.classList.add("on");
+    if (hide) { root.classList.add("skip"); if (playing() || ytState() === 3) root.classList.remove("ui-on"); }
+    clearTimeout(skipTimer);
+    skipTimer = setTimeout(() => { box.classList.remove("on"); root.classList.remove("skip"); }, 800);
+  }
+  $("cBack").onclick = () => skip(-secsOf(-1));
+  $("cFwd").onclick = () => skip(secsOf(1));
+  $("cPlay").onclick = togglePlay;
+  $("cPrev").onclick = () => { goPrev(); poke(); };
+  $("cNext").onclick = () => { goNext(); poke(); };
+  function setAuto(on) {
+    lsSet("autoplay", on ? "1" : "0");
+    syncCtl(true);
+    $("setAuto").checked = on;
+    if (!on && ending) { stopCount(); drawEnd(); }
+  }
+  function setLoop(on) {
+    if (pl) { pl.loop = on ? "one" : "off"; plRender(); } else lsSet("loop", on ? "1" : "0");
+  }
+  $("wAuto").onclick = () => { setAuto(!autoOn()); poke(); };
+  $("setAuto").onchange = () => setAuto($("setAuto").checked);
+  $("setLoop").onchange = () => setLoop($("setLoop").checked);
+  for (const g of document.querySelectorAll("#wSet .wSecs")) for (const n of SECS) {
+    const b = el(`<button type="button" role="radio" data-v="${n}">${n}秒</button>`);
+    b.onclick = () => { lsSet(g.dataset.k, String(n)); syncSecs(); refreshSet(); };
+    g.appendChild(b);
+  }
+  syncSecs();
+
+  // 先頭から見直す
+  function replay() {
+    if (!script) return;
+    hideEnd();
+    talkCancel();
+    try { primeAudio(); } catch (e) {}
+    fired = new Set(); dropQueue(); lastT = -1; endDone = -1;
+    try { player.seekTo(script.start || 0, true); player.playVideo(); } catch (e) {}
+    poke();
+  }
+  // 広告が終わった合図と取り違えない。動画の長さが台本のものと合い、終わりの近くにいるときだけ
+  function reallyEnded() {
+    let t = 0, d = 0;
+    try { t = player.getCurrentTime() || 0; d = player.getDuration() || 0; } catch (e) { return false; }
+    const want = script.meta?.duration || 0;
+    if (d && want && Math.abs(d - want) > Math.max(5, want * 0.02)) return false;
+    return t >= (d || total) - 10;
+  }
+  window.__ended = part => {
+    if (!script || !started) return;
+    if (part ? endDone === cueBase : !reallyEnded()) return;
+    if (part) endDone = cueBase;   // 続きを見ると決めた人に、何度も出さない
+    if (!pl && loopOn()) { replay(); return; }
+    if (part && window.SHARE) return;
+    if (part) try { player.pauseVideo(); } catch (e) {}
+    ending = { next: nextItem(), left: 0, timer: 0, stopped: false };
+    if (!pl && autoOn() && ending.next) {
+      ending.left = 8;
+      ending.timer = setInterval(() => {
+        if (!ending || root.classList.contains("brk") || document.querySelector("dialog[open]")) return;
+        if (--ending.left > 0) { drawEnd(); return; }
+        stopCount();
+        drawEnd();
+        goNext();
+      }, 1000);
+    }
+    root.classList.add("ended");
+    drawEnd();
+  };
+  function stopCount() { if (ending) { clearInterval(ending.timer); ending.timer = ending.left = 0; } }
+  function hideEnd() {
+    stopCount();
+    ending = null;
+    root.classList.remove("ended");
+  }
+  function drawEnd() {
+    const x = ending.next, counting = ending.left > 0, box = $("wEnd"), q = c => box.querySelector(c);
+    q(".nx").hidden = !x;
+    if (x && box.dataset.key !== x.key) {
+      box.dataset.key = x.key;
+      q("img").style.visibility = "";
+      setThumb(q("img"), x.videoId);
+      q("b").textContent = mainName(x);
+      q("i").textContent = isOnly(x) ? "" : scriptTitle(x);
+    }
+    q(".lb").textContent = counting ? `次の動画まで ${ending.left}秒` : "次の動画";
+    $("eCancel").hidden = !counting;
+    $("eAgain").hidden = counting;
+    $("eNext").hidden = !x;
+    $("eNext").textContent = counting ? "今すぐ再生" : "次へ";
+  }
+  $("eCancel").onclick = () => { stopCount(); drawEnd(); };
+  $("eAgain").onclick = replay;
+  $("eNext").onclick = () => { const was = ending?.left; stopCount(); goNext(); if (was) drawEnd(); };
 
   // 字幕は1行ずつ背景を敷くので、文字を span で包む
   new MutationObserver(() => {
@@ -7790,7 +8092,7 @@ $("btnCopy").onclick = async () => {
 
   $("wPlay").onclick = togglePlay;
   $("wBig").onclick = togglePlay;
-  $("wBack").onclick = () => { if (talkBusy && talkHeldAt) { togglePlay(); return; } talkCancel(); try { player.seekTo(Math.max(0, player.getCurrentTime() - 10), true); } catch (e) {} poke(); };
+  $("wBack").onclick = () => skip(-secsOf(-1));
   // セリフの一覧とプレイリストは、同じ場所に片方だけ出す
   const listOpen = plain => root.classList.contains("list-open") && root.classList.contains("pl-open") !== plain;
   $("wList").onclick = () => { const on = !listOpen(true); root.classList.remove("pl-open"); root.classList.toggle("list-open", on); poke(); };
@@ -7850,14 +8152,15 @@ $("btnCopy").onclick = async () => {
   // 次の台本の声を、終わる2分前から取り込んでおく。記録が動画の途中までなら、そこで次へ進む
   let endWait = 0;
   setInterval(() => {
-    if (!pl || !script || !started || !playing() || seekWant) return;
+    if (!script || !started || !playing() || seekWant) return;
     let t = 0, dur = 0;
     try { t = contentTime(); dur = player.getDuration() || 0; } catch (e) { return; }
     if (t === null) return;
-    if (scriptKey(script) !== pl.order[pl.i]) return;
+    if (pl && scriptKey(script) !== pl.order[pl.i]) return;
     const end = script.covered || total;
-    if (end - t < 120) prefetchVoice(plNextKey());
-    if (end && dur - end > 20 && t > end + 3 && Date.now() > endWait) { endWait = Date.now() + 15000; plEnded(); }
+    if (t < end - 5) endDone = -1;
+    if (end - t < 120) prefetchVoice(pl ? plNextKey() : !window.SHARE && autoOn() && !loopOn() ? nextVideo()?.key : "");
+    if (end && dur - end > 20 && t > end + 3 && Date.now() > endWait) { endWait = Date.now() + 15000; plEnded(true); }
   }, 2000);
   $("wPick").onclick = () => { try { player.pauseVideo(); } catch (e) {} openPicker(); };
   $("wPick2").onclick = () => openPicker();
@@ -7911,6 +8214,10 @@ $("btnCopy").onclick = async () => {
     for (const b of document.querySelectorAll("#wTalk button")) { b.hidden = !!window.SHARE && b.dataset.v === "ad"; b.setAttribute("aria-checked", b.dataset.v === talkWhen()); }
     for (const b of document.querySelectorAll("#wMood button")) b.setAttribute("aria-checked", b.dataset.v === lsGet("mood", "mid"));
     for (const g of document.querySelectorAll("#wSet .wVol")) for (const b of g.children) b.setAttribute("aria-checked", b.dataset.v === lsGet(g.dataset.k, "mid"));
+    for (const g of document.querySelectorAll("#wSet .wSecs")) for (const b of g.children) b.setAttribute("aria-checked", +b.dataset.v === secsOf(g.dataset.k === "skip-back" ? -1 : 1));
+    $("svK").textContent = secsOf(-1) === secsOf(1) ? `${secsOf(1)}秒` : `戻る${secsOf(-1)}秒・進む${secsOf(1)}秒`;
+    $("setAuto").checked = autoOn();
+    $("setLoop").checked = loopOn();
     $("svV").textContent = { low: "小さめ", mid: "ふつう", high: "大きめ" }[lsGet("vol-voice", "mid")] || "ふつう";
   }
   // 画質：YouTubeは画質を選ばせないが、枠の大きさで決めている。枠を大きく（小さく）作り、縮めて（伸ばして）見せる
@@ -8088,21 +8395,65 @@ $("btnCopy").onclick = async () => {
     } catch (e) {}
     poke();
   };
-  // 映像を押す：帯が隠れていれば出す。出ていれば再生・一時停止
-  $("wTap").onclick = e => {
+  // 映像を押す。指では、1回で操作を出し入れし、2回で左なら戻り、右なら進む。マウスでは、再生・一時停止
+  let tapType = "mouse", tapAt = -1e9, tapSide = 0, tapShown = false, cardTimer = 0;
+  for (const id of ["wTap", "wCtl"]) $(id).addEventListener("pointerdown", e => { tapType = e.pointerType; }, true);
+  function tapVideo(e) {
+    const r = $("wTap").getBoundingClientRect(), side = e.clientX < r.left + r.width / 2 ? -1 : 1, now = e.timeStamp, touch = tapType !== "mouse";
+    const more = root.classList.contains("skip");
+    if (touch && started && (more || (now - tapAt < 300 && side === tapSide))) {
+      clearTimeout(cardTimer);
+      tapAt = -1e9;
+      skip(side * secsOf(side), "tap");
+      return;
+    }
+    tapAt = now; tapSide = side; tapShown = false;
     // 「いま話している記事」の札を押したら、概要を開く（札は、この層の下にある）
-    const tp = $("wTopic"), r = tp.getBoundingClientRect();
-    if (tp.classList.contains("on") && !root.classList.contains("no-topic") && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) { openInfo(); return; }
-    if (!root.classList.contains("ui-on")) poke(); else togglePlay();
-  };
-  $("stage").addEventListener("mousemove", poke);
+    const tp = $("wTopic"), c = tp.getBoundingClientRect();
+    if (tp.classList.contains("on") && !root.classList.contains("no-topic") && e.clientX >= c.left && e.clientX <= c.right && e.clientY >= c.top && e.clientY <= c.bottom) {
+      if (touch) cardTimer = setTimeout(openInfo, 300); else openInfo();
+      return;
+    }
+    if (!root.classList.contains("ui-on")) { poke(); tapShown = true; }
+    else if (!touch) togglePlay();
+    else if (playing()) root.classList.remove("ui-on");
+    else poke();
+  }
+  $("wTap").onclick = tapVideo;
+  // 1回目で出てきた操作の上に2回目の指が来ても、2回たたいたことにする
+  $("wCtl").addEventListener("click", e => {
+    if (tapType === "mouse" || !tapShown || e.timeStamp - tapAt > 300) return;
+    e.stopPropagation();
+    tapVideo(e);
+  }, true);
+  $("stage").addEventListener("pointermove", e => { if (e.pointerType === "mouse") poke(); });
+  function toggleMute() {
+    voiceMute = !voiceMute;
+    try { voiceMute ? player.mute() : player.unMute(); } catch (e) {}
+    if (voiceMaster) voiceMaster.gain.value = voiceMute ? 0 : 1;
+    showToast(voiceMute ? "音を消しました。" : "音を戻しました。", 2000);
+  }
+  // キーは YouTube と同じ
   document.addEventListener("keydown", e => {
-    if (/input|textarea|select/i.test(e.target.tagName) || document.querySelector("dialog[open]")) return;
-    if (e.key === " " || e.key === "k") { e.preventDefault(); togglePlay(); }
-    else if (e.key === "ArrowLeft") $("wBack").click();
-    else if (e.key === "ArrowRight") { try { player.seekTo(player.getCurrentTime() + 10, true); } catch (err) {} poke(); }
-    else if (e.key === "l") $("wList").click();
-    else if (e.key === "f") $("wFs").click();
+    if (/input|textarea|select/i.test(e.target.tagName) || e.target.isContentEditable || document.querySelector("dialog[open]")) return;
+    if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+    const k = e.key.toLowerCase();
+    if (e.shiftKey) {
+      if (k === "n") goNext(); else if (k === "p") goPrev(); else return;
+      poke();
+    }
+    else if (k === " " || k === "k") { e.preventDefault(); if (!e.repeat) togglePlay(); }
+    else if (k === "j") skip(-10, "key");
+    else if (k === "l") skip(10, "key");
+    else if (k === "arrowleft") { e.preventDefault(); skip(-5, "key"); }
+    else if (k === "arrowright") { e.preventDefault(); skip(5, "key"); }
+    else if (k === "m") { if (!e.repeat) toggleMute(); }
+    else if (k === "f") { if (!e.repeat) $("wFs").click(); }
+    else if (/^[0-9]$/.test(k) && script && started) {
+      talkCancel();
+      try { player.seekTo(total * +k / 10, true); } catch (err) {}
+      poke();
+    }
   });
 
   // 台本の一覧から始める。共有URLで開いたときは、動画の画面から始める

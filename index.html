@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>
   // ふつうに開くと、見るだけの画面になる。台本づくりや細かい設定の画面は ?edit を付けて開く
-  window.APP_VERSION = 'v0.22.1'.startsWith('v') || /^master-/.test('v0.22.1') ? 'v0.22.1' : '開発版';
+  window.APP_VERSION = 'v0.22.2'.startsWith('v') || /^master-/.test('v0.22.2') ? 'v0.22.2' : '開発版';
   // ?v=持ち主/リポジトリ/台本の名前 で開くと、その人が公開した台本を、接続なしで再生する
   (() => {
     const q = new URLSearchParams(location.search);
@@ -31,6 +31,8 @@
   })();
   window.WATCH_MODE = !!window.SHARE || !new URLSearchParams(location.search).has("edit");
   if (window.SHARE) document.documentElement.classList.add("shared");
+  // 3D の部品を読み込めない端末では、真っ暗のままにせず、絵の顔を出す
+  setTimeout(() => { if (!window.__vrmBoot) document.documentElement.classList.add("vrm-done"); }, 8000);
   if (window.WATCH_MODE) document.documentElement.classList.add("watch");
 </script>
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -540,6 +542,29 @@
   #wDesc .stats div { flex: 1 1 0; min-width: 0; }
   #wDesc .stats b { display: block; font-size: 18px; font-weight: 700; }
   #wDesc .stats i { display: block; font-style: normal; font-size: 12px; color: #aaa; margin-top: 2px; }
+  /* iPhone の「2回たたくと拡大」を止める。つまんでの拡大は残す */
+  html.watch, html.watch body, html.watch * { touch-action: manipulation; }
+  /* モデルが出るまで、ワイプは真っ暗。下の細い線が進み具合 */
+  #vrmLoad { display: none; position: absolute; inset: 0; z-index: 2; background: #000; border-radius: inherit; overflow: hidden; pointer-events: none; }
+  html.watch:not(.vrm-done) #vrmLoad { display: block; }
+  html.watch:not(.vrm-done) #face { visibility: hidden; }
+  #vrmLoad .bar { position: absolute; left: 0; bottom: 0; height: 2px; width: calc(var(--p, 0) * 1%); background: rgba(255,255,255,.45); transition: width .3s, opacity .3s; }
+  /* 目を隠していた手が、指のすき間から光を入れながら、左右にほどける */
+  #vrmLoad.open { display: block !important; background: transparent; transition: background .35s ease-out; }
+  #vrmLoad.open .bar { opacity: 0; }
+  #vrmLoad i { position: absolute; display: none; height: 17%; background: #070506; box-shadow: 0 0 10px 3px rgba(7,5,6,.9); will-change: transform; }
+  #vrmLoad.open i { display: block; animation: peekL .95s cubic-bezier(.5,0,.3,1) forwards; }
+  #vrmLoad i.l { left: -12%; width: 78%; border-radius: 0 60px 60px 0 / 0 50% 50% 0; --to: -118%; --rot: -9deg; }
+  #vrmLoad i.r { right: -12%; width: 78%; border-radius: 60px 0 0 60px / 50% 0 0 50%; --to: 118%; --rot: 9deg; }
+  @keyframes peekL { 0%, 12% { transform: none; opacity: 1; } 30% { transform: translateX(calc(var(--to) * .06)) rotate(calc(var(--rot) * .15)); } 100% { transform: translateX(var(--to)) rotate(var(--rot)); opacity: .9; } }
+  #wDesc .acts { display: flex; justify-content: center; margin: 14px 0 2px; }
+  #wDesc .acts button { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 18px; border: 0; border-radius: 22px; background: #272727; color: #fff; font-size: 15px; font-weight: 500; }
+  #wDesc .acts svg, #wShare svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+  #wShare { display: none; }
+  html.watch.booth #wRow.on + #wShare { display: flex; align-items: center; justify-content: center; position: absolute; z-index: 4; right: 6px; top: calc(var(--b-vh) + 8px); width: 44px; height: 44px; min-height: 0; padding: 0; border: 0; border-radius: 50%; background: none; color: #fff; }
+  html.watch.shared.booth #wRow.on + #wShare { right: auto; left: calc(var(--i-l, 0px) + var(--i-w, 100%) - 50px); top: calc(var(--i-t, 0px) + 8px); }
+  html.watch.shared.norow #wShare, html.watch.no-share #wShare, html.watch.no-share #iShare, html.watch.list-open #wShare { display: none !important; }
+  html.watch.booth #wRow { padding-right: 56px; }
   #wDesc h3 { margin: 22px 0 10px; font-size: 17px; font-weight: 700; }
   #wDesc a { color: inherit; text-decoration: none; }
   #wDesc .media { display: flex; gap: 12px; align-items: flex-start; }
@@ -930,6 +955,7 @@
       <div id="avatar">
         <canvas id="face" width="300" height="400"></canvas>
         <canvas id="vrm" class="off"></canvas>
+        <div id="vrmLoad"><div class="bar"></div></div>
         <div class="grip"></div>
       </div>
       <div id="caption"></div>
@@ -983,6 +1009,7 @@
       <div id="wAbout"></div>
     </div>
     <button type="button" id="wRow" aria-haspopup="dialog"><span class="t"></span><span class="m"><span></span><b>その他</b></span></button>
+    <button type="button" id="wShare" title="共有" aria-label="共有"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 5l7 6-7 6v-4c-5 0-8 2-9 5 0-6 4-9 9-9z"/></svg></button>
     <button id="fsMenu">メニュー</button>
     <button id="exitFull">閉じる</button>
   </div>
@@ -1652,6 +1679,7 @@
     <div class="hd"><h2 id="iTitle"></h2><button type="button" id="iClose" aria-label="閉じる"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <p class="sub" id="iSub"></p>
     <div class="stats" id="iStats"></div>
+    <div class="acts"><button type="button" id="iShare"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 5l7 6-7 6v-4c-5 0-8 2-9 5 0-6 4-9 9-9z"/></svg>共有</button></div>
     <h3>元の動画</h3>
     <a class="media" id="iVideo" target="_blank" rel="noopener"><img alt="" id="iThumb"><span><b id="iVTitle"></b><i id="iVCh"></i><i class="go">YouTube で開く</i></span></a>
     <h3 id="iArtsH">取り上げた記事</h3>
@@ -1956,7 +1984,7 @@ function buildCues(data, withComments) {
   for (const it of (data.items || [])) {
     if (!it.line) continue;
     out.push({ at: it.abs, text: it.line, kind: it.kind || "scene", act: it.act, amount: it.amount || 0,
-               face: it.face || "", gesture: it.gesture || "", marks: it.marks });
+               face: it.face || "", gesture: it.gesture || "", marks: it.marks, follow: !!it.follow });
   }
   if (withComments) {
     for (const c of (data.comments || [])) {
@@ -2743,11 +2771,24 @@ function highlightCue(id) {
   const row = el.querySelector(`.cue[data-id="${id}"]`);
   if (row) {
     row.classList.add("now");
-    // 一覧を自分でスクロールしているときに引き戻さない
-    if (document.activeElement !== el) row.scrollIntoView({ block: "nearest" });
+    // 一覧を自分で動かしているあいだは、引き戻さない
+    if (window.WATCH_MODE) { if (Date.now() - tlTouched > 8000) showCue(row, true); }
+    else if (document.activeElement !== el) row.scrollIntoView({ block: "nearest" });
   }
   lastHighlight = id;
 }
+// いまのセリフの行を、一覧の上から3割あたりに出す
+let tlTouched = 0;
+function showCue(row, smooth) {
+  const el = $("timeline");
+  row = row || el.querySelector(".cue.now");
+  if (!row || !el.clientHeight) return;
+  const r = row.getBoundingClientRect(), b = el.getBoundingClientRect();
+  const top = el.scrollTop + r.top - b.top - b.height * 0.3;
+  if (smooth && r.top > b.top + b.height * 0.1 && r.bottom < b.top + b.height * 0.75) return;   // もう見えている
+  el.scrollTo({ top: Math.max(0, top), behavior: smooth ? "smooth" : "auto" });
+}
+for (const t of ["pointerdown", "wheel", "touchmove"]) $("timeline").addEventListener(t, () => { tlTouched = Date.now(); }, { passive: true });
 
 /* ---------- ワイプの配置（移動・大きさ） ---------- */
 // 既定は右下だが、YouTubeの操作エリアに重なるので動かせるようにする。
@@ -3429,6 +3470,7 @@ const LOOK_GAP = {   // こちらを見る間隔（ミリ秒）。雑談のと�
 };
 function wantedGaze(dt) {
   if (!window.WATCH_MODE) return gazeTarget;
+  if (window.__introOn) return 1;
   if (talkFace) return 1;   // 小話のあいだは、車を止めてこちらを向いている見立て
   if (talkBusy) return 0;   // 小話のあと、前を向いてから走り出す
   const turning = Math.abs(wheelTarget) > 0.3, chat = gazeTarget > 0.5, rest = chat ? 0.05 : gazeTarget;
@@ -3516,6 +3558,8 @@ function moodRun(sec) {
     }, t * 1000);
   }
 }
+// 出てくるところの顔。もう話しはじめていたら、台本の表情を優先する
+window.__introMood = on => { if (speaking) return; if (on) { moodFace = "smile"; } else if (moodFace === "smile") moodFace = ""; };
 function gestureGo(g) {
   if (GESTURE_SHAPES[g]) { moodGesture = g; gestureAt = performance.now(); gestureOn = true; gestureAmp = 1; }
 }
@@ -3551,7 +3595,7 @@ function setHand(name) {
 }
 function handStep(dt) {
   handAmt = handWant ? Math.min(1, handAmt + dt / 350) : Math.max(0, handAmt - dt / 450);
-  const want = talkFace ? 1 : 0;
+  const want = talkFace || window.__introOn ? 1 : 0;
   faceCam = want ? Math.min(1, faceCam + dt / 500) : Math.max(0, faceCam - dt / 600);
   return { hand: { name: handName, amt: smooth01(handAmt), t: (performance.now() - handAt) / 1000 }, faceCam: smooth01(faceCam) };
 }
@@ -3780,6 +3824,7 @@ function tick() {
   for (const c of cues) {
     if (c.at > t) break;
     if (fired.has(c.id)) continue;
+    if (c.follow && (draining || queue.length)) continue;   // 続きのセリフは、前を読み終えてから話す（drain）
     fired.add(c.id);
     queue.push(c);
   }
@@ -3941,7 +3986,6 @@ async function runTalk(mode) {
   // 話しかけのセリフがあれば、言い終わるのを待つ
   for (let i = 0; i < 80 && draining && live(); i++) await sleep(100);
   window.__playLog?.push(`${Math.round(performance.now() / 100) / 10} 小話: ${first?.title || "続きから"}`);
-  const used = [];
   const speak = async l => {
     if ($("showCaption").checked) setCaption(l.line);
     moodPlan(l.line, l, "talk");
@@ -3957,8 +4001,7 @@ async function runTalk(mode) {
   try {
     if (!live()) return;
     if (mode === "before") await sleep(500);
-    for (let t = first; t && live(); t = mode === "ad" && !talkAdOver && used.length < 3 ? pickTalk("mid", used) : null) {
-      used.push(t.id);
+    for (const t of first ? [first] : []) {   // 1回に1つ。続けて別の話をすると、話がころころ変わって聞こえる
       let all = true;
       for (const l of t.lines) {
         if (!live()) return;
@@ -3970,8 +4013,6 @@ async function runTalk(mode) {
         markHeard(t.id);
         if (t.url && !talked.some(x => x.url === t.url)) talked.push({ title: t.title, article: t.article || "", url: t.url });
       }
-      // 広告がまだ続いていて、次の話まで少し間をあける
-      if (mode === "ad") for (let i = 0; i < 6 && live() && !talkAdOver; i++) await sleep(250);
     }
     if (live() && talkHeldAt) {
       // 話し終えて、ひと息おいてから声をかけ、前を向いてから走り出す
@@ -3998,7 +4039,7 @@ async function drain() {
   try {
     while (queue.length) {
       // 溜まりすぎたら古いものは捨てる（映像から離れた発話は不自然なため）
-      if (queue.length > 3) queue = queue.slice(-2);
+      if (queue.length > 3) queue = queue.slice(-2);   // 続きのセリフは、ここに溜まらない
       const c = queue.shift();
       const gen = sayGen, dropped = new Promise(r => { onDrop = r; });
       // 音声が用意できていなければここで作る。字幕は鳴り始めに合わせて出す
@@ -4037,6 +4078,12 @@ async function drain() {
       if (!keep) try { player.setVolume(vol); } catch (e) {}
       $("caption").textContent = "";
       gazeTarget = 0;
+      // 続きのセリフがあれば、息つぎだけして話す
+      const k = cues.indexOf(c), nx = k >= 0 ? cues[k + 1] : null;
+      if (nx?.follow && gen === sayGen && !fired.has(nx.id) && !queue.length) {
+        await Promise.race([dropped, sleep(350 + Math.random() * 350)]);
+        if (gen === sayGen && contentTime() !== null && !fired.has(nx.id)) { fired.add(nx.id); queue.unshift(nx); }
+      }
     }
   } finally {
     draining = false;
@@ -5053,7 +5100,7 @@ async function avatarPull() {
   }
   status("VRMを取り込んでいます…");
   const vrm = await ghGetRaw(AVATAR_MODEL);
-  if (vrm) await idbSet("vrm", vrm.buffer);
+  if (vrm) { await idbSet("vrm", vrm.buffer); lsSet("vrm-fresh", "1"); }
   if (!raw && !vrm) { status("リポジトリに avatar/ がまだありません。先に［保存する］を押してください。", "err"); return; }
   // 調整値の反映は init() が全部やっているので、読み直すのが確実
   status(`取り込みました（調整値${n}件${vrm ? "・VRM" : ""}）。画面を読み込み直します…`, "ok");
@@ -5069,6 +5116,7 @@ $("vrmFile").onchange = async e => {
     const buf = await f.arrayBuffer();
     window.__vrmFile = f.name + ":" + buf.byteLength;   // 別のモデルかどうかの判定に使う
     await idbSet("vrm", buf);
+    lsSet("vrm-fresh", "1");
     await window.loadVRM?.(buf);
   } catch (err) {
     status("VRMを読み込めませんでした: " + err.message, "err");
@@ -5131,11 +5179,11 @@ $("vrmFile").onchange = async e => {
 const $ = id => document.getElementById(id);
 const setStatus = (m, c) => { const el = $("status"); el.className = c || ""; el.textContent = m; };
 
-let THREE, VRMLoaderPlugin, VRMUtils, GLTFLoader;
+let THREE, VRMLoaderPlugin, VRMUtils, VRMExpression, VRMExpressionMorphTargetBind, GLTFLoader;
 try {
   THREE = await import("three");
   ({ GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js"));
-  ({ VRMLoaderPlugin, VRMUtils } = await import("@pixiv/three-vrm"));
+  ({ VRMLoaderPlugin, VRMUtils, VRMExpression, VRMExpressionMorphTargetBind } = await import("@pixiv/three-vrm"));
 } catch (e) {
   setStatus("VRMの表示機能を読み込めませんでした（簡易アバターのまま動きます）: " + e.message, "warn");
 }
@@ -5236,9 +5284,15 @@ if (THREE && VRMLoaderPlugin) {
     if (lenU < 1e-4 || lenL < 1e-4) return;
 
     _S.copy(_p1);
+    if (!solveElbow(sx, lenU, lenL, target, elbowOut)) return;
+    pointBoneTo(ua, la, _E);
+    pointBoneTo(la, tip, target);
+  }
+  // 肩 _S と行き先から、肘の位置 _E を決める
+  function solveElbow(sx, lenU, lenL, target, elbowOut) {
     _dir.subVectors(target, _S);
     let d = _dir.length();
-    if (d < 1e-5) return;
+    if (d < 1e-5) return false;
     _dir.divideScalar(d);
     // 届かない・近すぎる位置でも破綻しないよう、可動範囲に丸める
     d = Math.min(Math.max(d, Math.abs(lenU - lenL) + 1e-3), (lenU + lenL) * 0.999);
@@ -5250,8 +5304,7 @@ if (THREE && VRMLoaderPlugin) {
     if (_perp.lengthSq() < 1e-8) _perp.set(0, -1, 0).addScaledVector(_dir, _dir.y);
     _perp.normalize();
     _E.copy(_S).addScaledVector(_dir, along).addScaledVector(_perp, rad);
-    pointBoneTo(ua, la, _E);
-    pointBoneTo(la, tip, target);
+    return true;
   }
 
   // 決め打ちの数値だと体格の違うモデルで破綻するので、骨の位置から測る
@@ -5607,8 +5660,248 @@ if (THREE && VRMLoaderPlugin) {
       }
     }
   }
+
+  /* ---------- 握る手 ----------
+     手のひらの面を輪に合わせ、指の関節を、輪に触れるところまで1つずつ曲げる。
+     手の座標は3本の向きで表す。F は手首→指先、N は手のひらが向く側、K は小指→人さし指（右手は N = F × K になるように逆向き） */
+  const JOINTS = ["Proximal", "Intermediate", "Distal"], THUMB_JOINTS = ["Metacarpal", "Proximal", "Distal"];
+  const hands = { left: null, right: null };
+  let handsOf = null;
+  function handOf(side) {
+    if (handsOf !== vrm) { handsOf = vrm; hands.left = measureHand("left"); hands.right = measureHand("right"); }
+    return hands[side];
+  }
+  // 骨から、指の向き・長さ・手のひらの向きを測る。骨が足りないモデルでは null
+  function measureHand(side) {
+    const h = vrm.humanoid, node = n => h.getNormalizedBoneNode(side + n);
+    const ua = node("UpperArm"), la = node("LowerArm"), hd = node("Hand");
+    const mp = node("MiddleProximal"), ip = node("IndexProximal"), lp = node("LittleProximal");
+    if (!ua || !la || !hd || !mp || !ip || !lp) return null;
+    const palm = mp.position.length();
+    if (palm < 1e-3 || ip.position.distanceTo(lp.position) < 1e-3) return null;
+    const F0 = mp.position.clone().normalize();
+    const K0 = ip.position.clone().sub(lp.position);
+    K0.addScaledVector(F0, -K0.dot(F0)).normalize();
+    if (side === "right") K0.negate();
+    const N0 = F0.clone().cross(K0);
+    const chain = (f, joints) => {
+      const bones = joints.map(j => node(f + j)).filter(Boolean);
+      if (!bones.length) return null;
+      const c = { f, bones, dir: [], len: [], axis: [], r: palm * (f === "Thumb" ? 0.14 : 0.12), ang: bones.map(() => 0) };
+      bones.forEach((b, i) => {
+        const nx = bones[i + 1];
+        c.dir.push(nx ? nx.position.clone().normalize() : c.dir[i - 1]?.clone() || F0.clone());
+        c.len.push(nx ? nx.position.length() : (c.len[i - 1] || palm * 0.35) * 0.8);
+        c.axis.push(c.dir[i].clone().cross(N0).normalize());   // この軸で正の向きに回すと、手のひらの側へ曲がる
+      });
+      return c;
+    };
+    const H = { side, sign: side === "left" ? 1 : -1, ua, la, hd, palm, F0, K0, N0, lenU: la.position.length(), lenL: hd.position.length(),
+      fingers: FINGERS.map(f => chain(f, JOINTS)).filter(Boolean), thumb: chain("Thumb", THUMB_JOINTS),
+      thick: palm * 0.2, mid: (ip.position.dot(K0) + lp.position.dot(K0)) / 2,
+      twistAxis: hd.position.clone().normalize(), q0inv: new THREE.Quaternion(), W: new THREE.Vector3(), q: new THREE.Quaternion(), c: new THREE.Vector3() };
+    H.q0inv.setFromRotationMatrix(new THREE.Matrix4().makeBasis(F0, K0, N0)).invert();
+    try { measureSkin(H); } catch (e) { /* 測れなければ、骨の長さからの見積もりを使う */ }
+    return H;
+  }
+  // 手のひらの厚み・指の太さ・指先の長さを、肌の頂点から測る（骨だけでは分からない）
+  function measureSkin(H) {
+    const h = vrm.humanoid, want = new Map(), raw = h.getRawBoneNode(H.side + "Hand");
+    if (!raw) return;
+    want.set(raw, { palm: true });
+    for (const c of [...H.fingers, H.thumb]) c?.bones.forEach((b, i) => {
+      const joint = (c.f === "Thumb" ? THUMB_JOINTS : JOINTS)[i], r = h.getRawBoneNode(H.side + c.f + joint);
+      if (r) want.set(r, { c, i, palm: c !== H.thumb && i === 0 });
+    });
+    const depth = [], thick = new Map(), tip = new Map();
+    const p = new THREE.Vector3(), o = new THREE.Vector3(), m = new THREE.Matrix4();
+    vrm.scene.traverse(mesh => {
+      if (!mesh.isSkinnedMesh) return;
+      const pos = mesh.geometry.attributes.position, si = mesh.geometry.attributes.skinIndex, sw = mesh.geometry.attributes.skinWeight;
+      if (!pos || !si || !sw) return;
+      const sk = mesh.skeleton, base = new Map();
+      const origin = bone => { const i = sk.bones.indexOf(bone); return i < 0 ? null : new THREE.Vector3().setFromMatrixPosition(m.copy(sk.boneInverses[i]).invert()); };
+      const wrist = origin(raw);
+      if (!wrist) return;
+      sk.bones.forEach((b, i) => { const w = want.get(b); if (w) base.set(i, { w, at: origin(b) }); });
+      for (let v = 0; v < pos.count; v++) {
+        let best = -1, bw = 0;
+        for (let k = 0; k < 4; k++) { const w = sw.getComponent(v, k); if (w > bw) { bw = w; best = si.getComponent(v, k); } }
+        const hit = base.get(best);
+        if (!hit || bw < 0.5) continue;
+        p.fromBufferAttribute(pos, v).applyMatrix4(mesh.bindMatrix);
+        if (hit.w.palm) {
+          o.subVectors(p, wrist);
+          const f = o.dot(H.F0) / H.palm, k = o.dot(H.K0) - H.mid;
+          if (f > 0.7 && f < 1.1 && Math.abs(k) < H.palm * 0.45 && o.dot(H.N0) > 0) depth.push(o.dot(H.N0));
+        }
+        if (hit.w.c) {
+          const c = hit.w.c, d = c.dir[hit.w.i];
+          o.subVectors(p, hit.at);
+          const along = o.dot(d);
+          if (hit.w.i === c.bones.length - 1) tip.set(c, Math.max(tip.get(c) || 0, along));
+          if (hit.w.i > 0 && along > 0) { if (!thick.has(c)) thick.set(c, []); thick.get(c).push(Math.sqrt(Math.max(0, o.lengthSq() - along * along))); }
+        }
+      }
+    });
+    const pick = (a, k) => a.sort((x, y) => x - y)[Math.min(a.length - 1, Math.floor(a.length * k))];
+    const lim = (v, lo, hi) => Math.min(H.palm * hi, Math.max(H.palm * lo, v));
+    if (depth.length > 8) H.thick = lim(pick(depth, 0.5), 0.08, 0.3);
+    for (const [c, a] of thick) if (a.length > 8) c.r = lim(pick(a, 0.6), 0.05, 0.25);
+    for (const [c, v] of tip) { const n = c.len.length - 1, l = c.len[n]; c.len[n] = Math.min(l * 1.4, Math.max(l * 0.6, v - c.r * 0.5)); }
+  }
+
+  const _gp = new THREE.Vector3(), _gr = new THREE.Vector3(), _gn = new THREE.Vector3(), _gt = new THREE.Vector3(), _gd = new THREE.Vector3();
+  const _gF = new THREE.Vector3(), _gK = new THREE.Vector3(), _gN = new THREE.Vector3(), _gm = new THREE.Matrix4(), _gq = new THREE.Quaternion(), _gq2 = new THREE.Quaternion();
+  const clampN = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  // 輪の上の点を握るときの、手首の位置 H.W と手の向き H.q を決める。前腕の向きに合わせて、手首が折れないようにする
+  function gripFrame(H, sx, deg, elbowOut) {
+    const a = deg * Math.PI / 180, mw = wheelMesh.matrixWorld, tube = 0.017 * wheelMesh.scale.x;
+    rimPoint(deg, _gp);
+    _gr.set(Math.cos(a), Math.sin(a), 0).transformDirection(mw);            // 輪の外向き
+    _gn.set(0, 0, 1).transformDirection(mw);                                // 輪の面から、運転者の側へ
+    if (_gn.z * fwdSign > 0) _gn.negate();
+    _gt.set(-Math.sin(a), Math.cos(a), 0).transformDirection(mw);           // 輪に沿って、てっぺんの側へ
+    if (deg > 90) _gt.negate();
+    // 輪が通る所。指の付け根のあたりで、手のひらの面に触れる
+    H.c.copy(H.F0).multiplyScalar(H.palm * 1.04).addScaledVector(H.N0, H.thick + tube).addScaledVector(H.K0, H.mid);
+    H.ua.getWorldPosition(_S);
+    _gd.subVectors(_gp, _S).normalize();   // 1回目は肩からの向きで見当をつける
+    for (let i = 0; i < 3; i++) {
+      const round = clampN(Math.atan2(_gd.dot(_gr), -_gd.dot(_gn)), -0.5, 0.9);
+      const slant = clampN(Math.asin(clampN(_gd.dot(_gt), -1, 1)) * 0.6, -0.55, 0.55);   // 斜めに握って、手首の曲がりを減らす
+      _gF.copy(_gn).multiplyScalar(-Math.cos(round)).addScaledVector(_gr, Math.sin(round)).addScaledVector(_gt, Math.tan(slant)).normalize();
+      _gK.copy(_gt).addScaledVector(_gF, -_gt.dot(_gF)).normalize().multiplyScalar(H.sign);
+      _gN.crossVectors(_gF, _gK);
+      H.q.setFromRotationMatrix(_gm.makeBasis(_gF, _gK, _gN)).multiply(H.q0inv);
+      H.W.copy(H.c).applyQuaternion(H.q).negate().add(_gp);
+      if (!solveElbow(sx, H.lenU, H.lenL, H.W, elbowOut)) break;
+      _gd.subVectors(H.W, _E).normalize();
+    }
+  }
+  // 手首を行き先へ届かせ、手の向きを合わせる。ひねりは前腕と手首で分ける（手首だけでひねると、袖口がねじ切れて見える）
+  function setArm(H, sx, wrist, elbowOut) {
+    H.ua.quaternion.identity(); H.la.quaternion.identity(); H.hd.quaternion.identity();
+    H.ua.updateMatrixWorld(true);
+    H.ua.getWorldPosition(_S);
+    if (!solveElbow(sx, H.lenU, H.lenL, wrist, elbowOut)) return;
+    pointBoneTo(H.ua, H.la, _E);
+    pointBoneTo(H.la, H.hd, wrist);
+  }
+  function turnHand(H, q) {
+    H.la.getWorldQuaternion(_gq).invert().multiply(q);   // 前腕から見た手の向き
+    const x = H.twistAxis;
+    let tw = 2 * Math.atan2(_gq.x * x.x + _gq.y * x.y + _gq.z * x.z, _gq.w);
+    if (tw > Math.PI) tw -= Math.PI * 2; else if (tw < -Math.PI) tw += Math.PI * 2;
+    _gq2.setFromAxisAngle(x, tw * 0.5);
+    H.la.quaternion.multiply(_gq2);
+    H.hd.quaternion.copy(_gq2.invert()).multiply(_gq);
+    H.la.updateMatrixWorld(true);
+  }
+
+  // 指を曲げる。計算は手の座標（手首が原点）で行う
+  const _rc = new THREE.Vector3(), _rnl = new THREE.Vector3(), _rq = new THREE.Vector3(), _rt = new THREE.Vector3();
+  const _j = new THREE.Vector3(), _sd = new THREE.Vector3(), _u = new THREE.Vector3(), _w = new THREE.Vector3(), _fq = new THREE.Quaternion(), _fq2 = new THREE.Quaternion(), _fi = new THREE.Quaternion();
+  // 点 p の近くの輪を、まっすぐな棒（通る点 _rq・向き _rt）とみなす
+  function tubeNear(p) {
+    _rq.subVectors(p, _rc);
+    _rq.addScaledVector(_rnl, -_rq.dot(_rnl)).normalize();
+    _rt.crossVectors(_rnl, _rq);
+    _rq.multiplyScalar(0.17 * wheelMesh.scale.x).add(_rc);
+  }
+  // 棒から線分（p から d の向きに len）までの、いちばん近い距離
+  function tubeDist(p, d, len) {
+    _u.subVectors(p, _rq); _u.addScaledVector(_rt, -_u.dot(_rt));
+    _w.copy(d).addScaledVector(_rt, -d.dot(_rt)).multiplyScalar(len);
+    const ww = _w.lengthSq(), k = ww > 1e-12 ? clampN(-_u.dot(_w) / ww, 0, 1) : 0;
+    return _u.addScaledVector(_w, k).length();
+  }
+  const _nj = new THREE.Vector3(), _fq3 = new THREE.Quaternion();
+  const NEXT_BEND = [0.35, 0.3], BEND_MIN = [0, 0, 0], BEND_MAX = [1.45, 1.75, 1.25];
+  // 関節 i を ang だけ曲げたときの骨の向きを _sd に入れる（_fq はそこまでの関節の曲がり）
+  function bendDir(c, i, ang) {
+    _fq2.setFromAxisAngle(c.axis[i], ang);
+    _sd.copy(c.dir[i]).applyQuaternion(_fq2).applyQuaternion(_fq);
+  }
+  // 輪に埋まらないか。次の関節も曲げられるだけの余裕を残す（付け根だけで触れると、その先がまっすぐのまま輪に埋まる）
+  function clearAt(c, i, ang, gap) {
+    bendDir(c, i, ang);
+    if (tubeDist(_j, _sd, c.len[i]) < gap) return false;
+    if (i + 1 >= c.bones.length) return true;
+    _nj.copy(_j).addScaledVector(_sd, c.len[i]);
+    _fq3.setFromAxisAngle(c.axis[i + 1], NEXT_BEND[i]);
+    _sd.copy(c.dir[i + 1]).applyQuaternion(_fq3).applyQuaternion(_fq2).applyQuaternion(_fq);
+    return tubeDist(_nj, _sd, c.len[i + 1]) >= gap;
+  }
+  // strength は握りの強さ、free は離している度合い（0〜1）、point は人さし指だけ伸ばす度合い
+  function setFingers(H, strength, free, point) {
+    const tube = 0.017 * wheelMesh.scale.x, hold = Math.min(1, strength / 0.8) * (1 - free);
+    const press = Math.max(0, strength - 0.8) * 0.75;   // 0.8 で輪に触れ、それより強いと少し食い込む
+    _fi.copy(H.q).invert();
+    _rc.subVectors(wheelCenter, H.W).applyQuaternion(_fi);
+    _rnl.copy(_gn).applyQuaternion(_fi);
+    for (const c of H.fingers) {
+      _j.copy(c.bones[0].position);
+      tubeNear(_j);
+      const gap = tube + c.r * (1 - press);
+      _fq.identity();
+      for (let i = 0; i < c.bones.length; i++) {
+        let lo = BEND_MIN[i], hi = lo;
+        if (hold > 0.001) {
+          // 開いた側から曲げていき、輪に触れる手前で止める
+          while (hi < BEND_MAX[i] && clearAt(c, i, hi, gap)) { lo = hi; hi += 0.12; }
+          if (hi >= BEND_MAX[i]) lo = BEND_MAX[i];
+          else if (hi > lo) for (let n = 0; n < 4; n++) { const mid = (lo + hi) / 2; if (clearAt(c, i, mid, gap)) lo = mid; else hi = mid; }
+        } else lo = 0;
+        c.ang[i] = lo;
+        bendDir(c, i, lo);
+        _j.addScaledVector(_sd, c.len[i]);
+        _fq.multiply(_fq2);
+        const bend = lo * hold + (c.f !== "Index" ? [1.25, 1.25, 0.6][i] * point : 0);
+        c.bones[i].quaternion.setFromAxisAngle(c.axis[i], bend);
+      }
+    }
+    if (H.thumb) setThumb(H, tube, hold, press);
+    H.hd.updateMatrixWorld(true);
+  }
+  // 親指は、輪の運転者側に沿わせ、先にいくほど内側へ回り込ませる。関節を、輪の表面から指の太さだけ離れた点に順に置く
+  const THUMB_ROUND = [-0.8, -0.6, -0.15], THUMB_BASE_TURN = 0.4;
+  const _tf = new THREE.Vector3(), _tn = new THREE.Vector3(), _tk = new THREE.Vector3(), _tg = new THREE.Vector3();
+  function setThumb(H, tube, hold, press) {
+    const c = H.thumb, gap = tube + c.r * (1 - press);
+    _j.copy(c.bones[0].position);
+    _tg.copy(_j).addScaledVector(H.K0, H.sign * c.len[0]);
+    _fq.identity();
+    for (let i = 0; i < c.bones.length; i++) {
+      tubeNear(_tg);
+      _tk.copy(_rt);   // 輪に沿って、人さし指の側へ
+      if (_tk.dot(H.K0) * H.sign < 0) _tk.negate();
+      _tf.copy(H.F0).addScaledVector(_tk, -H.F0.dot(_tk)).normalize();
+      _tn.copy(H.N0).addScaledVector(_tk, -H.N0.dot(_tk)).addScaledVector(_tf, -H.N0.dot(_tf)).normalize();
+      const r = THUMB_ROUND[i + 3 - c.bones.length];
+      _tg.copy(_rq).addScaledVector(_tf, -Math.cos(r) * gap).addScaledVector(_tn, Math.sin(r) * gap).sub(_j);
+      const along = _tg.dot(_tk);
+      _tg.addScaledVector(_tk, -along);   // 輪を横切る向きのずれ。残りの長さは、輪に沿って伸ばす
+      const side = Math.min(_tg.length(), c.len[i] * 0.9);
+      _tg.setLength(side).addScaledVector(_tk, Math.sqrt(c.len[i] * c.len[i] - side * side));
+      _sd.copy(_tg).normalize();
+      _w.copy(_sd).applyQuaternion(_fq2.copy(_fq).invert());
+      _fq2.setFromUnitVectors(c.dir[i], _w);
+      if (i === 0 && c.bones.length === 3) {
+        // 付け根（手のひらの中の骨）は、大きくは動かない
+        const a = 2 * Math.acos(Math.min(1, Math.abs(_fq2.w)));
+        if (a > THUMB_BASE_TURN) _fq2.copy(_fq3.identity().slerp(_fq2, THUMB_BASE_TURN / a));
+        _sd.copy(c.dir[0]).applyQuaternion(_fq2);
+      }
+      c.bones[i].quaternion.identity().slerp(_fq2, hold);
+      _fq.multiply(_fq2);
+      _j.addScaledVector(_sd, c.len[i]);
+      _tg.copy(_j).addScaledVector(_tk, c.len[i + 1] || 0);
+    }
+  }
+
   const _v3 = new THREE.Vector3();
-  const rimL = new THREE.Vector3(), rimR = new THREE.Vector3(), _shoulder = new THREE.Vector3();
+  const _shoulder = new THREE.Vector3();
 
   // ハンドルは体格から置く。手に合わせて置くと、腕がずれた分だけ輪までずれていく
   function placeWheel(steer) {
@@ -5644,28 +5937,93 @@ if (THREE && VRMLoaderPlugin) {
     if (!vrm?.humanoid || !placeWheel(steer)) return false;
     const half = 90 - (+$("armSpread").value) * 60;   // 上端からの角度。60度で10時10分
     const elbow = +$("armHeight").value;
-    rimPoint(90 - half * fwdSign, rimL);
-    rimPoint(90 + half * fwdSign, rimR);
     const hand = window.avatarState?.hand, amt = hand?.amt || 0;
-    const side = amt > 0.001 ? freeHand(hand, amt) : "";
-    armIK("left", fwdSign, rimL, elbow);
-    armIK("right", -fwdSign, rimR, elbow);
     const grip = +$("gripStrength").value;
-    gripHand("left", side === "left" ? Math.max(0.001, grip * (1 - amt)) : grip);
-    gripHand("right", side === "right" ? Math.max(0.001, grip * (1 - amt)) : grip);
-    if (side && hand.name === "point") curlFingers(side, amt);
+    // 出てくるところ：目隠しを外した両手を顔の横で見せて、引きながらハンドルを握る
+    if (introHands > 0.001) {
+      for (const [sd, sx, deg] of [["left", fwdSign, 90 - half * fwdSign], ["right", -fwdSign, 90 + half * fwdSign]]) {
+        introGoal(sd);
+        poseHand(sd, sx, deg, elbow, grip, introHands, INTRO_HAND);
+      }
+      return true;
+    }
+    const side = amt > 0.001 ? freeHand(hand) : "";   // 行き先は _goal に入る
+    poseHand("left", fwdSign, 90 - half * fwdSign, elbow, grip, side === "left" ? amt : 0, hand);
+    poseHand("right", -fwdSign, 90 + half * fwdSign, elbow, grip, side === "right" ? amt : 0, hand);
     return true;
   }
+  const step01 = (v, lo, hi) => { const u = clampN((v - lo) / (hi - lo), 0, 1); return u * u * (3 - 2 * u); };
+  const _rim = new THREE.Vector3(), _wr = new THREE.Vector3();
+  function poseHand(side, sx, deg, elbow, grip, amt, hand) {
+    const H = handOf(side);
+    if (!H) {
+      // 指や手の骨が足りないモデル
+      rimPoint(deg, _rim);
+      if (amt) _rim.lerp(_goal, amt);
+      armIK(side, sx, _rim, elbow);
+      gripHand(side, amt ? Math.max(0.001, grip * (1 - amt)) : grip);
+      if (amt && hand.name === "point") curlFingers(side, amt);
+      return;
+    }
+    gripFrame(H, sx, deg, elbow);
+    if (!amt) {
+      setArm(H, sx, H.W, elbow);
+      turnHand(H, H.q);
+      setFingers(H, grip, 0, 0);
+      return;
+    }
+    // 離すときは、先に指を開き、いったん手前へ引いてから動かす。戻すときは、その逆になる
+    const open = step01(amt, 0, 0.35), u = clampN((amt - 0.12) / 0.88, 0, 1), go = u * u * (2 - u);
+    armIK(side, sx, _goal, elbow);
+    H.hd.getWorldPosition(_wr);
+    _wr.lerpVectors(H.W, _wr, go).addScaledVector(_gn, Math.sin(go * Math.PI) * armLen * 0.05);
+    setArm(H, sx, _wr, elbow);
+    H.la.getWorldQuaternion(_qa);
+    if (hand.name !== "point") palmToCamera(H, _qa, hand.name === "wave" ? Math.sin(hand.t * 8.5) * 0.22 : 0);
+    turnHand(H, _fq3.slerpQuaternions(H.q, _qa, go));
+    setFingers(H, grip, open, hand.name === "point" ? go : 0);
+  }
+  // 手のひらをカメラへ向けて、指を上に立てる。手首に無理が出ないよう、前腕の向きにも少し寄せる
+  const _pf = new THREE.Vector3(), _pk = new THREE.Vector3(), _pn = new THREE.Vector3(), _pq = new THREE.Quaternion(), _pw = new THREE.Vector3();
+  function palmToCamera(H, q, sway) {
+    H.hd.getWorldPosition(_pw);
+    _pn.subVectors(camera.position, _pw); _pn.y *= 0.4; _pn.normalize();
+    _pk.set(-_pn.z, 0, _pn.x).normalize();                       // 画面の横向き
+    _pf.set(0, 1, 0).addScaledVector(_pk, sway);
+    _pf.addScaledVector(_pn, -_pf.dot(_pn)).normalize();
+    _pk.crossVectors(_pn, _pf);
+    _pq.setFromRotationMatrix(_gm.makeBasis(_pf, _pk, _pn)).multiply(H.q0inv);
+    q.slerp(_pq, 0.85);
+  }
+  // 出てくるところの両手の行き先。顔の左右・少し手前
+  let introHands = 0;
+  const INTRO_HAND = { name: "raise", t: 0 };
+  function introGoal(sd) {
+    const hd = vrm.humanoid.getNormalizedBoneNode("head"), ua = vrm.humanoid.getNormalizedBoneNode(sd + "UpperArm");
+    hd.getWorldPosition(_sh);
+    _cam.subVectors(camera.position, _sh); _cam.y = 0; _cam.normalize();
+    _lat.set(-_cam.z, 0, _cam.x);
+    ua.getWorldPosition(_goal);
+    const out = Math.sign(_goal.sub(_sh).dot(_lat)) || 1;
+    _goal.copy(_sh).addScaledVector(_cam, armLen * 0.30).addScaledVector(_lat, out * armLen * (0.30 + 0.14 * introSpread));
+    _goal.y += armLen * (0.02 - 0.06 * introSpread);
+  }
+  let introSpread = 0;
   // ハンドルから離す手の行き先。カメラに近いほうの手を使う
   const _sh = new THREE.Vector3(), _cam = new THREE.Vector3(), _lat = new THREE.Vector3(), _goal = new THREE.Vector3();
-  function freeHand(hand, amt) {
+  function freeHand(hand) {
     const h = vrm.humanoid, pos = {};
     for (const sd of ["left", "right"]) { const b = h.getNormalizedBoneNode(sd + "UpperArm"); if (!b) return ""; pos[sd] = b.getWorldPosition(new THREE.Vector3()); }
     const side = pos.left.distanceTo(camera.position) < pos.right.distanceTo(camera.position) ? "left" : "right";
     _sh.copy(pos[side]);
     _cam.subVectors(camera.position, _sh); _cam.y = 0; _cam.normalize();
     _lat.set(-_cam.z, 0, _cam.x);
-    if (hand.name === "point") _goal.copy(_sh).addScaledVector(_cam, armLen * 0.10).add(_lat.set(0, armLen * 0.06, fwdSign * armLen * 0.80));
+    if (hand.name === "point") {
+      _goal.copy(_sh).addScaledVector(_cam, armLen * 0.10).add(_lat.set(0, armLen * 0.06, fwdSign * armLen * 0.80));
+      // 腕が輪を突き抜けないように、輪の外側を通す
+      const out = Math.sign(_sh.x - wheelCenter.x) || 1, clear = 0.187 * wheelMesh.scale.x + armLen * 0.13;
+      _goal.x = wheelCenter.x + out * Math.max(clear, out * (_goal.x - wheelCenter.x));
+    }
     else {
       // 顔にかぶらないように、肩より後ろ寄り・顔より低めに上げる
       _goal.copy(_sh).addScaledVector(_cam, armLen * 0.34);
@@ -5673,7 +6031,6 @@ if (THREE && VRMLoaderPlugin) {
       _goal.z -= fwdSign * armLen * 0.20;
       if (hand.name === "wave") _goal.addScaledVector(_lat, armLen * 0.08 * Math.sin(hand.t * 8.5) * Math.min(1, hand.t * 2));
     }
-    (side === "left" ? rimL : rimR).lerp(_goal, amt);
     return side;
   }
   // 人さし指だけ伸ばす
@@ -5715,24 +6072,70 @@ if (THREE && VRMLoaderPlugin) {
   }
   // 台本の表情を、モデルの表情に当てる。three-vrm は VRM0 の Joy・Fun・Sorrow を happy・relaxed・sad に直す。
   // 驚きは VRM0 の決まった名前がなく、VRoid では Surprised という名前で入っている
-  // parts は [表情の名前, 強さ]。モデルにない名前は飛ばす。happy を強くすると目を閉じきるので半分まで
-  // mouth は「あ」を弱める割合、blink はまばたきを止める割合
+  // parts は [表情の名前, 強さ, 目, 眉, 口]。目・眉・口は、分けられるモデルだけで使う（なければ強さと同じ）。モデルにない名前は飛ばす。happy の目は閉じる形で、途中の強さでは眠そうな半開きになる。
+  // 目を分けられるモデルでは happy の目を使わず、開けたまま、口と眉で笑う
+  // talk は話しているあいだに残す表情の口の割合、mouth は目と口を分けられないモデルで「あ」を弱める割合、blink はまばたきを止める割合（open は、目を分けられるモデルでの割合）
   const FACE_LOOK = {
-    smile:     { parts: [["happy", 0.52], ["relaxed", 0.38]], mouth: 0.5, blink: 1 },
-    soft:      { parts: [["relaxed", 0.5], ["happy", 0.12]], mouth: 0.25, blink: 0.2 },
-    laugh:     { parts: [["happy", 1]], mouth: 0.35, blink: 1 },
-    surprised: { parts: [["surprised", 0.9]], mouth: 0.6, blink: 1 },
-    troubled:  { parts: [["sad", 0.8]], mouth: 0.5, blink: 0.4 },
-    pout:      { parts: [["angry", 0.85]], mouth: 0.5, blink: 0.4 },
+    smile:     { parts: [["happy", 0.3, 0, 0.5, 0.6], ["relaxed", 0.4, 0.5, 0.3, 0.4]], talk: 0.3, mouth: 0.25, blink: 1, open: 0 },
+    soft:      { parts: [["relaxed", 0.5, 0.25, 0.4, 0.75], ["happy", 0.1, 0, 0.2, 0.12]], talk: 0.5, mouth: 0.1, blink: 0.2, open: 0 },
+    laugh:     { parts: [["happy", 1, 0, 0.8, 0.85], ["relaxed", 0, 0.5, 0.2, 0.2]], talk: 0.2, mouth: 0.2, blink: 1, open: 0 },
+    surprised: { parts: [["surprised", 0.9]], talk: 0.2, mouth: 0.3, blink: 1 },
+    troubled:  { parts: [["sad", 0.8]], talk: 0.35, mouth: 0.25, blink: 0.4 },
+    pout:      { parts: [["angry", 0.85]], talk: 0.45, mouth: 0.25, blink: 0.4 },
   };
-  const usedFaceNames = new Set();
-  let faceNames = null, faceNamesOf = null;
-  function faceName(ex, name) {
-    if (faceNamesOf !== ex) { faceNamesOf = ex; faceNames = new Map((ex.expressions || []).map(e => [String(e.expressionName).toLowerCase(), e.expressionName])); }
-    const hit = faceNames.get(name);
-    if (hit) usedFaceNames.add(hit);
-    return hit || null;
+  // VRoid のモデルは、顔全体の形（Fcl_ALL_Joy など）のほかに、目（EYE）・眉（BRW）・口（MTH）の形を別に持つ。
+  // 表情がその「顔全体の形」1つでできているときは、目と眉だけの表情・口だけの表情に分けておく。
+  // three-vrm の表情として足すので、値を 0 にすれば形も残らない
+  const faces = new Map();   // happy など → { whole, eyes, mouth }
+  let facesOf = null;
+  function morphNames(mesh) {
+    const list = mesh.geometry?.userData?.targetNames;
+    if (Array.isArray(list)) return list;
+    const out = [];
+    for (const [n, i] of Object.entries(mesh.morphTargetDictionary || {})) out[i] = n;
+    return out;
   }
+  function faceOf(ex, name) {
+    if (facesOf !== ex) { facesOf = ex; faces.clear(); }
+    if (!faces.has(name)) faces.set(name, makeFace(ex, name));
+    return faces.get(name);
+  }
+  function makeFace(ex, name) {
+    const e = (ex.expressions || []).find(x => String(x.expressionName).toLowerCase() === name);
+    if (!e) return null;
+    e.overrideMouth = "none";   // 話しているあいだの口は、こちらで混ぜる
+    const face = { whole: e.expressionName, eyes: null, brow: null, mouth: null };
+    const binds = e.binds || [], split = { eyes: [], brow: [], mouth: [] };
+    for (const b of binds) {
+      if (!b.primitives || !(b.weight > 0)) return face;
+      for (const mesh of b.primitives) {
+        const names = morphNames(mesh), m = /^(.*Fcl_)ALL_(\w+)$/.exec(names[b.index] || "");
+        if (!m) return face;
+        for (const [part, to] of [["EYE", split.eyes], ["BRW", split.brow], ["MTH", split.mouth]]) {
+          const index = names.indexOf(m[1] + part + "_" + m[2]);
+          if (index < 0) return face;
+          to.push(new VRMExpressionMorphTargetBind({ primitives: [mesh], index, weight: b.weight }));
+        }
+      }
+    }
+    if (!split.mouth.length) return face;
+    for (const k of ["eyes", "brow", "mouth"]) {
+      const x = new VRMExpression("dw-" + name + "-" + k);
+      for (const b of split[k]) x.addBind(b);
+      ex.registerExpression(x);
+      face[k] = x.expressionName;
+    }
+    return face;
+  }
+  // 話しているあいだは 1、黙ると 0。声の切れ目では戻さない（切れ目ごとに表情が変わらないように）
+  let talkMix = 0, talkHold = 0;
+  function talkStep(mouth, dt) {
+    talkHold = mouth > 0.04 ? 0.6 : Math.max(0, talkHold - dt);
+    talkMix = talkHold > 0 ? Math.min(1, talkMix + dt / 0.15) : Math.max(0, talkMix - dt / 0.35);
+    return talkMix * talkMix * (3 - 2 * talkMix);
+  }
+  const faceSum = {};   // 表情の名前 → いまの強さ
+  function addFace(name, v) { faceSum[name] = Math.min(1, (faceSum[name] || 0) + v); }
   let lastDraw = 0;
   function loop() {
     requestAnimationFrame(loop);
@@ -5751,20 +6154,35 @@ if (THREE && VRMLoaderPlugin) {
       if (el > 12) window.__wheelDemo = 0; else s.wheel = Math.sin(el * 1.2) * 0.8;
     }
 
-    // 口と表情。表情の口の形に「あ」を重ねると開きすぎるので、表情のあいだは「あ」を弱める
+    // 表情と口。目と眉は表情のまま保ち、口は、話しているあいだは表情の口を弱めて、声に合わせて動かす
     const ex = vrm.expressionManager;
     if (ex) {
-      const sum = {};
+      if (facesOf !== ex) for (const k in faceSum) delete faceSum[k];
+      for (const k in faceSum) faceSum[k] = 0;
+      const talk = talkStep(s.mouth, dt);
+      const voice = Math.min(1, s.mouth * 1.1);
       let mouthCut = 0, blinkCut = 0;
-      for (const [id, w] of Object.entries(s.face || {})) {
-        const look = FACE_LOOK[id];
+      for (const id in s.face || {}) {
+        const look = FACE_LOOK[id], w = s.face[id];
         if (!look || !w) continue;
-        for (const [n, k] of look.parts) { const name = faceName(ex, n); if (name) sum[name] = Math.min(1, (sum[name] || 0) + k * w); }
-        mouthCut = Math.max(mouthCut, look.mouth * w);
-        blinkCut = Math.max(blinkCut, look.blink * w);
+        let split = false;
+        for (const [n, k, eyes = k, brow = k, mouth = k] of look.parts) {
+          const f = faceOf(ex, n);
+          if (!f) continue;
+          if (f.mouth) {
+            split = true;
+            addFace(f.eyes, eyes * w);
+            addFace(f.brow, brow * w);
+            addFace(f.mouth, mouth * w * (1 - talk * (1 - look.talk * (1 - voice * 0.5))));
+          } else {
+            addFace(f.whole, k * w * (1 - talk * 0.35));
+            mouthCut = Math.max(mouthCut, look.mouth * w);
+          }
+        }
+        blinkCut = Math.max(blinkCut, (split ? look.open ?? look.blink : look.blink) * w);
       }
-      for (const name of usedFaceNames) ex.setValue(name, sum[name] || 0);
-      ex.setValue("aa", Math.min(1, s.mouth * 1.1) * (1 - mouthCut));
+      for (const name in faceSum) ex.setValue(name, faceSum[name]);
+      ex.setValue("aa", voice * (1 - mouthCut));
       ex.setValue("blink", Math.min(1, s.blink) * (1 - blinkCut));
     }
     // 視線：基本は進行方向（道路）。雑談のときだけカメラの方を向く
@@ -5840,12 +6258,105 @@ if (THREE && VRMLoaderPlugin) {
 
     }
     aimCamera();
+    introCamera();
     vrm.update(dt);
     renderer.render(scene, camera);
     window.copyToPreview?.(canvas);
   }
   loop();
   resize();
+
+  // 共有で開いた人：モデルを取ってくる。終わるまでは、別人の顔を出さずに、読み込み中と出す。
+  // ファイルの名前は中身で決まるので、端末に取っておいて、2回目からはすぐ出す
+  window.__vrmBoot = true;
+  const progress = n => $("vrmLoad").style.setProperty("--p", Math.max(0, Math.min(100, n)));
+  async function sharedVRM() {
+    const S = window.SHARE;
+    const ix = await (await fetch(S.base + "index.json", { cache: "no-cache" })).json();
+    if (!ix.avatar?.vrm) return false;
+    const file = /^[\w.-]+\.vrm$/.test(ix.avatar.vrmFile || "") ? ix.avatar.vrmFile : "model.vrm", url = S.base + "avatar/" + file;
+    let store = null, buf = null, fresh = false;
+    try { store = await caches.open("drive-wipe-vrm"); buf = await (await store.match(url))?.arrayBuffer(); } catch (e) {}
+    if (!buf) {
+      fresh = true;
+      const r = await fetch(url);
+      if (!r.ok) throw new Error("VRM " + r.status);
+      const all = +r.headers.get("content-length") || 0, rd = r.body?.getReader();
+      if (rd && all) {
+        const parts = [];
+        let got = 0;
+        for (let x; !(x = await rd.read()).done;) { parts.push(x.value); got += x.value.length; progress(got / all * 95); }
+        buf = await new Blob(parts).arrayBuffer();
+      } else buf = await r.arrayBuffer();
+      try {
+        for (const k of await store.keys()) if (k.url.startsWith(S.base) && k.url !== url) await store.delete(k);   // 古いモデルは捨てる
+        await store.put(url, new Response(buf.slice(0)));
+      } catch (e) {}
+    }
+    progress(96);
+    await window.loadVRM(buf);
+    return fresh;
+  }
+
+  // 出てくるところ：暗がりが手の形にほどけて、こちらを見た顔のアップから、運転席の画角へ引く
+  let introStart = 0;
+  const INTRO = { hold: 1500, pull: 1900 };
+  const easeIO = u => u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
+  const _ic = new THREE.Vector3(), _ih = new THREE.Vector3(), _il = new THREE.Vector3(), _ip = new THREE.Vector3(), _iq = new THREE.Quaternion();
+  function introCamera() {
+    if (!introStart) return;
+    const t = performance.now() - introStart, u = Math.max(0, Math.min(1, (t - INTRO.hold) / INTRO.pull)), e = easeIO(u);
+    introSpread = Math.min(1, t / 900);                           // 目隠しを外した手が、少し外へ開く
+    introHands = 1 - step01((t - INTRO.hold) / INTRO.pull, 0.12, 0.92);   // 引きながら、ハンドルへ
+    const hd = vrm?.humanoid?.getNormalizedBoneNode("head");
+    if (!hd || u >= 1) {
+      introStart = introHands = 0;
+      frame(); aimCamera();
+      window.__introOn = false;
+      return;
+    }
+    if (u > 0.72) window.__introOn = false;   // 引き終わるころに、前を向く
+    // いつもの画角
+    frame(); aimCamera();
+    _ic.copy(camera.position);
+    camera.getWorldDirection(_il);
+    _ip.copy(_ic).addScaledVector(_il, 1);
+    // 顔のアップ
+    hd.getWorldPosition(_ih);
+    _ih.y += 0.065;
+    _il.set(_ic.x - _ih.x, 0, _ic.z - _ih.z).normalize();
+    const near = 0.15 / Math.tan(FOV * Math.PI / 360) * Math.max(1, 1.0 / Math.max(0.6, camera.aspect));
+    const cx = _ih.x + _il.x * near, cy = _ih.y + 0.005, cz = _ih.z + _il.z * near;
+    const breathe = 1 - Math.min(1, t / INTRO.hold) * 0.06;   // 止めているあいだも、少しずつ寄る
+    camera.position.set(cx + (_ih.x - cx) * (1 - breathe) , cy, cz + (_ih.z - cz) * (1 - breathe)).lerp(_ic, e);
+    _ih.lerp(_ip, e);
+    camera.lookAt(_ih);
+  }
+  async function reveal() {
+    const root = document.documentElement, box = $("vrmLoad");
+    if (!window.WATCH_MODE) { root.classList.add("vrm-done"); return; }
+    progress(100);
+    // 一覧を開いているあいだは見えないので、ワイプが見えるまで待つ
+    while (document.hidden || $("pickDlg").open || root.classList.contains("brk") || getComputedStyle($("avatar")).visibility === "hidden") await new Promise(r => setTimeout(r, 200));
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) { root.classList.add("vrm-done"); return; }
+    for (let i = 0; i < 4; i++) for (const c of ["l", "r"]) {
+      const f = document.createElement("i");
+      f.className = c;
+      f.style.top = (i * 25 + (c === "r" ? 9 : -4)) + "%";
+      f.style.height = "18%";
+      f.style.animationDelay = (0.04 * i + (c === "r" ? 0.03 : 0)) + "s";
+      box.appendChild(f);
+    }
+    window.__introOn = true;
+    introHands = 1;
+    introStart = performance.now();
+    window.__introMood?.(true);
+    await new Promise(r => setTimeout(r, 120));   // アップの絵ができてから開く
+    box.classList.add("open");
+    root.classList.add("vrm-done");
+    setTimeout(() => { box.classList.remove("open"); box.querySelectorAll("i").forEach(x => x.remove()); }, 1400);
+    setTimeout(() => window.__introMood?.(false), INTRO.hold + INTRO.pull * 0.8);
+  }
 
   // 前回選んだVRMがあれば自動で復元する
   try {
@@ -5860,11 +6371,15 @@ if (THREE && VRMLoaderPlugin) {
         q.onsuccess = () => res(q.result); q.onerror = () => res(null);
       });
     })();
-    if (window.SHARE) {
-      const r = await fetch(window.SHARE.base + "avatar/model.vrm");
-      if (r.ok) await window.loadVRM(await r.arrayBuffer());
-    } else if (saved) await window.loadVRM(saved);
-  } catch (e) { /* 復元できなければ簡易アバターのまま */ }
+    // 演出は、モデルをはじめて取ってきたときだけ。もう端末にあるときは、すぐ出す
+    let fresh = false;
+    if (window.SHARE) fresh = await sharedVRM();
+    else if (saved) {
+      fresh = lsGet("vrm-fresh") === "1";
+      await window.loadVRM(saved);
+    }
+    if (fresh && window.__vrmReady) { lsSet("vrm-fresh", ""); reveal(); } else document.documentElement.classList.add("vrm-done");
+  } catch (e) { document.documentElement.classList.add("vrm-done"); /* 復元できなければ簡易アバターのまま */ }
 }
 </script>
 <script>
@@ -7556,6 +8071,23 @@ $("btnCopy").onclick = async () => {
     d.querySelector(".body").scrollTop = cur ? Math.max(0, cur.offsetTop - 120) : 0;
   }
   $("wInfoBtn").onclick = $("wInfoBtn2").onclick = $("wRow").onclick = openInfo;
+  // 共有：自分の台本なら共有の画面、共有で開いた人なら、いま見ている URL を渡す
+  async function shareNow() {
+    if (!script) return;
+    if (window.SHARE) {
+      const url = location.href;
+      if (navigator.share) { try { await navigator.share({ title: document.title, url }); return; } catch (e) { if (e.name === "AbortError") return; } }
+      let ok = false;
+      try { await navigator.clipboard.writeText(url); ok = true; } catch (e) {}
+      showToast(ok ? "URL をコピーしました。" : "URL をコピーできませんでした。");
+      return;
+    }
+    const key = scriptKey(script);
+    if ($("wDesc").open) $("wDesc").close();
+    openShare(pickItems.find(x => x.key === key) || { key, videoId: script.videoId, info: { label: [script.meta?.title || key, script.title].filter(Boolean).join("　") } });
+  }
+  $("wShare").onclick = $("iShare").onclick = shareNow;
+  root.classList.toggle("no-share", !window.SHARE && (!lsGet("data-repo") || !lsGet("github-pat")));
   $("iClose").onclick = () => $("wDesc").close();
   $("wDesc").addEventListener("click", e => { if (e.target === $("wDesc")) $("wDesc").close(); });
 
@@ -7757,6 +8289,13 @@ $("btnCopy").onclick = async () => {
   // 「動画の前」の人と、共有で開いた人には、広告のあいだは小話をしない
   function adTalk(ad) {
     if (!ad) { adTalkWait = false; if (wasAd) talkQuiet = Math.max(talkQuiet, Date.now() + 1500); adTalkT = 0; return; }
+    // 横持ちでは、広告のあいだキャラクターを隠している。姿が見えないまま話さない
+    if (!root.classList.contains("booth")) {
+      talkCancel();
+      if (queue.length) dropQueue();
+      if (speaking) try { cancelSpeak(); } catch (e) {}
+      return;
+    }
     if (talkWhen() !== "ad") {
       // 広告が始まったら話をやめる。共有で開いた人には、話しかけの実況もそこでやめる
       if (!wasAd) { talkCancel(); if (window.SHARE) { dropQueue(); try { cancelSpeak(); } catch (e) {} } }
@@ -8321,8 +8860,18 @@ $("btnCopy").onclick = async () => {
   $("wBig").onclick = togglePlay;
   $("wBack").onclick = () => skip(-secsOf(-1));
   // セリフの一覧とプレイリストは、同じ場所に片方だけ出す
+  // セリフの一覧を開いたら、いまの所を出す
+  function openCueList() {
+    tlTouched = 0;
+    let t = 0;
+    try { t = player.getCurrentTime() || 0; } catch (e) {}
+    if (!started) t = startPos();
+    const cur = cues.filter(c => c.at <= t + 0.5).pop() || cues[0];
+    if (cur) { lastHighlight = -1; highlightCue(cur.id); }
+    requestAnimationFrame(() => requestAnimationFrame(() => showCue(null, false)));
+  }
   const listOpen = plain => root.classList.contains("list-open") && root.classList.contains("pl-open") !== plain;
-  $("wList").onclick = () => { const on = !listOpen(true); root.classList.remove("pl-open"); root.classList.toggle("list-open", on); if (window.SHARE) layout(); poke(); };
+  $("wList").onclick = () => { const on = !listOpen(true); root.classList.remove("pl-open"); root.classList.toggle("list-open", on); if (window.SHARE) layout(); if (on) openCueList(); poke(); };
   const togglePl = () => { const on = !listOpen(false); root.classList.toggle("pl-open", on); root.classList.toggle("list-open", on); plRender(); poke(); };
 
   window.__watchToast = msg => showToast(msg);
@@ -8647,6 +9196,13 @@ $("btnCopy").onclick = async () => {
     else if (playing()) root.classList.remove("ui-on");
     else poke();
   }
+  // 何もない所を続けてたたいたときの拡大も止める（押す所・入力欄・ダイアログの中は、そのまま）
+  let lastTouch = 0;
+  document.addEventListener("touchend", e => {
+    const near = e.timeStamp - lastTouch < 400;
+    lastTouch = e.timeStamp;
+    if (near && e.cancelable && !e.touches.length && !e.target.closest("button, a, input, select, textarea, label, dialog, #wTap, #avatar, #wProg, #tlWrap")) e.preventDefault();
+  }, { passive: false });
   $("wTap").onclick = tapVideo;
   // 1回目で出てきた操作の上に2回目の指が来ても、2回たたいたことにする
   $("wCtl").addEventListener("click", e => {

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>
   // ふつうに開くと、見るだけの画面になる。台本づくりや細かい設定の画面は ?edit を付けて開く
-  window.APP_VERSION = 'v0.22.3'.startsWith('v') || /^master-/.test('v0.22.3') ? 'v0.22.3' : '開発版';
+  window.APP_VERSION = 'v0.22.4'.startsWith('v') || /^master-/.test('v0.22.4') ? 'v0.22.4' : '開発版';
   // ?v=持ち主/リポジトリ/台本の名前 で開くと、その人が公開した台本を、接続なしで再生する
   (() => {
     const q = new URLSearchParams(location.search);
@@ -30,6 +30,8 @@
     }
   })();
   window.WATCH_MODE = !!window.SHARE || !new URLSearchParams(location.search).has("edit");
+  // ?t=秒 で、その所から始める（YouTube と同じ）
+  { const t = new URLSearchParams(location.search).get("t"); if (/^\d{1,6}$/.test(t || "")) window.LINK_T = +t; }
   if (window.SHARE) document.documentElement.classList.add("shared");
   // 3D の部品を読み込めない端末では、真っ暗のままにせず、絵の顔を出す
   setTimeout(() => { if (!window.__vrmBoot) document.documentElement.classList.add("vrm-done"); }, 8000);
@@ -1694,11 +1696,20 @@
 </dialog>
 
 <!-- URLで共有 -->
+<dialog id="shareTDlg">
+  <h2 style="margin-top:0;font-size:17px">共有</h2>
+  <div class="row" style="margin-top:12px">
+    <button id="shareT1" class="fixed primary"></button>
+    <button id="shareT0" class="fixed">最初から</button>
+    <button id="shareTClose" class="fixed">閉じる</button>
+  </div>
+</dialog>
 <dialog id="shareDlg">
   <h2 style="margin-top:0;font-size:17px">URLで共有</h2>
   <p id="shareWhat"></p>
   <p class="hint">共有すると、URL を知っている人は誰でも台本を見られます。公開されるのは、セリフと声とキャラクター、動画と台本の題、取り上げた記事の題とリンクです。リポジトリのほかの中身は、公開されません。</p>
   <input type="text" id="shareUrl" readonly aria-label="共有のURL">
+  <label class="hint" id="shareAtRow" hidden style="display:flex;align-items:center;gap:8px;margin-top:8px"><input type="checkbox" id="shareAt" style="width:auto;margin:0"><span id="shareAtTxt"></span></label>
   <p class="hint" id="shareMsg"></p>
   <div class="row" style="margin-top:12px">
     <button id="shareOn" class="fixed primary">共有する</button>
@@ -2100,12 +2111,26 @@ $("useComments").onchange = () => { if (script) { cues = buildCues(script, $("us
 /* ---------- YouTube プレイヤー ---------- */
 let ytReady = false, pendingVideo = null, pendingStart = false, seekWant = 0;
 // 再生を始める位置。見る画面では、途中まで見た台本は続きから
-function startPos() { return (window.WATCH_MODE && script && resumeAt(scriptKey(script))) || script?.start || 0; }
+function startPos() {
+  if (window.LINK_T != null && script) return linkStart(window.LINK_T);
+  return (window.WATCH_MODE && script && resumeAt(scriptKey(script))) || script?.start || 0;
+}
+// 時間を指定したリンク：話の途中から始まらないよう、その話のかたまりの頭の少し前から始める。
+// 黙っている所なら、指定のとおり
+function linkStart(t) {
+  const list = cues.filter(c => !c.comment && c.text);
+  let k = -1;
+  for (let i = 0; i < list.length && list[i].at <= t + 0.5; i++) k = i;
+  if (k < 0 || t > list[k].at + list[k].text.length / 5.5 + 3) return t;   // 話し終えたあとの静かな所
+  while (k > 0 && list[k].follow) k--;
+  return Math.max(script.start || 0, list[k].at - 1.5);
+}
 function startVideo() {
   // プレイヤーの準備ができる前に押されたら、準備ができたときに始める
   if (!player || !player.seekTo) { pendingStart = true; return; }
   // 動画を替えた直後の seekTo は捨てられることがあるので、再生が始まってからも位置を確かめる
   seekWant = startPos();
+  window.LINK_T = null;   // リンクの時間は、最初の1回だけ
   try { player.seekTo(seekWant, true); player.playVideo(); } catch (e) {}
 }
 window.onYouTubeIframeAPIReady = () => {
@@ -4742,13 +4767,29 @@ function shareInfo(key) {
   const [owner, repo] = lsGet("data-repo").split("/");
   return { base: `https://${owner.toLowerCase()}.github.io/${repo}/`, url: `${location.origin}${location.pathname}?v=${owner}/${repo}/${key}` };
 }
-let shareTarget = null, shareSeq = 0;
+let shareTarget = null, shareSeq = 0, shareT = null;
+// いま見ている所の秒。始まっていなければ、または始めのほうなら null
+function nowSec() {
+  if (!started) return null;
+  let t = 0;
+  try { t = Math.floor(player.getCurrentTime() || 0); } catch (e) {}
+  return t >= 5 ? t : null;
+}
+const withT = (url, t) => {
+  const u = url.replace(/([?&])t=[^&#]*&?/, "$1").replace(/[?&]$/, "");
+  return t == null ? u : u + (u.includes("?") ? "&" : "?") + "t=" + t;
+};
+function shareUrlNow() { $("shareUrl").value = withT(shareInfo(shareTarget.key).url, $("shareAt").checked ? shareT : null); $("shareCopy").textContent = "URLをコピー"; }
+$("shareAt").onchange = shareUrlNow;
 async function openShare(x) {
   shareTarget = x;
+  shareT = script && x.key === scriptKey(script) ? nowSec() : null;
+  $("shareAt").checked = false;
+  $("shareAtTxt").textContent = shareT != null ? `いま見ている所（${fmtTime(shareT)}）から始める` : "";
   const seq = ++shareSeq, d = $("shareDlg");
   $("shareWhat").textContent = isOnly(x) ? mainName(x) : `${mainName(x)}（${scriptTitle(x)}）`;
   $("shareUrl").value = shareInfo(x.key).url;
-  $("shareUrl").hidden = $("shareOn").hidden = $("shareOff").hidden = $("shareCopy").hidden = true;
+  $("shareUrl").hidden = $("shareOn").hidden = $("shareOff").hidden = $("shareCopy").hidden = $("shareAtRow").hidden = true;
   $("shareMsg").textContent = "確かめています…";
   if (!d.open) d.showModal();
   try {
@@ -4766,6 +4807,7 @@ async function openShare(x) {
 function showShare(on) {
   $("shareOn").hidden = on;
   $("shareUrl").hidden = $("shareOff").hidden = $("shareCopy").hidden = !on;
+  $("shareAtRow").hidden = !on || shareT == null;
   $("shareMsg").textContent = on ? "" : "まだ共有していません。";
   $("shareCopy").textContent = "URLをコピー";
 }
@@ -8075,16 +8117,27 @@ $("btnCopy").onclick = async () => {
   async function shareNow() {
     if (!script) return;
     if (window.SHARE) {
-      const url = location.href;
-      if (navigator.share) { try { await navigator.share({ title: document.title, url }); return; } catch (e) { if (e.name === "AbortError") return; } }
-      let ok = false;
-      try { await navigator.clipboard.writeText(url); ok = true; } catch (e) {}
-      showToast(ok ? "URL をコピーしました。" : "URL をコピーできませんでした。");
+      const t = nowSec();
+      if (t != null && !$("shareTDlg").open) {
+        $("shareT1").textContent = `${fmtTime(t)} から`;
+        $("shareT1").onclick = () => { $("shareTDlg").close(); shareUrl(withT(location.href, t)); };
+        $("shareT0").onclick = () => { $("shareTDlg").close(); shareUrl(withT(location.href, null)); };
+        $("shareTDlg").showModal();
+        return;
+      }
+      shareUrl(withT(location.href, null));
       return;
     }
     const key = scriptKey(script);
     if ($("wDesc").open) $("wDesc").close();
     openShare(pickItems.find(x => x.key === key) || { key, videoId: script.videoId, info: { label: [script.meta?.title || key, script.title].filter(Boolean).join("　") } });
+  }
+  $("shareTClose").onclick = () => $("shareTDlg").close();
+  async function shareUrl(url) {
+    if (navigator.share) { try { await navigator.share({ title: document.title, url }); return; } catch (e) { if (e.name === "AbortError") return; } }
+    let ok = false;
+    try { await navigator.clipboard.writeText(url); ok = true; } catch (e) {}
+    showToast(ok ? "URL をコピーしました。" : "URL をコピーできませんでした。");
   }
   $("wShare").onclick = $("iShare").onclick = shareNow;
   root.classList.toggle("no-share", !window.SHARE && (!lsGet("data-repo") || !lsGet("github-pat")));
@@ -8131,7 +8184,7 @@ $("btnCopy").onclick = async () => {
     const box = el('<div id="shBox" data-k="pre"><button type="button" id="shVoice"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5v5h3.5L12 19V5L7.5 9.5z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>声を出す</button><button type="button" id="shAgain">もう一度見る</button><div id="shArt"><span class="tx"><span class="lb"></span><span class="tt"></span></span><a target="_blank" rel="noopener noreferrer">元の記事を読む</a></div><div id="shPlace"></div></div>');
     $("stage").appendChild(box);
     box.prepend($("wInfo"), $("wBig"));
-    $("wBig").append("再生");
+    $("wBig").append(window.LINK_T != null ? fmtTime(window.LINK_T) + " から再生" : "再生");
     if (!script) $("wBig").style.display = "none";
     const fwd = $("wBack").cloneNode(true);
     fwd.id = "wFwd";

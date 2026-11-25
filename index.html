@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>
   // ふつうに開くと、見るだけの画面になる。台本づくりや細かい設定の画面は ?edit を付けて開く
-  window.APP_VERSION = 'v0.18.1'.startsWith('v') || /^master-/.test('v0.18.1') ? 'v0.18.1' : '開発版';
+  window.APP_VERSION = 'v0.19.0'.startsWith('v') || /^master-/.test('v0.19.0') ? 'v0.19.0' : '開発版';
   // ?v=持ち主/リポジトリ/台本の名前 で開くと、その人が公開した台本を、接続なしで再生する
   (() => {
     const q = new URLSearchParams(location.search);
@@ -696,6 +696,46 @@
     background: rgba(0,0,0,.8); color: #fff; font-size: 13px; padding: 6px 12px; border-radius: 8px; max-width: 70%;
   }
   html.watch #wToast.on { display: block; }
+
+  /* ==== 声・アバターの設定（?edit）。上から順に決めて、最後に保存する ==== */
+  html.watch #setup { display: none !important; }
+  html:not(.watch) #tlWrap { display: none; }
+  /* 映像とキャラクターは、下を動かしているあいだも見えるように、画面の上に留める */
+  html:not(.watch) #playArea { display: block; position: sticky; top: 0; z-index: 5; background: var(--bg); margin: -14px -14px 0; padding: 8px 14px 6px; box-shadow: 0 8px 8px -8px rgba(0,0,0,.35); }
+  html:not(.watch) #stage { max-height: 42dvh; }
+  html:not(.watch) #status { margin-top: 4px; max-height: 4.8em; overflow-y: auto; }
+  html:not(.watch) #status:empty { display: none; }
+  @media (max-width: 680px) {
+    html:not(.watch)[data-wipe-shape="portrait"] #avatar { width: 34%; }
+    html:not(.watch)[data-wipe-shape="square"] #avatar { width: 40%; }
+    html:not(.watch)[data-wipe-shape="landscape"] #avatar { width: 46%; }
+    html:not(.watch)[data-wipe-shape="wide"] #avatar { width: 52%; }
+    html:not(.watch) #avatar { bottom: 4%; }
+  }
+  #setup .lead { margin: 12px 0 4px; font-size: 15px; }
+  .sx { border-top: 1px solid var(--line); padding: 16px 0 8px; margin-top: 12px; }
+  .sx h2 { display: flex; align-items: center; gap: 8px; font-size: 17px; margin: 0 0 6px; }
+  .sx h2 .num { flex: 0 0 26px; height: 26px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 14px; display: inline-flex; align-items: center; justify-content: center; }
+  .sx label { font-size: 14px; }
+  .sx .hint, .sx details { font-size: 13px; line-height: 1.65; }
+  .sx .hint + .hint { margin-top: 6px; }
+  .sx ul { margin: 6px 0; padding-left: 1.3em; }
+  .sx details p { margin: 8px 0; }
+  .sx input[type=range] { width: 100%; }
+  .sx input[type=file] { width: 100%; font-size: 16px; }
+  .sx button { min-height: 44px; }
+  .sx code { font-size: 12px; overflow-wrap: anywhere; }
+  .g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+  .g2 > div { min-width: 0; }
+  .sx .now { padding: 10px 12px; margin: 4px 0 8px; background: var(--panel); border-radius: 8px; font-size: 15px; }
+  #bgFileRow[hidden], #voiceRow[hidden] { display: none; }
+  #setup #engineHint:not(.err) { display: none; }
+  @media (min-width: 900px) {
+    html:not(.watch) main { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 0 28px; align-items: start; max-width: 1240px; }
+    html:not(.watch) #playArea { top: 14px; margin: 0; padding: 0 0 6px; }
+    html:not(.watch) #stage { max-height: 80dvh; }
+    #setup .lead { margin-top: 0; }
+  }
 </style>
 </head>
 <body>
@@ -770,8 +810,182 @@
     <button id="exitFull">閉じる</button>
   </div>
   <div id="tlWrap"><div id="timeline"></div><div id="wPl"></div></div>
-  </div>
   <div id="status"></div>
+  </div>
+  <div id="setup">
+  <p class="lead">見る画面に出るキャラクターと声を、上から順に決めます。最後に［保存する］を押します。</p>
+
+  <section class="sx">
+    <h2><span class="num">1</span>キャラクターを選ぶ</h2>
+    <label for="vrmFile">3D モデル</label>
+    <input type="file" id="vrmFile" accept=".vrm,model/gltf-binary,application/octet-stream" style="width:auto">
+    <p class="hint">VRM という形のファイルを選びます。3D モデルを選ばないときは、簡単な絵の顔のキャラクターが表示されます。</p>
+    <details>
+      <summary>3D モデルの手に入れ方</summary>
+      <ul>
+        <li>配られている 3D モデルを使う：<a href="https://hub.vroid.com/characters" target="_blank" rel="noopener">VRoid Hub</a>、<a href="https://3d.nicovideo.jp/search?work_type=vrm&amp;sort=total&amp;order=1" target="_blank" rel="noopener">ニコニ立体</a></li>
+        <li>買う：<a href="https://booth.pm/ja/browse/3D%E3%83%A2%E3%83%87%E3%83%AB?q=VRM" target="_blank" rel="noopener">BOOTH</a></li>
+        <li>自分で作る：<a href="https://vroid.com/studio" target="_blank" rel="noopener">VRoid Studio</a>。VRoid Studio は、Windows か Mac で使います</li>
+      </ul>
+      <p>3D モデルを使う前に、配布ページで利用条件を読みます。</p>
+    </details>
+    <label for="bgPreset">車内の背景</label>
+    <select id="bgPreset">
+          <option value="night">夜の車内（内蔵）</option>
+          <option value="day">昼の車内（内蔵）</option>
+          <option value="none">なし</option>
+          <option value="file">自分の写真を使う</option>
+        </select>
+    <div id="bgFileRow">
+      <label for="bgFile">背景の写真</label>
+      <input type="file" id="bgFile" accept="image/*" style="width:auto">
+      <p class="hint">選んだ写真は、ほかのスマホや PC と、URL で共有した相手の画面には出ません。</p>
+    </div>
+  </section>
+
+  <section class="sx">
+    <h2><span class="num">2</span>キャラクターの見え方を合わせる</h2>
+    <p class="hint">設定を変えると、映像に出ているキャラクターが、すぐに変わります。</p>
+    <div class="g2">
+      <div>
+        <label for="wipeShape">枠の形</label>
+        <select id="wipeShape">
+          <option value="portrait">縦（3:4）</option>
+          <option value="square">正方形</option>
+          <option value="landscape">横（4:3）</option>
+          <option value="wide">横長（16:9）</option>
+        </select>
+      </div>
+      <div>
+        <label for="framing">映す範囲</label>
+        <select id="framing">
+          <option value="bust">胸から上</option>
+          <option value="wheel">ハンドルまで</option>
+        </select>
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px"><button id="btnAutoFit">自動で合わせる</button></div>
+    <p class="hint">［自動で合わせる］を押すと、寄りと位置が、3D モデルの体格に合わせて決め直されます。枠の形や横からの角度を変えたあとも、［自動で合わせる］を押します。</p>
+    <div class="g2">
+      <div>
+        <label for="camDist">寄り <span id="camDistVal">1.00</span></label>
+        <input type="range" id="camDist" min="0.55" max="2" step="0.05" value="1" style="width:100%">
+      </div>
+      <div>
+        <label for="camAngle">横からの角度 <span id="camAngleVal">40</span>°</label>
+        <input type="range" id="camAngle" min="0" max="80" step="5" value="40" style="width:100%">
+      </div>
+      <div>
+        <label for="camY">上下の位置 <span id="camYVal">0.00</span></label>
+        <input type="range" id="camY" min="-0.6" max="0.6" step="0.02" value="0" style="width:100%">
+      </div>
+      <div>
+        <label for="camX">左右の位置 <span id="camXVal">0.00</span></label>
+        <input type="range" id="camX" min="-0.4" max="0.4" step="0.02" value="0" style="width:100%">
+      </div>
+      <div>
+        <label for="idle">揺れの大きさ <span id="idleVal">1.00</span></label>
+        <input type="range" id="idle" min="0" max="3" step="0.1" value="1" style="width:100%">
+      </div>
+    </div>
+    <p class="hint">寄りの数を小さくすると、キャラクターが大きく映ります。キャラクターの大きさと置き場所は、見る画面で、キャラクターを指やマウスで動かして決めます。</p>
+    <details id="wheelBox">
+      <summary>ハンドルの調整</summary>
+      <p>［映す範囲］で［ハンドルまで］を選んだときに、ハンドルと手を合わせます。ハンドルの置き場所を先に決めると、手はハンドルの縁を握りにいきます。</p>
+      <div class="g2">
+      <div>
+        <label for="wheelSize">ハンドルの大きさ <span id="wheelSizeVal">1.00</span></label>
+        <input type="range" id="wheelSize" min="0.6" max="1.6" step="0.05" value="1" style="width:100%">
+      </div>
+      <div>
+        <label for="wheelTilt">ハンドルの傾き <span id="wheelTiltVal">0.40</span></label>
+        <input type="range" id="wheelTilt" min="0" max="1.2" step="0.05" value="0.4" style="width:100%">
+      </div>
+      <div>
+        <label for="wheelY">ハンドルの高さ <span id="wheelYVal">0.00</span></label>
+        <input type="range" id="wheelY" min="-0.30" max="0.30" step="0.01" value="0" style="width:100%">
+      </div>
+      <div>
+        <label for="wheelZ">ハンドルの前後 <span id="wheelZVal">0.00</span></label>
+        <input type="range" id="wheelZ" min="-0.30" max="0.30" step="0.01" value="0" style="width:100%">
+      </div>
+      <div>
+        <label for="camAim">ハンドルの入れ具合 <span id="camAimVal">0.50</span></label>
+        <input type="range" id="camAim" min="0" max="1" step="0.05" value="0.5" style="width:100%">
+      </div>
+      <div>
+        <label for="armSpread">手を握る位置 <span id="armSpreadVal">0.50</span></label>
+        <input type="range" id="armSpread" min="0" max="1" step="0.05" value="0.5" style="width:100%">
+      </div>
+      <div>
+        <label for="armHeight">肘の張り出し <span id="armHeightVal">0.50</span></label>
+        <input type="range" id="armHeight" min="0" max="1" step="0.05" value="0.5" style="width:100%">
+      </div>
+      <div>
+        <label for="gripStrength">手の握り <span id="gripStrengthVal">0.80</span></label>
+        <input type="range" id="gripStrength" min="0" max="1" step="0.05" value="0.8" style="width:100%">
+      </div>
+      </div>
+      <p>ハンドルの入れ具合は、0 で体、1 でハンドルが、枠のまん中に来ます。手を握る位置は、つまみを左に寄せるほど、ハンドルの下のほうを握ります。</p>
+      <div class="row" style="margin-top:8px"><button id="btnTuneWheel">ハンドルの動きを確認</button></div>
+    </details>
+  </section>
+
+  <section class="sx">
+    <h2><span class="num">3</span>声を選ぶ</h2>
+    <div class="now" id="voiceNow"></div>
+    <p class="hint">台本の声は、AI エージェントに「声を作って」と頼むと作られます。選んだ声は、次に声を作るときから使われます。もう作ってある声は変わりません。</p>
+    <p class="hint">声は、VOICEVOX というソフトにある声から選びます。VOICEVOX を起動している PC で、［声の一覧を読み込む］を押すと、選べる声が出ます。</p>
+    <div class="row" style="margin-top:8px"><button id="vvLoad" class="fixed">声の一覧を読み込む</button></div>
+    <p class="hint" id="vvMsg"></p>
+    <div id="voiceRow">
+      <label for="voice">声</label>
+      <div class="row">
+        <div><select id="voice"></select></div>
+        <div class="fixed"><button id="btnTest">声を確認</button></div>
+      </div>
+    </div>
+    <details id="vvBox">
+      <summary>VOICEVOX につながらないとき</summary>
+      <p class="hint" id="engineHint"></p>
+      <p>VOICEVOX を、次の指定を付けて起動し直します。</p>
+      <p><code id="vvOrigin"></code></p>
+      <label for="vvUrl">VOICEVOX の接続先</label>
+      <input type="text" id="vvUrl" placeholder="http://127.0.0.1:50021"
+               autocapitalize="off" autocorrect="off" spellcheck="false">
+      <p>同じ PC の VOICEVOX を使うときは、接続先を空のままにします。</p>
+    </details>
+  </section>
+
+  <section class="sx">
+    <h2><span class="num">4</span>設定を保存する</h2>
+    <p class="hint">1 と 2 で決めたキャラクターは、同じスマホや PC の見る画面に、すぐに使われます。</p>
+    <p class="hint">［保存する］を押すと、3D モデルと、1〜3 で決めた設定が、リポジトリに保存されます。リポジトリは、台本と声を置いている、自分の置き場所です。保存した設定は、次の場面で使われます。</p>
+    <ul class="hint">
+      <li>AI エージェントに頼んで、これから声を作るとき</li>
+      <li>ほかのスマホや PC で、声・アバターの設定の画面を開いて、［リポジトリから読み込む］を押したとき</li>
+      <li>URL で共有した台本を、相手が見るとき</li>
+    </ul>
+    <div class="row" style="margin-top:10px"><div class="fixed"><button id="btnSyncPush" class="primary">保存する</button></div></div>
+    <p class="hint">URL で共有した相手の画面に 3D モデルが出るのは、3D モデルに書かれた利用条件で、再配布が許されているときです。</p>
+    <p class="hint" style="margin-top:14px">ほかのスマホや PC で保存した設定を使うときは、［リポジトリから読み込む］を押します。リポジトリに保存してある 3D モデルと設定が読み込まれて、画面が開き直されます。保存していない変更は、なくなります。</p>
+    <div class="row" style="margin-top:8px"><div class="fixed"><button id="btnSyncPull">リポジトリから読み込む</button></div></div>
+    <details id="repoBox">
+      <summary>リポジトリとの接続</summary>
+      <p id="repoState"></p>
+      <label for="dataRepo">リポジトリ</label>
+      <input type="text" id="dataRepo" placeholder="例: yourname/drive-wipe-data（URL貼り付けも可）"
+               autocapitalize="off" autocorrect="off" spellcheck="false">
+      <label for="ghPat">トークン</label>
+      <input type="password" id="ghPat" placeholder="github_pat_..." autocapitalize="off" autocorrect="off" spellcheck="false">
+      <div class="row" style="margin-top:10px"><div class="fixed"><button id="btnRepoSave">接続を保存</button></div></div>
+      <p>トークンは、アプリがリポジトリを読み書きするための鍵です。見る画面の［設定］の［データの接続］と、同じ接続です。リポジトリをまだ作っていないときは、<a href="https://github.com/kyunkyunpeachdisco-maker/drive-wipe-data-template#readme" target="_blank" rel="noopener">準備の手順</a>を開きます。</p>
+    </details>
+  </section>
+  </div>
+
+  <!-- いまは使っていない部品。ほかのコードが id で触るので、消さずに見えない所へ置く -->
+  <div id="unused" hidden>
   <div id="stageBar">
     <label><input type="checkbox" id="showAvatar" checked style="width:auto;margin-right:6px">アバターを表示</label>
     <label><input type="checkbox" id="showCaption" checked style="width:auto;margin-right:6px">字幕を表示</label>
@@ -937,10 +1151,9 @@
         </select>
       </div>
       <div>
-        <label for="voice">話者</label>
-        <select id="voice"></select>
+        
       </div>
-      <div class="fixed"><button id="btnTest">声を確認</button></div>
+      <div class="fixed"></div>
       <div>
         <label for="importVoice">この台本の保存済みの声</label>
         <select id="importVoice" disabled><option value="">（台本を読み込むと出ます）</option></select>
@@ -948,9 +1161,7 @@
     </div>
     <div class="row" style="margin-top:8px" id="vvUrlRow">
       <div>
-        <label for="vvUrl">VOICEVOXの接続先</label>
-        <input type="text" id="vvUrl" placeholder="http://127.0.0.1:50021"
-               autocapitalize="off" autocorrect="off" spellcheck="false">
+        
       </div>
     </div>
     <p class="hint" id="vvHelp">
@@ -999,7 +1210,7 @@
         <input type="text" id="style" value="落ち着いた自然な声で、独り言のように、少し抑えめに">
       </div>
     </div>
-    <p class="hint" id="engineHint"></p>
+    
     <p class="hint">
       Gemini音声は上から<b>穏やか → 明るい → 力強い → 説明向き</b>の順に並べてあります。
       括弧内は公表されている声の特徴です。「声を確認」で聴き比べてください。<br>
@@ -1017,8 +1228,8 @@
     <legend>アバターの調整</legend>
     <div id="previewBox"><canvas id="preview" width="320" height="427"></canvas></div>
     <div class="row" style="margin-bottom:10px">
-      <div class="fixed"><button id="btnTuneWheel">ハンドルの動きを確認</button></div>
-      <div class="fixed"><button id="btnAutoFit">自動で合わせる</button></div>
+      <div class="fixed"></div>
+      <div class="fixed"></div>
     </div>
     <p class="hint" style="margin-bottom:10px">
       上が実際のワイプです。下の設定を変えると、ここにそのまま反映されます。<br>
@@ -1027,93 +1238,63 @@
     </p>
     <div class="row">
       <div>
-        <label for="framing">画角</label>
-        <select id="framing">
-          <option value="bust">胸から上（腕を映さない）</option>
-          <option value="wheel">ハンドルまで映す（調整が要ります）</option>
-        </select>
+        
       </div>
       <div>
-        <label for="camDist">寄り <span id="camDistVal">1.00</span></label>
-        <input type="range" id="camDist" min="0.55" max="2" step="0.05" value="1" style="width:100%">
+        
       </div>
       <div>
-        <label for="camY">上下位置 <span id="camYVal">0.00</span></label>
-        <input type="range" id="camY" min="-0.6" max="0.6" step="0.02" value="0" style="width:100%">
+        
       </div>
       <div>
-        <label for="wipeShape">ワイプの形</label>
-        <select id="wipeShape">
-          <option value="portrait">縦（3:4）</option>
-          <option value="square">正方形</option>
-          <option value="landscape">横（4:3）</option>
-          <option value="wide">横長（16:9）</option>
-        </select>
+        
       </div>
       <div>
         <label for="wipeSize">ワイプの大きさ <span id="wipeSizeVal">22</span>%</label>
         <input type="range" id="wipeSize" min="12" max="45" step="1" value="22" style="width:100%">
       </div>
       <div>
-        <label for="camAngle">横からの角度 <span id="camAngleVal">40</span>°</label>
-        <input type="range" id="camAngle" min="0" max="80" step="5" value="40" style="width:100%">
+        
       </div>
       <div>
-        <label for="camAim">ハンドルの入れ具合 <span id="camAimVal">0.50</span></label>
-        <input type="range" id="camAim" min="0" max="1" step="0.05" value="0.5" style="width:100%">
+        
       </div>
       <div>
-        <label for="camX">左右位置 <span id="camXVal">0.00</span></label>
-        <input type="range" id="camX" min="-0.4" max="0.4" step="0.02" value="0" style="width:100%">
+        
       </div>
     </div>
     <div class="row" style="margin-top:8px">
       <div>
-        <label for="bgPreset">車内の背景</label>
-        <select id="bgPreset">
-          <option value="night">夜の車内（内蔵）</option>
-          <option value="day">昼の車内（内蔵）</option>
-          <option value="none">なし</option>
-          <option value="file">自分の写真を使う</option>
-        </select>
+        
       </div>
       <div class="fixed">
-        <label style="margin:0" for="bgFile">写真を選ぶ</label>
-        <input type="file" id="bgFile" accept="image/*" style="width:auto">
+        
       </div>
     </div>
     <div class="row" style="margin-top:8px">
       <div>
-        <label for="armHeight">肘の張り出し <span id="armHeightVal">0.50</span></label>
-        <input type="range" id="armHeight" min="0" max="1" step="0.05" value="0.5" style="width:100%">
+        
       </div>
       <div>
-        <label for="armSpread">手を握る位置 <span id="armSpreadVal">0.50</span></label>
-        <input type="range" id="armSpread" min="0" max="1" step="0.05" value="0.5" style="width:100%">
+        
       </div>
       <div>
-        <label for="gripStrength">手の握り <span id="gripStrengthVal">0.80</span></label>
-        <input type="range" id="gripStrength" min="0" max="1" step="0.05" value="0.8" style="width:100%">
+        
       </div>
       <div>
-        <label for="wheelSize">ハンドルの大きさ <span id="wheelSizeVal">1.00</span></label>
-        <input type="range" id="wheelSize" min="0.6" max="1.6" step="0.05" value="1" style="width:100%">
+        
       </div>
       <div>
-        <label for="wheelTilt">ハンドルの傾き <span id="wheelTiltVal">0.40</span></label>
-        <input type="range" id="wheelTilt" min="0" max="1.2" step="0.05" value="0.4" style="width:100%">
+        
       </div>
       <div>
-        <label for="wheelY">ハンドルの高さ <span id="wheelYVal">0.00</span></label>
-        <input type="range" id="wheelY" min="-0.30" max="0.30" step="0.01" value="0" style="width:100%">
+        
       </div>
       <div>
-        <label for="wheelZ">ハンドルの前後 <span id="wheelZVal">0.00</span></label>
-        <input type="range" id="wheelZ" min="-0.30" max="0.30" step="0.01" value="0" style="width:100%">
+        
       </div>
       <div>
-        <label for="idle">揺れの大きさ <span id="idleVal">1.00</span></label>
-        <input type="range" id="idle" min="0" max="3" step="0.1" value="1" style="width:100%">
+        
       </div>
     </div>
     <p class="hint">
@@ -1187,8 +1368,7 @@
         <label style="margin:0"><input type="checkbox" id="useComments" style="width:auto;margin-right:6px">コメントも読む</label>
       </div>
       <div class="fixed">
-        <label style="margin:0" for="vrmFile">VRMファイル</label>
-        <input type="file" id="vrmFile" accept=".vrm,model/gltf-binary,application/octet-stream" style="width:auto">
+        
       </div>
       <div class="fixed">
         <label style="margin:0"><input type="checkbox" id="flipVRM" style="width:auto;margin-right:6px">向きを反転</label>
@@ -1219,19 +1399,16 @@
     <legend>データリポジトリ（端末間の受け渡し）</legend>
     <div class="row">
       <div>
-        <label for="dataRepo">リポジトリ</label>
-        <input type="text" id="dataRepo" placeholder="例: yourname/drive-wipe-data（URL貼り付けも可）"
-               autocapitalize="off" autocorrect="off" spellcheck="false">
+        
       </div>
       <div>
-        <label for="ghPat">アクセストークン</label>
-        <input type="password" id="ghPat" placeholder="github_pat_..." autocapitalize="off" autocorrect="off" spellcheck="false">
+        
       </div>
-      <div class="fixed"><button id="btnRepoSave">保存</button></div>
+      <div class="fixed"></div>
     </div>
     <div class="row" style="margin-top:8px">
-      <div class="fixed"><button id="btnSyncPush">まとめて保存</button></div>
-      <div class="fixed"><button id="btnSyncPull">まとめて読み込む</button></div>
+      <div class="fixed"></div>
+      <div class="fixed"></div>
     </div>
     <p class="hint">
       <b>まとめて保存</b>＝アバター（VRM・調整値）。<br>
@@ -1268,6 +1445,7 @@
     </details>
   </fieldset>
   </section>
+  </div>
 </main>
 
 <dialog id="pickDlg">
@@ -2183,6 +2361,8 @@ async function refreshVoices() {
   try { await refreshVoicesInner(); } finally { done(); }
 }
 async function refreshVoicesInner() {
+  // 見る画面では声を作らないので、声の一覧を取りにいかない（PC の中の VOICEVOX への問い合わせを、見る人のブラウザから出さない）
+  if (window.WATCH_MODE) return;
   const sel = $("voice");
   sel.innerHTML = "";
   $("engineHint").className = "hint";
@@ -2371,6 +2551,7 @@ function setupWipeDrag() {
 function applyWipe() {
   const shape = $("wipeShape").value, w = +$("wipeSize").value;
   document.documentElement.style.setProperty("--wipe-ar", WIPE_AR[shape] || "3 / 4");
+  document.documentElement.dataset.wipeShape = shape;
   $("previewBox").style.aspectRatio = WIPE_AR[shape] || "3 / 4";
   document.documentElement.style.setProperty("--wipe-w", w + "%");
   document.documentElement.style.setProperty("--wipe-w-sp", Math.min(60, Math.round(w * 1.35)) + "%");
@@ -2660,7 +2841,7 @@ function repoSlug(input) {
 }
 function repoReady() {
   const r = lsGet("data-repo"), p = lsGet("github-pat");
-  if (!r || !p) throw new Error("リポジトリとトークンを設定してください（下の「初回の準備」を参照）。");
+  if (!r || !p) throw new Error("［リポジトリとの接続］で、リポジトリとトークンを入れてください。");
   return r;
 }
 async function ghError(res) {
@@ -2903,7 +3084,7 @@ async function autoPullAudio(data) {
     const { got, have } = await pullVoice(key, chosen.tag, chosen.meta);
     if (got) status(`保存済みの音声を取り込みました（${chosen.label}／新規 ${got}件・取り込み済み ${have}件）。`, "ok");
   } catch (e) {
-    if (!window.WATCH_MODE) status(`音声の取り込みに失敗しました（${e.message}）。データタブの「まとめて読み込む」で再試行できます。`, "warn");
+    if (!window.WATCH_MODE) status(`音声の取り込みに失敗しました（${e.message}）。［リポジトリから読み込む］で、もう一度取り込めます。`, "warn");
     else if (script === data) window.__watchToast?.(`声の取り込みに失敗しました（${e.message}）。台本を選び直すと、もう一度取り込みます。`);
   } finally {
     done();
@@ -2950,8 +3131,8 @@ $("btnSyncPush").onclick = async () => {
   try {
     repoReady();
     try { await avatarPush(); done.push("アバター"); } catch (e) { failed.push(`アバター（${e.message}）`); }
-    status(`保存：${done.join("・") || "なし"}`
-         + (failed.length ? ` ／ 失敗：${failed.join("・")}` : ""), failed.length ? "warn" : "ok");
+    // うまくいったときは、何を保存したかを avatarPush() が出している
+    if (failed.length) status(`保存できませんでした：${failed.join("・")}`, "warn");
   } catch (e) {
     status(e.message, "err");
   } finally { btn.disabled = false; }
@@ -4197,15 +4378,15 @@ async function avatarPush() {
               "更新: アバターの調整値", shas[AVATAR_SETTINGS]);
 
   const vrm = await idbGet("vrm");
-  if (!vrm) { status("調整値だけ保存しました（VRMがまだ読み込まれていません）。", "ok"); return; }
+  if (!vrm) { status("設定を保存しました。3D モデルは、まだ選ばれていないので、保存していません。", "ok"); return; }
   const mb = vrm.byteLength / 1024 / 1024;
   if (mb > AVATAR_MAX_MB) {
-    status(`調整値は保存しました。VRMは${mb.toFixed(0)}MBあり、GitHubのAPIで送れる大きさ（${AVATAR_MAX_MB}MB）を超えています。`, "err");
+    status(`設定は保存しました。3D モデルは ${mb.toFixed(0)}MB あり、送れる大きさの ${AVATAR_MAX_MB}MB を超えているので、保存できませんでした。`, "err");
     return;
   }
-  status(`VRMを送っています（${mb.toFixed(1)}MB）…`);
+  status(`3D モデルを送っています（${mb.toFixed(1)}MB）…`);
   await ghPut(AVATAR_MODEL, new Uint8Array(vrm), "更新: アバターのVRM", shas[AVATAR_MODEL]);
-  status(`アバターと調整値を保存しました（${mb.toFixed(1)}MB）。`, "ok");
+  status(`3D モデルと設定を保存しました（${mb.toFixed(1)}MB）。`, "ok");
 }
 
 async function avatarPull() {
@@ -4218,7 +4399,7 @@ async function avatarPull() {
   status("VRMを取り込んでいます…");
   const vrm = await ghGetRaw(AVATAR_MODEL);
   if (vrm) await idbSet("vrm", vrm.buffer);
-  if (!raw && !vrm) { status("リポジトリに avatar/ がまだありません。先に「アバターと調整値を保存」を実行してください。", "err"); return; }
+  if (!raw && !vrm) { status("リポジトリに avatar/ がまだありません。先に［保存する］を押してください。", "err"); return; }
   // 調整値の反映は init() が全部やっているので、読み直すのが確実
   status(`取り込みました（調整値${n}件${vrm ? "・VRM" : ""}）。画面を読み込み直します…`, "ok");
   setTimeout(() => location.reload(), 800);
@@ -5880,7 +6061,7 @@ function repoSlug(input) {
 }
 function repoReady() {
   const r = lsGet("data-repo"), p = lsGet("github-pat");
-  if (!r || !p) throw new Error("詳細設定「データ」タブでリポジトリとトークンを入れてください。");
+  if (!r || !p) throw new Error("［リポジトリとの接続］で、リポジトリとトークンを入れてください。");
   return r;
 }
 async function ghError(res) {
@@ -7326,6 +7507,68 @@ $("btnCopy").onclick = async () => {
     $("wBig").style.display = "none";
     showStart(true);
   }, 1200);
+})();
+</script>
+<script>
+/* ==== 声・アバターの設定（?edit）の画面の動き。見る画面では何もしない ==== */
+(function () {
+  if (window.WATCH_MODE) return;
+  const V = "player-voice-voicevox", VN = "player-voiceName-voicevox";
+  // 背景の写真は、［自分の写真を使う］のときだけ選ぶ
+  const syncBg = () => { $("bgFileRow").hidden = $("bgPreset").value !== "file"; };
+  $("bgPreset").addEventListener("change", syncBg);
+  $("bgFile").addEventListener("change", () => setTimeout(syncBg, 0));
+  syncBg();
+  // ハンドルの調整は、ハンドルまで映すときに開いておく
+  const syncWheel = () => { $("wheelBox").open = $("framing").value === "wheel"; };
+  $("framing").addEventListener("change", syncWheel);
+  syncWheel();
+
+  // 声。GitHub Actions が声を作るときに読むのは player-voice-voicevox だけ
+  $("vvOrigin").textContent = "--allow_origin " + location.origin;
+  const listed = () => $("engine").value === "voicevox" && [...$("voice").options].some(o => o.value);
+  function showVoice() {
+    const id = lsGet(V);
+    const opt = listed() ? [...$("voice").options].find(o => o.value && o.value === id) : null;
+    if (opt) lsSet(VN, opt.textContent);
+    const name = opt?.textContent || lsGet(VN);
+    $("voiceNow").textContent = !id ? "いまの声：まだ選んでいません。声を選ばないときは、VOICEVOX の 8 番の声が使われます。"
+      : "いまの声：" + (name || `VOICEVOX の ${id} 番の声`);
+    $("voiceRow").hidden = !listed();
+    // 一覧に、選んだ声がない（まだ選んでいない）ときは、勝手に1つ目を選んだように見せない
+    if (listed() && !opt && !$("voice").querySelector('option[value=""]')) {
+      $("voice").insertAdjacentHTML("afterbegin", '<option value="">（声を選ぶ）</option>');
+      $("voice").value = "";
+    }
+  }
+  $("voice").addEventListener("change", showVoice);
+  async function loadVoices(byHand) {
+    $("vvLoad").disabled = true;
+    try {
+      await voicesReady;
+      // 選んでいる読み上げの仕組みは書き換えない（保存されて、見る画面にも渡るため）。この画面の中だけ VOICEVOX にする
+      if ($("engine").value !== "voicevox" || byHand) { $("engine").value = "voicevox"; syncEngineRows(); clearAudioCache(); await refreshVoices(); }
+    } finally { $("vvLoad").disabled = false; }
+    const n = [...$("voice").options].filter(o => o.value).length;
+    $("vvMsg").className = n ? "hint" : "hint err";
+    $("vvMsg").textContent = n ? `声が ${n} 件見つかりました。声を選んだら、［保存する］を押します。`
+      : byHand ? "VOICEVOX につながりませんでした。下の［VOICEVOX につながらないとき］を開きます。" : "";
+    showVoice();
+  }
+  $("vvLoad").onclick = () => loadVoices(true);
+  $("vvUrl").addEventListener("change", () => loadVoices(true));
+  // 前から VOICEVOX を選んでいる PC では、開いたときに一覧が出る
+  if ($("engine").value === "voicevox") loadVoices(false); else showVoice();
+
+  // 保存先の接続
+  function showRepo() {
+    const on = !!(lsGet("data-repo") && lsGet("github-pat"));
+    $("repoState").textContent = on ? `接続しています：${lsGet("data-repo")}` : "まだ接続していません。保存するには、リポジトリとトークンを入れて、［接続を保存］を押します。";
+    $("repoState").className = on ? "" : "warn";
+    if (!on) $("repoBox").open = true;
+  }
+  $("btnRepoSave").addEventListener("click", () => setTimeout(showRepo, 0));
+  showRepo();
 })();
 </script>
 </body>

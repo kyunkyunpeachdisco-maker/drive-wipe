@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>
   // ふつうに開くと、見るだけの画面になる。台本づくりや細かい設定の画面は ?edit を付けて開く
-  window.APP_VERSION = 'v0.21.2'.startsWith('v') || /^master-/.test('v0.21.2') ? 'v0.21.2' : '開発版';
+  window.APP_VERSION = 'v0.21.3'.startsWith('v') || /^master-/.test('v0.21.3') ? 'v0.21.3' : '開発版';
   // ?v=持ち主/リポジトリ/台本の名前 で開くと、その人が公開した台本を、接続なしで再生する
   (() => {
     const q = new URLSearchParams(location.search);
@@ -1620,6 +1620,8 @@
     <label class="sh"><span class="l">広告のあいだに話す</span><input type="checkbox" class="sw" data-show="talk"></label>
     <p class="note" style="margin-bottom:0">こちらを見る回数</p>
     <div class="seg" id="wLook" role="radiogroup"><button type="button" data-v="few">少なめ</button><button type="button" data-v="mid">ふつう</button><button type="button" data-v="many">多め</button></div>
+    <p class="note" style="margin-bottom:0">表情の多さ</p>
+    <div class="seg" id="wMood" role="radiogroup" aria-label="表情の多さ"><button type="button" role="radio" data-v="few">台本だけ</button><button type="button" role="radio" data-v="mid">ふつう</button><button type="button" role="radio" data-v="many">多め</button></div>
     <button type="button" class="sh" id="wReset"><span class="l">大きさと位置を元に戻す</span></button>
     <p class="note">キャラクターをなぞると、位置が変わります。2本の指でつまむと、大きさが変わります。2回たたくと、小・中・大に変わります。画面の端の外へ動かすと、しまわれます。パソコンでは、ホイールで大きさが変わります。</p>
     <a class="sh" href="./?edit"><span class="l">声・アバターの設定を開く</span><span class="v plain">再生は止まります</span></a>
@@ -1801,7 +1803,7 @@ function buildCues(data, withComments) {
   for (const it of (data.items || [])) {
     if (!it.line) continue;
     out.push({ at: it.abs, text: it.line, kind: it.kind || "scene", act: it.act, amount: it.amount || 0,
-               face: it.face || "", gesture: it.gesture || "" });
+               face: it.face || "", gesture: it.gesture || "", marks: it.marks });
   }
   if (withComments) {
     for (const c of (data.comments || [])) {
@@ -2061,7 +2063,7 @@ async function playClip(c, speed, caption) {
   let audio = await decodeClip(c, speed);
   if (caption && gen !== sayGen) return;   // 用意する間に、台本が替わった・位置が動いた・止められた
   if (caption && playRate !== 1) audio = stretchAudio(audio, playRate);
-  if (caption) revealCaption(audio.duration);
+  if (caption) { revealCaption(audio.duration); moodRun(audio.duration); }
   return playBuffer(audioCtx(), audio);
 }
 // 再生速度。動画に合わせて、声と字幕も同じ速さにする
@@ -2100,6 +2102,7 @@ function stretchAudio(buf, rate) {
 function silentSay(text) {
   const sec = (text.length / 5.5 + 0.5) / playRate;
   revealCaption(sec * 0.8);
+  moodRun(sec * 0.85);
   return new Promise(resolve => {
     const id = setTimeout(resolve, sec * 1000);
     cancelSpeak = () => { clearTimeout(id); resolve(); };
@@ -3259,7 +3262,7 @@ function wantedGaze(dt) {
 let lastFrame = performance.now();
 
 // 台本の印（表情・しぐさ）。セリフを話しているあいだだけ付ける
-const FACE_IDS = ["smile", "surprised", "troubled", "pout"];
+const FACE_IDS = ["smile", "soft", "laugh", "surprised", "troubled", "pout"];
 const faceMix = {};   // 表情ごとの効き（0〜1）。0.25秒かけて移る
 let moodFace = "", moodGesture = "", gestureAt = 0, gestureOn = false, gestureAmp = 0;
 // しぐさの形。u は 0→1。角度はラジアンで、首と頭に足す（運転中なので小さく短く）
@@ -3268,11 +3271,76 @@ const GESTURE_SHAPES = {
   nod:    { dur: 0.9, f: u => ({ pitch: 0.11 * Math.sin(u * Math.PI * 2) ** 2 }) },   // 小さく2回
   tilt:   { dur: 1.8, f: u => ({ roll: 0.13 * Math.min(1, bump(u) * 1.6), yaw: 0.04 * bump(u) }) },
   shake:  { dur: 1.0, f: u => ({ yaw: 0.10 * Math.sin(u * Math.PI * 4) * bump(u) }) },
+  laugh:  { dur: 1.3, f: u => ({ pitch: 0.05 * Math.abs(Math.sin(u * Math.PI * 5)) * bump(u) - 0.05 * bump(u), roll: 0.05 * bump(u) }) },   // 笑って、頭が少し揺れる
   glance: { dur: 1.1, away: true, f: u => ({ yaw: 0.25 * Math.min(1, bump(u) * 1.5), pitch: 0.05 * bump(u) }) },   // VRM ではカメラと逆の側へ
 };
+// 台本に印のないセリフに、言葉から選んで付ける表情としぐさ。[言葉, 表情, しぐさ]。上にあるものを先に見る
+const MOOD_WORDS = [
+  [/爆笑|大笑い|笑いすぎ|笑っちゃ/, "laugh", ""],
+  [/笑(?!え(?!る|た)|い事|いごと)/, "smile", ""],
+  [/驚|びっくり|えっ|え、|まさか|なんと、|うそ、|すごい/, "surprised", ""],
+  [/ずるい|ひどい|むっと|納得いか|腹が立/, "pout", ""],
+  [/困|しんど|つらい|疲れ|怖|こわ[いく]|だめ|残念|もったいない|大変|難しい|苦手|寒そう|眠い/, "troubled", ""],
+  [/かわい|おいし|楽し|うれし|嬉し|好き|きれい|綺麗|最高|いいなあ|いいよね|いいね|気持ちいい|素敵|ありがと|よかった/, "smile", ""],
+  [/たしかに|うん、|なるほど|わかる|分かる|そうそう/, "", "nod"],
+  [/かな[。、]|だろう|でしょう?[。？]|なんでだろ|知ってる[？。]|どう思/, "", "tilt"],
+  [/わけない|いやいや|ううん|違うよ/, "", "shake"],
+];
+// 同じセリフなら、いつも同じ結果にする
+const textRoll = t => { let h = 7; for (const c of t) h = (h * 31 + c.codePointAt(0)) >>> 0; return (h % 1000) / 1000; };
+function autoMarks(text, kind) {
+  const level = lsGet("mood", "mid");
+  if (level === "few") return [];
+  const roll = textRoll(text), out = [];
+  let face = null, gest = null;
+  for (const [re, f, g] of MOOD_WORDS) {
+    const m = re.exec(text);
+    if (!m) continue;
+    const at = [...text.slice(0, m.index)].length;
+    if (f && !face) face = { at, face: f };
+    if (g && !gest) gest = { at, gesture: g };
+  }
+  if (face) out.push(face);
+  if (gest && (level === "many" || roll < 0.75)) out.push(gest);
+  // 何も当てはまらないセリフでも、ときどき表情をゆるめる
+  if (!face && roll < (kind === "scene" ? 0.2 : 0.4) * (level === "many" ? 1.7 : 1)) out.push({ at: 0, face: "soft" });
+  if (level === "many" && !gest && roll > 0.8) out.push({ at: 0, gesture: "nod" });
+  return out;
+}
+let moodSteps = [], moodText = "", moodSeq = 0;
+// セリフを話しはじめる前に呼ぶ。長さが決まったら（moodRun）、言葉の少し前に表情を変える
+function moodPlan(text, c, kind) {
+  const own = !!(c.face || c.gesture || c.marks?.length);
+  const list = own ? [...(c.face || c.gesture ? [{ at: 0, face: c.face, gesture: c.gesture }] : []), ...(Array.isArray(c.marks) ? c.marks : [])] : autoMarks(text, kind);
+  moodSteps = list.filter(m => m && Number.isFinite(m.at)).sort((a, b) => a.at - b.at);
+  moodText = text;
+  moodSeq++;
+  const now = moodSteps.filter(m => m.at === 0);
+  setMood(now.find(m => m.face)?.face || "", now.find(m => m.gesture)?.gesture || "");
+}
+function moodRun(sec) {
+  const my = ++moodSeq, chars = [...moodText];
+  // 読点や句点では間があくので、2文字ぶんと数える
+  const weight = n => chars.slice(0, n).reduce((a, c) => a + ("、。？！".includes(c) ? 2 : 1), 0), all = weight(chars.length) || 1;
+  for (const m of moodSteps) {
+    if (m.at <= 0) continue;
+    const t = Math.max(0, sec * weight(m.at) / all - 0.35);   // 言葉より少し早く
+    setTimeout(() => {
+      if (my !== moodSeq || (!speaking && !talkBusy)) return;
+      if (m.face) moodFace = FACE_IDS.includes(m.face) ? m.face : "";
+      if (m.gesture || m.face === "laugh") gestureGo(m.gesture || "laugh");
+    }, t * 1000);
+  }
+}
+function gestureGo(g) {
+  if (GESTURE_SHAPES[g]) { moodGesture = g; gestureAt = performance.now(); gestureOn = true; gestureAmp = 1; }
+}
+// 話し終えた・止めた。途中の印も、もう効かせない
+function moodStop() { moodSeq++; moodSteps = []; setMood("", ""); }
 function setMood(face, gesture) {
+  if (face === "laugh" && !gesture) gesture = "laugh";
   moodFace = FACE_IDS.includes(face) ? face : "";
-  if (GESTURE_SHAPES[gesture]) { moodGesture = gesture; gestureAt = performance.now(); gestureOn = true; gestureAmp = 1; }
+  if (GESTURE_SHAPES[gesture]) gestureGo(gesture);
   else if (!gesture) gestureOn = false;   // 話し終えた・止めた。途中のしぐさはすぐに引っ込める
 }
 function moodStep(now, dt) {
@@ -3328,6 +3396,7 @@ function drawAvatar(now) {
   const gest = moodStep(now, dt);
   const fw = {};
   for (const k of FACE_IDS) fw[k] = smooth01(faceMix[k]);
+  const face2d = { ...fw, smile: Math.max(fw.smile, fw.laugh, fw.soft * 0.45) };   // 簡単な絵の顔は、笑う系を1つにまとめる
 
   // VRM側（module script）から読むための状態。描画方式を差し替えても共通で使う
   window.avatarState = { wheel, gaze, mouth, blink, sway, breathe, dt, face: fw, gesture: gest, gestureOn: !!moodGesture, ...handStep(dt) };
@@ -3374,8 +3443,8 @@ function drawAvatar(now) {
   const ex = (1 - gaze) * -W * 0.018;
   const ey = H * 0.31 + (1 - gaze) * H * 0.012;
   // 表情：笑うと目を細め、驚くと見開く。笑う・驚くのあいだはまばたきしない
-  const open = 1 - fw.smile * 0.45 + fw.surprised * 0.3 - fw.troubled * 0.1;
-  const bl = blink * Math.max(0, 1 - fw.smile - fw.surprised);
+  const open = 1 - face2d.smile * 0.45 + face2d.surprised * 0.3 - face2d.troubled * 0.1;
+  const bl = blink * Math.max(0, 1 - face2d.smile - face2d.surprised);
   for (const sx of [-1, 1]) {
     fx.fillStyle = "#fff";
     fx.beginPath(); fx.ellipse(sx * W * 0.085, ey, W * 0.045, H * 0.030 * open * (1 - bl * 0.92), 0, 0, Math.PI * 2); fx.fill();
@@ -3383,14 +3452,14 @@ function drawAvatar(now) {
     fx.beginPath(); fx.ellipse(sx * W * 0.085 + ex, ey, W * 0.022, H * 0.020 * Math.min(1, open) * (1 - bl * 0.92), 0, 0, Math.PI * 2); fx.fill();
   }
   // 眉は、表情を付けているときだけ描く
-  const browOn = Math.min(1, FACE_IDS.reduce((a, k) => a + fw[k], 0) - fw.smile * 0.5);
+  const browOn = Math.min(1, ["smile", "surprised", "troubled", "pout"].reduce((a, k) => a + face2d[k], 0) - face2d.smile * 0.5);
   if (browOn > 0.01) {
     fx.save();
     fx.globalAlpha = browOn;
     fx.strokeStyle = "#4a3b34"; fx.lineWidth = W * 0.016; fx.lineCap = "round";
-    const lift = H * (0.022 * fw.surprised + 0.008 * fw.smile);
-    const inner = H * (-0.020 * fw.troubled + 0.011 * fw.pout);
-    const outer = H * (0.006 * fw.troubled - 0.004 * fw.pout);
+    const lift = H * (0.022 * face2d.surprised + 0.008 * face2d.smile);
+    const inner = H * (-0.020 * face2d.troubled + 0.011 * face2d.pout);
+    const outer = H * (0.006 * face2d.troubled - 0.004 * face2d.pout);
     for (const sx of [-1, 1]) {
       fx.beginPath();
       fx.moveTo(sx * W * 0.045, H * 0.262 - lift + inner);
@@ -3402,10 +3471,10 @@ function drawAvatar(now) {
 
   // 口（喋っている間だけ開く）。驚くと丸く、むっとすると狭く
   fx.fillStyle = "#8d4a4a";
-  const mh = H * (0.008 + mouth * 0.05 + fw.surprised * 0.014);
-  fx.beginPath(); fx.ellipse(0, H * 0.42, W * (0.035 + mouth * 0.02) * (1 - fw.pout * 0.3 - fw.surprised * 0.15), mh, 0, 0, Math.PI * 2); fx.fill();
+  const mh = H * (0.008 + mouth * 0.05 + face2d.surprised * 0.014);
+  fx.beginPath(); fx.ellipse(0, H * 0.42, W * (0.035 + mouth * 0.02) * (1 - face2d.pout * 0.3 - face2d.surprised * 0.15), mh, 0, 0, Math.PI * 2); fx.fill();
   // 口の端：笑うと上げ、困ると下げる
-  const curve = fw.smile - 0.7 * fw.troubled;
+  const curve = face2d.smile - 0.7 * face2d.troubled;
   if (Math.abs(curve) > 0.01) {
     fx.save();
     fx.globalAlpha = Math.min(1, Math.abs(curve));
@@ -3534,38 +3603,58 @@ let talkSeen = false;          // この台本で、映像が1度でも流れた
 let talked = [];               // この台本を見ているあいだに話した、記事の話
 const TALK_HOLD_MAX = 10000;   // 映像を止めて待たせるのは、ここまで。過ぎたら、区切りのよい所で戻る
 
+// 広告は再生を押してすぐ出るので、前に読んだ小話を先に使い、新しいものは裏で読み直す。
+// 声がまだ決まっていなくても、小話そのものは始められるようにする（声を待つのは talkClip）
+let talkVoice = Promise.resolve();
 async function loadTalks(data) {
-  talks = []; talkIds = null; talkTag = ""; talkDir = ""; talked = []; talkSeen = false;
+  talked = []; talkSeen = false;
   if (!window.WATCH_MODE) return;
+  const S = window.SHARE, home = S ? S.base : lsGet("data-repo");
+  if (!S && (!home || !lsGet("github-pat"))) { talks = []; return; }
+  const live = () => script === data;
+  const ok = l => (Array.isArray(l) ? l : []).filter(t => t && t.id && Array.isArray(t.lines) && t.lines.every(x => typeof x?.line === "string"));
+  let found;
+  talkVoice = new Promise(r => { found = r; });
+  const useVoice = (tag, dir, items) => {
+    talkTag = tag; talkDir = dir;
+    talkIds = new Map((items || []).filter(i => /^[0-9a-f]{6,64}$/.test(i.h) && /^[a-z0-9]{2,5}$/.test(i.ext || "")).map(i => [i.h, i]));
+    found();
+  };
+  talkIds = null;
   try {
-    if (window.SHARE) {
-      const S = window.SHARE;
-      const r = await fetch(S.base + "talks.json", { cache: "no-cache" });
-      if (!r.ok) return;
-      const list = (await r.json()).talks || [];
-      const a = await fetch(S.base + "audio/talks/index.json", { cache: "no-cache" });
-      const ids = a.ok ? (await a.json()).items || [] : [];
-      if (script !== data) return;
-      talks = list; talkTag = `share:${S.owner}/${S.repo}/talks`; talkDir = S.base + "audio/talks/";
-      talkIds = new Map(ids.filter(i => /^[0-9a-f]{6,64}$/.test(i.h) && /^[a-z0-9]{2,5}$/.test(i.ext || "")).map(i => [i.h, i]));
-    } else {
-      if (!lsGet("data-repo") || !lsGet("github-pat")) return;
-      const raw = await ghGetRaw("talks/index.json");
-      if (!raw || script !== data) return;
-      const list = JSON.parse(new TextDecoder().decode(raw)).talks || [];
-      await pulling;   // 台本の声が決まってから、同じ声の小話を探す
-      const want = currentImportTake.replace(/_\d+$/, "");
-      const take = want ? (await listVoices("talks")).find(v => v.tag.replace(/_\d+$/, "") === want) : null;
-      if (script !== data) return;
-      talks = list;
-      if (take) { talkTag = take.tag; talkDir = `audio/talks/${take.tag}/`; talkIds = new Map((take.meta.items || []).map(i => [i.h, i])); }
-    }
-    talks = talks.filter(t => t && t.id && Array.isArray(t.lines) && t.lines.every(l => typeof l?.line === "string"));
+    const kept = await idbGet("talks:" + home).catch(() => null);
+    if (!live()) return;
+    if (kept?.length) talks = ok(kept);
+    const voice = (async () => {
+      if (S) {
+        const a = await fetch(S.base + "audio/talks/index.json", { cache: "no-cache" });
+        if (a.ok && live()) useVoice(`share:${S.owner}/${S.repo}/talks`, S.base + "audio/talks/", (await a.json()).items);
+        return;
+      }
+      // 台本の声が決まるのを待つ（音声の取り込みが終わるのは待たない）
+      for (let n = 0; n < 60 && live() && !currentImportTake; n++) await sleep(250);
+      const want = currentImportTake.replace(/_\d+$/, ""), k = `talks-voice:${home}:${want}`;
+      if (!want || !live()) return;
+      const had = await idbGet(k).catch(() => null);
+      if (had && live()) useVoice(had.tag, `audio/talks/${had.tag}/`, had.items);
+      const take = (await listVoices("talks")).find(v => v.tag.replace(/_\d+$/, "") === want);
+      if (!take || !live()) return;
+      useVoice(take.tag, `audio/talks/${take.tag}/`, take.meta.items);
+      idbSet(k, { tag: take.tag, items: take.meta.items || [] }).catch(() => {});
+    })().catch(() => {}).finally(() => found());
+    let list = null;
+    if (S) { const r = await fetch(S.base + "talks.json", { cache: "no-cache" }); list = r.ok ? (await r.json()).talks : []; }
+    else { const raw = await ghGetRaw("talks/index.json"); list = raw ? JSON.parse(new TextDecoder().decode(raw)).talks : []; }
+    if (!live()) return;
+    talks = ok(list);
+    idbSet("talks:" + home, talks).catch(() => {});
+    await voice;
     // 次に話しそうなものの声を、先に取っておく
-    for (const t of [pickTalk("start"), pickTalk("mid"), bridgeTalk("go"), bridgeTalk("back")]) if (t) for (const l of t.lines) await talkClip(l.line);
+    for (const t of [pickTalk("start"), pickTalk("mid"), bridgeTalk("go"), bridgeTalk("back")]) if (t && live()) for (const l of t.lines) await talkClip(l.line);
   } catch (e) { /* 小話が読めなくても、ふつうに見られる */ }
 }
 async function talkClip(text) {
+  if (!talkIds) await Promise.race([talkVoice, sleep(2500)]);
   if (!talkIds) return null;
   try {
     const h = await textHash(text), it = talkIds.get(h), k = `i:${talkTag}:` + h;
@@ -3620,7 +3709,7 @@ function talkEnd() {
   if (talkBusy) talkQuiet = Date.now() + 1500;
   talkBusy = talkFace = false; talkHeldAt = 0;
   document.documentElement.classList.remove("talk");
-  setMood("", ""); setHand("");
+  moodStop(); setHand("");
   $("caption").textContent = "";
 }
 function talkCancel() {
@@ -3644,14 +3733,14 @@ async function runTalk() {
   const used = [];
   const speak = async l => {
     if ($("showCaption").checked) setCaption(l.line);
-    setMood(l.face, l.gesture);
+    moodPlan(l.line, l, "talk");
     setHand(l.hand);
     const clip = await talkClip(l.line);
     if (!live()) return;
     speaking = true;
     try { if (clip) await playClip(clip, +$("rate").value, true); else await silentSay(l.line); }
     catch (e) {} finally { speaking = false; }
-    if (live()) { setMood("", ""); setHand(""); $("caption").textContent = ""; await sleep(250); }
+    if (live()) { moodStop(); setHand(""); $("caption").textContent = ""; await sleep(250); }
   };
   try {
     if (!live()) return;
@@ -3726,9 +3815,9 @@ async function drain() {
       const vol = player?.getVolume ? player.getVolume() : 100;
       // 声が無いときは、動画の音を下げない
       if (!window.WATCH_MODE || audioCache.get(c.id)) try { player.setVolume(+$("duck").value); } catch (e) {}
-      setMood(c.face, c.gesture);
+      moodPlan(c.text, c, c.kind);
       try { await say(c.text, c); } catch (e) { status("音声エラー: " + e.message, "err"); }
-      setMood("", "");
+      moodStop();
       try { player.setVolume(vol); } catch (e) {}
       $("caption").textContent = "";
       gazeTarget = 0;
@@ -5400,7 +5489,9 @@ if (THREE && VRMLoaderPlugin) {
   // parts は [表情の名前, 強さ]。モデルにない名前は飛ばす。happy を強くすると目を閉じきるので半分まで
   // mouth は「あ」を弱める割合、blink はまばたきを止める割合
   const FACE_LOOK = {
-    smile:     { parts: [["happy", 0.45], ["relaxed", 0.45]], mouth: 0.5, blink: 1 },
+    smile:     { parts: [["happy", 0.52], ["relaxed", 0.38]], mouth: 0.5, blink: 1 },
+    soft:      { parts: [["relaxed", 0.5], ["happy", 0.12]], mouth: 0.25, blink: 0.2 },
+    laugh:     { parts: [["happy", 1]], mouth: 0.35, blink: 1 },
     surprised: { parts: [["surprised", 0.9]], mouth: 0.6, blink: 1 },
     troubled:  { parts: [["sad", 0.8]], mouth: 0.5, blink: 0.4 },
     pout:      { parts: [["angry", 0.85]], mouth: 0.5, blink: 0.4 },
@@ -7280,7 +7371,13 @@ $("btnCopy").onclick = async () => {
     if (!script) { if (!window.SHARE) openPicker(); return; }
     if (!started) { $("btnStart").click(); showStart(false); poke(); return; }
     // 小話のために止まっているときに押したら、話を切り上げて映像に戻る
-    if (talkBusy) { const held = !!talkHeldAt; talkCancel(); if (held) { try { player.playVideo(); } catch (e) {} poke(); return; } }
+    if (talkBusy) {
+      if (!talkHeldAt) { poke(); return; }   // 広告のあいだは、再生ボタンで小話を止めない
+      talkCancel();
+      try { player.playVideo(); } catch (e) {}
+      poke();
+      return;
+    }
     try { playing() ? player.pauseVideo() : player.playVideo(); } catch (e) {}
     poke();
   }
@@ -7341,12 +7438,16 @@ $("btnCopy").onclick = async () => {
   }
   // 広告のあいだに話す。横持ちでは、キャラクターが映像の上にあって出せないので話さない
   function adTalk(ad) {
-    if (!ad) { if (adTalkT) talkQuiet = Math.max(talkQuiet, Date.now() + 1500); adTalkT = 0; return; }
+    if (!ad) { adTalkWait = false; if (adTalkT) talkQuiet = Math.max(talkQuiet, Date.now() + 1500); adTalkT = 0; return; }
     if (talkBusy || adTalkT < 0 || !started || document.hidden || !root.classList.contains("booth") || root.classList.contains("no-talk")) return;
     if (!adTalkT) adTalkT = Date.now();
-    if (Date.now() - adTalkT > 700) { adTalkT = -1; runTalk(); }   // 1回の広告につき1度
+    if (Date.now() - adTalkT < 700) return;
+    // 1回の広告につき1度。まだ小話を読み込めていなければ、読み込めるまで待つ
+    if (!talks.length) { if (!adTalkWait) { adTalkWait = true; playLog.push(`${Math.round(performance.now() / 100) / 10} 小話を待っている`); } return; }
+    runTalk();
+    if (talkBusy) adTalkT = -1;
   }
-  let adTalkT = 0;
+  let adTalkT = 0, adTalkWait = false;
   const playLog = [];
   window.__playLog = playLog;
 
@@ -7781,6 +7882,7 @@ $("btnCopy").onclick = async () => {
     radio($("wQual"), [["auto", "自動"], ...levels.map(n => [n, n + "p"])], q, v => { lsSet("quality", String(v)); applyQuality(); });
     radio($("wSpeed"), SPEEDS.map(n => [n, n === 1 ? "標準" : n + "倍"]), playRate, v => setRate(v));
     for (const b of document.querySelectorAll("#wLook button")) b.setAttribute("aria-checked", b.dataset.v === lsGet("look", "mid"));
+    for (const b of document.querySelectorAll("#wMood button")) b.setAttribute("aria-checked", b.dataset.v === lsGet("mood", "mid"));
     for (const g of document.querySelectorAll("#wSet .wVol")) for (const b of g.children) b.setAttribute("aria-checked", b.dataset.v === lsGet(g.dataset.k, "mid"));
     $("svV").textContent = { low: "小さめ", mid: "ふつう", high: "大きめ" }[lsGet("vol-voice", "mid")] || "ふつう";
   }
@@ -7826,6 +7928,7 @@ $("btnCopy").onclick = async () => {
   }
   for (const b of document.querySelectorAll("#wSet [data-page]")) b.onclick = () => setPage(b.dataset.page);
   for (const g of document.querySelectorAll("#wSet .wVol")) for (const b of g.children) b.onclick = () => { lsSet(g.dataset.k, b.dataset.v); refreshSet(); };
+  for (const b of document.querySelectorAll("#wMood button")) b.onclick = () => { lsSet("mood", b.dataset.v); refreshSet(); };
   for (const b of document.querySelectorAll("#wLook button")) b.onclick = () => { lsSet("look", b.dataset.v); refreshSet(); };
   $("wReset").onclick = () => { lsSet("wipe-p", ""); lsSet("wipe-l", ""); layout(); $("wSet").close(); };
   // シートの外を押すか、つまみを下へなぞると閉じる

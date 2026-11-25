@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>
   // ふつうに開くと、見るだけの画面になる。台本づくりや細かい設定の画面は ?edit を付けて開く
-  window.APP_VERSION = 'v0.20.0'.startsWith('v') || /^master-/.test('v0.20.0') ? 'v0.20.0' : '開発版';
+  window.APP_VERSION = 'v0.21.0'.startsWith('v') || /^master-/.test('v0.21.0') ? 'v0.21.0' : '開発版';
   // ?v=持ち主/リポジトリ/台本の名前 で開くと、その人が公開した台本を、接続なしで再生する
   (() => {
     const q = new URLSearchParams(location.search);
@@ -315,6 +315,24 @@
     #pickList { overflow: visible; }
     #pickList .th { flex-basis: 30%; }
   }
+  /* 見る画面では、台本の一覧が入口になる。画面いっぱいのページとして出す */
+  html.watch #pickDlg { width: 100%; max-width: none; height: 100dvh; max-height: none; margin: 0; border: 0; border-radius: 0; box-sizing: border-box;
+    padding: 0 max(env(safe-area-inset-right), (100vw - 900px) / 2) 0 max(env(safe-area-inset-left), (100vw - 900px) / 2); }
+  html.watch #pickDlg[open] { height: 100dvh; }
+  @media (display-mode: standalone) and (max-width: 680px) { html.watch #pickDlg[open] { height: 100vh; } }
+  html.watch #pickDlg::backdrop { background: var(--bg); }
+  html.watch #pickDlg:focus, html.watch #pickDlg:focus-visible { outline: none; }
+  #pickName { display: none; flex: 1; margin: 0; font-size: 18px; }
+  html.watch #pickDlg:not(.has) #pickName { display: block; }
+  html.watch #pickClose { padding: 8px 10px; font-size: 14px; white-space: nowrap; }
+  html.watch #pickTabs button { white-space: nowrap; }
+  #pickSet { flex: 0 0 44px; width: 44px; height: 44px; min-height: 0; padding: 10px; background: none; border: 0; color: inherit; }
+  #pickSet svg { width: 24px; height: 24px; display: block; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  #pickFoot { align-items: center; }
+  #pickFoot > a { color: var(--accent); font-size: 14px; padding: 8px 4px; }
+  html:not(.watch) #pickSet, html:not(.watch) #pickFoot > a { display: none; }
+  #pickList .guide { padding: 8px 16px; max-width: 640px; line-height: 1.8; }
+  #pickList .guide a { color: var(--accent); }
   /* ---- 統合UI ---- */
   #quick[hidden] { display: none !important; }
   #quick { display: flex; gap: 8px; align-items: flex-end; margin-bottom: 10px; flex-wrap: wrap; }
@@ -501,16 +519,19 @@
   html.watch #caption b, html.watch #caption i { font: inherit; }
   html.watch #caption i { color: transparent; text-shadow: none; }
   /* 概要 */
-  #wDesc { border: 0; padding: 0; color: #fff; background: #0f0f0f; border-radius: 16px 16px 0 0; width: 100%; max-width: 560px; height: calc(100dvh - 56.25vw - 8px); min-height: 55dvh; max-height: 92dvh; margin: auto auto 0; overflow: hidden; }
+  #wDesc { border: 0; padding: 0; color: #fff; background: #0f0f0f; border-radius: 16px 16px 0 0; width: 100%; max-width: 560px; height: 75dvh; max-height: 92dvh; margin: auto auto 0; overflow: hidden; }
   #wDesc[open] { display: flex; flex-direction: column; animation: shUp .22s ease-out; }
   #wDesc::backdrop { background: rgba(0,0,0,.2); }
-  @media (max-height: 500px), (min-width: 900px) { #wDesc { margin: auto 16px 8px auto; width: 420px; height: auto; min-height: 0; max-height: calc(100dvh - 16px); border-radius: 16px; } }
-  #wDesc .grab { flex: 0 0 auto; padding: 10px 0 6px; cursor: pointer; }
+  /* 縦持ち：動画は上に残し、その下の全部を概要にする */
+  html.booth #wDesc { max-width: none; margin: var(--d-top, 40dvh) 0 0; height: calc(100% - var(--d-top, 40dvh)); max-height: none; }
+  html.booth #wDesc::backdrop { background: transparent; }
+  @media (max-height: 500px), (min-width: 900px) { html:not(.booth) #wDesc { margin: auto 16px 8px auto; width: 420px; height: auto; min-height: 0; max-height: calc(100dvh - 16px); border-radius: 16px; } }
+  #wDesc .grab { flex: 0 0 auto; padding: 10px 0 6px; cursor: grab; touch-action: none; }
   #wDesc .grab::before { content: ""; display: block; width: 40px; height: 4px; margin: 0 auto; border-radius: 2px; background: #5a5a5a; }
-  #wDesc .body { overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 4px 16px 28px; }
+  #wDesc .body { overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 4px 16px calc(28px + env(safe-area-inset-bottom)); }
   #wDesc .hd { display: flex; align-items: flex-start; gap: 8px; }
-  #wDesc h2 { flex: 1 1 auto; margin: 0; font-size: 20px; line-height: 1.35; font-weight: 700; overflow-wrap: anywhere; }
-  #iClose { flex: 0 0 40px; width: 40px; height: 40px; min-height: 0; padding: 8px; margin: -4px -8px 0 0; background: none; border: 0; border-radius: 50%; color: #fff; }
+  #wDesc h2 { flex: 1 1 auto; margin: 0 44px 0 0; font-size: 20px; line-height: 1.35; font-weight: 700; overflow-wrap: anywhere; }
+  #iClose { position: absolute; top: 20px; right: 10px; z-index: 1; width: 40px; height: 40px; min-height: 0; padding: 8px; background: rgba(34,34,34,.9); border: 0; border-radius: 50%; color: #fff; }
   #iClose svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
   #wDesc .sub { margin: 6px 0 0; font-size: 14px; color: #aaa; overflow-wrap: anywhere; }
   #wDesc .sub:empty { display: none; }
@@ -541,11 +562,13 @@
   #wAbout a { color: #cfd0ff; font-size: 12px; overflow-wrap: anywhere; }
   #wAbout ul { margin: 2px 0 6px; padding-left: 1.2em; }
   html:not(.shared) #wMine { display: none; }
+  #wDesc #wMine { display: block; margin-top: 24px; color: #3ea6ff; font-size: 14px; }
+  html:not(.shared) #wDesc #wMine { display: none; }
   #shareUrl { width: 100%; box-sizing: border-box; font-size: 16px; }
   #shareDlg p { margin: 8px 0; }
   /* 広告のあいだは、映像の上に何もかぶせない */
   html.watch.brk #wTap { pointer-events: none; }
-  html.watch.brk #wTopic, html.watch.brk #wPlace, html.watch.brk #avatar.over, html.watch.brk #caption { visibility: hidden !important; }
+  html.watch.brk #wTopic, html.watch.brk #wPlace, html.watch.brk #avatar.over, html.watch.brk:not(.talk) #caption, html.watch.brk:not(.booth) #caption { visibility: hidden !important; }
   html.watch.brk:not(.booth):not(.list-open) #wBar { opacity: 0; pointer-events: none; }
   /* 動画の枠そのものを16:9にする。横長の枠に任せると、iPhoneの横持ちで映像が片側に寄ることがある */
   html.watch:not(.booth) #ytbox { inset: 0; margin: auto; width: min(100cqw, 100cqh * 16 / 9); height: min(100cqh, 100cqw * 9 / 16); }
@@ -678,10 +701,25 @@
   #wNow { flex: 1 1 auto; min-width: 0; font-size: 13px; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* 再生前と一時停止中の入口 */
   #wStart {
-    position: absolute; inset: 0; z-index: 5; display: none; color: #fff; text-align: center;
-    background: rgba(0,0,0,.55); align-items: center; justify-content: center; flex-direction: column; gap: 14px; padding: 20px;
+    position: absolute; inset: 0; z-index: 4; display: none; color: #fff; text-align: center;
+    background: rgba(0,0,0,.35); align-items: center; justify-content: center; flex-direction: column; gap: 14px; padding: 20px;
   }
   html.watch #wStart.on { display: flex; }
+  html.watch.booth #wStart { bottom: auto; height: var(--b-vh); }
+  #wStart h2:empty, #wStart p:empty { display: none; }
+  /* 再生前でも、操作の帯（概要・台本の一覧・設定）は使える */
+  html.watch.pre #avatar { z-index: 5; }
+  html.watch.pre #wBar { opacity: 1; pointer-events: auto; z-index: 5; }
+  /* 動画のすぐ下の題。押すと概要が開く */
+  #wRow { display: none; position: absolute; left: 0; right: 0; top: var(--b-vh); z-index: 3; height: 60px; width: 100%; min-height: 0; padding: 8px 14px 6px; border: 0; border-radius: 0;
+    background: #141414; color: #fff; text-align: left; font-weight: 400; cursor: pointer; }
+  html.watch.booth #wRow.on { display: block; }
+  #wRow .t { display: block; font-size: 17px; font-weight: 700; line-height: 1.45; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  #wRow .m { display: flex; gap: 8px; font-size: 13px; line-height: 1.5; color: #aaa; }
+  #wRow .m span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  #wRow .m b { flex: 0 0 auto; color: #fff; font-weight: 600; }
+  /* 題の行があるときは、帯の［概要］は要らない */
+  html.watch.booth #wInfoBtn { display: none; }
   #wStart h2 { font-size: clamp(16px, 2.4vw, 24px); margin: 0; font-weight: 600; max-width: 80%; line-height: 1.5; }
   #wStart p { margin: 0; font-size: 13px; opacity: .8; max-width: 80%; }
   #wStart .big {
@@ -689,8 +727,6 @@
     display: inline-flex; align-items: center; justify-content: center;
   }
   #wStart .big svg { width: 34px; height: 34px; fill: currentColor; margin-left: 4px; }
-  #wStart .sub { background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.35); color: #fff; }
-  #wStart a { color: #cfd0ff; font-size: 13px; }
   #wToast {
     position: absolute; left: 50%; top: 14px; transform: translateX(-50%); z-index: 6; display: none;
     background: rgba(0,0,0,.8); color: #fff; font-size: 13px; padding: 6px 12px; border-radius: 8px; max-width: 70%;
@@ -790,7 +826,7 @@
         <span id="wNow"></span>
         <button id="wList" title="セリフの一覧" aria-label="セリフの一覧"><svg viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg></button>
         <button id="wInfoBtn" title="概要" aria-label="概要"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5h.01"/></svg></button>
-        <button id="wPick" title="台本を選ぶ" aria-label="台本を選ぶ"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button>
+        <button id="wPick" title="台本の一覧" aria-label="台本の一覧"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></svg></button>
         <button id="wSetBtn" title="設定" aria-label="設定"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
         <button id="wFs" title="全画面" aria-label="全画面"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
       </div>
@@ -799,13 +835,14 @@
       <h2 id="wTitle"></h2>
       <p id="wInfo"></p>
       <button class="big" id="wBig" aria-label="再生"><svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg></button>
+    </div>
+    <div hidden>
       <button class="sub" id="wPick2">台本を選ぶ</button>
       <button class="sub" id="wMake">台本の作り方</button>
       <button class="sub" id="wInfoBtn2">概要</button>
       <div id="wAbout"></div>
-      <a id="wMine" href="https://github.com/kyunkyunpeachdisco-maker/drive-wipe-data-template#readme" target="_blank" rel="noopener">ドライブ実況ワイプの説明を読む</a>
-      <a href="./?edit">声・アバターの設定</a>
     </div>
+    <button type="button" id="wRow" aria-haspopup="dialog"><span class="t"></span><span class="m"><span></span><b>その他</b></span></button>
     <button id="fsMenu">メニュー</button>
     <button id="exitFull">閉じる</button>
   </div>
@@ -1451,8 +1488,10 @@
 <dialog id="pickDlg">
   <div id="pickTop">
     <div class="hd"><button id="pickBack" aria-label="プレイリストの一覧へ戻る" hidden>←</button>
+      <h1 id="pickName">ドライブ実況ワイプ</h1>
       <div id="pickTabs"><button type="button" data-view="scripts">台本</button><button type="button" data-view="lists">プレイリスト</button></div>
-      <button id="pickClose">閉じる</button></div>
+      <button id="pickClose">閉じる</button>
+      <button type="button" id="pickSet" title="設定" aria-label="設定"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button></div>
     <div class="tools">
       <input type="search" id="pickQ" placeholder="検索" aria-label="台本を検索" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="search">
       <select id="pickSort" aria-label="並び順"><option value="new">新しい順</option><option value="old">古い順</option><option value="recent">最近見た順</option><option value="name">名前順</option><option value="short">短い順</option><option value="long">長い順</option></select>
@@ -1462,6 +1501,7 @@
   </div>
   <div id="pickList"></div>
   <div id="pickFoot"><button id="pickMake">台本の作り方</button>
+    <a href="./?edit">声・アバターの設定</a>
     <button id="pickFix" class="primary" style="display:none">接続を直す</button></div>
 </dialog>
 
@@ -1480,6 +1520,7 @@
     <div id="iChap"></div>
     <h3>詳細</h3>
     <div id="iMore"></div>
+    <a id="wMine" href="https://github.com/kyunkyunpeachdisco-maker/drive-wipe-data-template#readme" target="_blank" rel="noopener">ドライブ実況ワイプの説明を読む</a>
   </div>
 </dialog>
 
@@ -1529,7 +1570,7 @@
         <div class="row"><button id="makeCopy" class="fixed primary">コピー</button></div></li>
       <li style="margin-top:12px"><a href="https://claude.ai/code" target="_blank" rel="noopener">Claude Code</a> を開いて、リポジトリ <code id="makeRepo"></code> を選び、コピーした文を送ります。
         <p class="hint">リポジトリが表示されないときは、<a href="https://code.claude.com/docs/en/claude-code-on-the-web" target="_blank" rel="noopener">GitHub のアカウントをつなぐ手順</a>を開きます。</p></li>
-      <li style="margin-top:12px">台本と声ができると、AI エージェントから返事が来ます。アプリの最初の画面で［台本を選ぶ］を押して、できた台本を押します。
+      <li style="margin-top:12px">台本と声ができると、AI エージェントから返事が来ます。アプリを開いて、できた台本を押します。
         <p class="hint">台本が何本もある動画では、動画を押すと、台本が表示されます。</p></li>
     </ol>
     <p class="hint"><a href="https://github.com/kyunkyunpeachdisco-maker/drive-wipe-data-template#台本を作るたびにやること" target="_blank" rel="noopener">Claude Code 以外の AI エージェントで台本を作る手順</a></p>
@@ -1567,6 +1608,7 @@
     <button type="button" class="sh bk" data-page="main"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span class="l">キャラクター</span></button>
     <label class="sh"><span class="l">キャラクターを出す</span><input type="checkbox" class="sw" data-show="avatar"></label>
     <label class="sh"><span class="l">背景を出す</span><input type="checkbox" class="sw" data-show="avbg"></label>
+    <label class="sh"><span class="l">広告のあいだに話す</span><input type="checkbox" class="sw" data-show="talk"></label>
     <p class="note" style="margin-bottom:0">こちらを見る回数</p>
     <div class="seg" id="wLook" role="radiogroup"><button type="button" data-v="few">少なめ</button><button type="button" data-v="mid">ふつう</button><button type="button" data-v="many">多め</button></div>
     <button type="button" class="sh" id="wReset"><span class="l">大きさと位置を元に戻す</span></button>
@@ -1917,8 +1959,8 @@ function setupPlayer(videoId) {
           tick();
         }
         if (e.data === YT.PlayerState.ENDED && started) { lastT = -1; adHold = seekMark = null; plEnded(); }
-        // 一時停止したまま喋り続けると映像とずれるので止める
-        if (e.data === YT.PlayerState.PAUSED || e.data === YT.PlayerState.ENDED) {
+        // 一時停止したまま喋り続けると映像とずれるので止める（広告のあいだの小話は、映像と関係がないので続ける）
+        if ((e.data === YT.PlayerState.PAUSED && !talkBusy) || e.data === YT.PlayerState.ENDED) {
           dropQueue();
           try { cancelSpeak(); } catch (err) {}
           $("caption").textContent = "";
@@ -3162,6 +3204,7 @@ let glance = 0, glanceT = 6000, roadT = 0, chatT = 0;
 const LOOK_GAP = { few: [24000, 48000], mid: [9000, 20000], many: [4000, 9000] };
 function wantedGaze(dt) {
   if (!window.WATCH_MODE) return gazeTarget;
+  if (talkBusy) return 1;   // 小話のあいだは、車を止めてこちらを向いている見立て
   const turning = Math.abs(wheelTarget) > 0.3;
   if (gazeTarget > 0.5) {   // 雑談：こちらを見て話し、合間に道路へ目を戻す
     if (roadT > 0) { roadT -= dt; return 0.1; }
@@ -3213,6 +3256,18 @@ function moodStep(now, dt) {
   return g;
 }
 const smooth01 = v => v * v * (3 - 2 * v);
+// 小話のあいだだけ使う、手のしぐさ。ハンドルから片手を離す（amt は離している度合い 0〜1）
+let handName = "", handWant = 0, handAmt = 0, handAt = 0, faceCam = 0;
+function setHand(name) {
+  if (["wave", "raise", "point"].includes(name)) { handName = name; handWant = 1; handAt = performance.now(); }
+  else handWant = 0;
+}
+function handStep(dt) {
+  handAmt = handWant ? Math.min(1, handAmt + dt / 350) : Math.max(0, handAmt - dt / 450);
+  const want = talkBusy ? 1 : 0;
+  faceCam = want ? Math.min(1, faceCam + dt / 500) : Math.max(0, faceCam - dt / 600);
+  return { hand: { name: handName, amt: smooth01(handAmt), t: (performance.now() - handAt) / 1000 }, faceCam: smooth01(faceCam) };
+}
 
 function setAct(act, amount) {
   const a = Math.min(1, Math.max(0, amount || 0.5));
@@ -3240,7 +3295,7 @@ function drawAvatar(now) {
   for (const k of FACE_IDS) fw[k] = smooth01(faceMix[k]);
 
   // VRM側（module script）から読むための状態。描画方式を差し替えても共通で使う
-  window.avatarState = { wheel, gaze, mouth, blink, sway, breathe, dt, face: fw, gesture: gest, gestureOn: !!moodGesture };
+  window.avatarState = { wheel, gaze, mouth, blink, sway, breathe, dt, face: fw, gesture: gest, gestureOn: !!moodGesture, ...handStep(dt) };
 
   if (window.__vrmReady) { requestAnimationFrame(drawAvatar); return; }  // VRM表示中は簡易アバターを描かない
   fx.clearRect(0, 0, W, H);
@@ -3406,6 +3461,8 @@ function tick() {
   if (!started || !player || !player.getCurrentTime) return;
   const t = contentTime();
   if (t === null) { tickRAF = requestAnimationFrame(tick); return; }
+  // 小話の途中で広告が終わったら、映像を止めて、話し終わるのを待つ
+  if (talkBusy) { talkHoldVideo(); tickRAF = requestAnimationFrame(tick); return; }
 
   // シーク検出。巻き戻したら読み直し、飛ばしたら読まずに消化済みにする
   if (lastT < 0) {
@@ -3418,6 +3475,7 @@ function tick() {
   }
   lastT = t;
   seekMark = null;
+  talkSeen = true;
 
   for (const c of cues) {
     if (c.at > t) break;
@@ -3430,6 +3488,164 @@ function tick() {
   const cur = cues.filter(c => c.at <= t).pop();
   if (cur) highlightCue(cur.id);
   tickRAF = requestAnimationFrame(tick);
+}
+
+/* ---------- 広告のあいだの小話 ----------
+   広告が出たら、talks/index.json の話を1つ選んで話す。広告が先に終わったら、映像を止めたまま話し終えて、
+   ひとこと言ってから映像に戻る。広告そのもの（音・画面）には手を加えない。 */
+let talks = [], talkTag = "", talkDir = "", talkIds = null;   // 話、声の取り置きの名前、置き場、声のあるセリフ
+let talkBusy = false, talkHeldAt = 0, talkSeq = 0, talkAdOver = false;
+let talkSeen = false;          // この台本で、映像が1度でも流れたか
+let talked = [];               // この台本を見ているあいだに話した、記事の話
+const TALK_HOLD_MAX = 10000;   // 映像を止めて待たせるのは、ここまで。過ぎたら、区切りのよい所で戻る
+
+async function loadTalks(data) {
+  talks = []; talkIds = null; talkTag = ""; talkDir = ""; talked = []; talkSeen = false;
+  if (!window.WATCH_MODE) return;
+  try {
+    if (window.SHARE) {
+      const S = window.SHARE;
+      const r = await fetch(S.base + "talks.json", { cache: "no-cache" });
+      if (!r.ok) return;
+      const list = (await r.json()).talks || [];
+      const a = await fetch(S.base + "audio/talks/index.json", { cache: "no-cache" });
+      const ids = a.ok ? (await a.json()).items || [] : [];
+      if (script !== data) return;
+      talks = list; talkTag = `share:${S.owner}/${S.repo}/talks`; talkDir = S.base + "audio/talks/";
+      talkIds = new Map(ids.filter(i => /^[0-9a-f]{6,64}$/.test(i.h) && /^[a-z0-9]{2,5}$/.test(i.ext || "")).map(i => [i.h, i]));
+    } else {
+      if (!lsGet("data-repo") || !lsGet("github-pat")) return;
+      const raw = await ghGetRaw("talks/index.json");
+      if (!raw || script !== data) return;
+      const list = JSON.parse(new TextDecoder().decode(raw)).talks || [];
+      await pulling;   // 台本の声が決まってから、同じ声の小話を探す
+      const want = currentImportTake.replace(/_\d+$/, "");
+      const take = want ? (await listVoices("talks")).find(v => v.tag.replace(/_\d+$/, "") === want) : null;
+      if (script !== data) return;
+      talks = list;
+      if (take) { talkTag = take.tag; talkDir = `audio/talks/${take.tag}/`; talkIds = new Map((take.meta.items || []).map(i => [i.h, i])); }
+    }
+    talks = talks.filter(t => t && t.id && Array.isArray(t.lines) && t.lines.every(l => typeof l?.line === "string"));
+    // 次に話しそうなものの声を、先に取っておく
+    for (const t of [pickTalk("start"), pickTalk("mid"), bridgeTalk("go"), bridgeTalk("back")]) if (t) for (const l of t.lines) await talkClip(l.line);
+  } catch (e) { /* 小話が読めなくても、ふつうに見られる */ }
+}
+async function talkClip(text) {
+  if (!talkIds) return null;
+  try {
+    const h = await textHash(text), it = talkIds.get(h), k = `i:${talkTag}:` + h;
+    if (!it) return null;
+    const hit = await idbGet(k);
+    if (hit) return hit;
+    let bytes;
+    if (window.SHARE) {
+      const r = await fetch(`${talkDir}${it.h}.${it.ext}`);
+      if (!r.ok) return null;
+      bytes = new Uint8Array(await r.arrayBuffer());
+    } else bytes = await ghGetRaw(`${talkDir}${it.h}.${it.ext}`);
+    if (!bytes) return null;
+    const clip = makeClip(it.enc, bytes, it.rate, it.ext);
+    idbSet(k, clip).catch(() => {});
+    return clip;
+  } catch (e) { return null; }
+}
+function talkHeard() { try { return JSON.parse(lsGet("talk-heard", "{}")) || {}; } catch (e) { return {}; } }
+function markHeard(id) {
+  const all = talkHeard();
+  all[id] = Date.now();
+  // 消えた話の覚えがたまらないように、新しいものから 400 だけ残す
+  lsSet("talk-heard", JSON.stringify(Object.fromEntries(Object.entries(all).sort((a, b) => b[1] - a[1]).slice(0, 400))));
+}
+// 話を1つ選ぶ。動画の話 → まだ聞いていない記事の話・いつでも使える話 → 聞いてから長くたったもの
+function pickTalk(phase, skip = []) {
+  const heard = talkHeard(), pos = Math.max(lastT, 0);
+  const fresh = l => l.filter(t => !heard[t.id] && !skip.includes(t.id));
+  const video = talks.filter(t => t.kind === "video" && t.videoId === script?.videoId && t.when === phase
+    && (t.from == null || (pos >= t.from && pos <= t.to)));
+  const v = fresh(video)[0];
+  if (v) return v;
+  const art = fresh(talks.filter(t => t.kind === "article" && (t.when === "any" || t.when === phase)))
+    .sort((a, b) => (b.addedAt || "").localeCompare(a.addedAt || ""));
+  const any = fresh(talks.filter(t => t.kind === "any" && (t.when === "any" || t.when === phase)));
+  if (art.length && any.length) return Math.random() < 0.5 ? art[0] : any[Math.floor(Math.random() * any.length)];
+  if (art.length || any.length) return art[0] || any[Math.floor(Math.random() * any.length)];
+  const rest = [...video, ...talks.filter(t => (t.kind === "article" || t.kind === "any") && (t.when === "any" || t.when === phase))].filter(t => !skip.includes(t.id));
+  return rest.sort((a, b) => (heard[a.id] || 0) - (heard[b.id] || 0))[0] || null;
+}
+function bridgeTalk(when) {
+  const l = talks.filter(t => t.when === when && (t.kind === "any" || t.videoId === script?.videoId));
+  return l.length ? l[Math.floor(Math.random() * l.length)] : null;
+}
+function talkHoldVideo() {
+  if (!talkHeldAt) { talkHeldAt = Date.now(); window.__playLog?.push(`${Math.round(performance.now() / 100) / 10} 小話のために映像を止めた`); }
+  talkAdOver = true;
+  try { player.pauseVideo(); } catch (e) {}
+}
+function talkEnd() {
+  talkBusy = false; talkHeldAt = 0;
+  document.documentElement.classList.remove("talk");
+  setMood("", ""); setHand("");
+  $("caption").textContent = "";
+}
+function talkCancel() {
+  if (!talkBusy) return;
+  talkSeq++;
+  try { cancelSpeak(); } catch (e) {}
+  talkEnd();
+}
+async function runTalk() {
+  if (talkBusy || !talks.length || !started) return;
+  const root = document.documentElement, my = ++talkSeq, phase = talkSeen ? "mid" : "start", live = () => my === talkSeq;
+  // 出発前の話は、はじめから見るときだけ。途中から見るときは、途中の話
+  const first = pickTalk(phase === "start" && startPos() < 30 ? "start" : "mid");
+  if (!first) return;
+  talkBusy = true; talkHeldAt = 0; talkAdOver = false;
+  root.classList.add("talk");
+  dropQueue();
+  // 話しかけのセリフがあれば、言い終わるのを待つ
+  for (let i = 0; i < 80 && draining && live(); i++) await sleep(100);
+  window.__playLog?.push(`${Math.round(performance.now() / 100) / 10} 小話: ${first.title}`);
+  const used = [];
+  const speak = async l => {
+    if ($("showCaption").checked) setCaption(l.line);
+    setMood(l.face, l.gesture);
+    setHand(l.hand);
+    const clip = await talkClip(l.line);
+    if (!live()) return;
+    speaking = true;
+    try { if (clip) await playClip(clip, +$("rate").value, true); else await silentSay(l.line); }
+    catch (e) {} finally { speaking = false; }
+    if (live()) { setMood("", ""); setHand(""); $("caption").textContent = ""; await sleep(250); }
+  };
+  try {
+    if (!live()) return;
+    for (let t = first; t && live(); t = !talkAdOver && used.length < 3 ? pickTalk("mid", used) : null) {
+      used.push(t.id);
+      let all = true;
+      for (const l of t.lines) {
+        if (!live()) return;
+        if (talkHeldAt && Date.now() - talkHeldAt > TALK_HOLD_MAX) { all = false; break; }
+        await speak(l);
+      }
+      if (!live()) return;
+      if (all) {
+        markHeard(t.id);
+        if (t.url && !talked.some(x => x.url === t.url)) talked.push({ title: t.title, article: t.article || "", url: t.url });
+      }
+      // 広告がまだ続いていて、次の話まで少し間をあける
+      for (let i = 0; i < 6 && live() && !talkAdOver; i++) await sleep(250);
+    }
+    const b = live() && talkHeldAt ? bridgeTalk(phase === "start" ? "go" : "back") : null;
+    if (b) await speak(b.lines[0]);
+  } finally {
+    // やめたときの片づけは talkCancel がしている
+    const held = live() && !!talkHeldAt;
+    if (live()) talkEnd();
+    if (held) {
+      try { player.playVideo(); } catch (e) {}
+      setTimeout(() => { try { if (live() && player.getPlayerState() === 2) window.__watchToast?.("再生ボタンを押すと、映像に戻ります。"); } catch (e) {} }, 2500);
+    }
+  }
 }
 
 async function drain() {
@@ -3731,7 +3947,6 @@ function scriptMenu(x, extra = []) {
   ];
 }
 function makeFor(x) {
-  $("pickDlg").close();
   window.__openMake("https://www.youtube.com/watch?v=" + x.videoId);
 }
 function favButton(b, x) {
@@ -5067,11 +5282,45 @@ if (THREE && VRMLoaderPlugin) {
     if (!vrm?.humanoid || !placeWheel(steer)) return false;
     const half = 90 - (+$("armSpread").value) * 60;   // 上端からの角度。60度で10時10分
     const elbow = +$("armHeight").value;
-    armIK("left", fwdSign, rimPoint(90 - half * fwdSign, rimL), elbow);
-    armIK("right", -fwdSign, rimPoint(90 + half * fwdSign, rimR), elbow);
-    gripHand("left", +$("gripStrength").value);
-    gripHand("right", +$("gripStrength").value);
+    rimPoint(90 - half * fwdSign, rimL);
+    rimPoint(90 + half * fwdSign, rimR);
+    const hand = window.avatarState?.hand, amt = hand?.amt || 0;
+    const side = amt > 0.001 ? freeHand(hand, amt) : "";
+    armIK("left", fwdSign, rimL, elbow);
+    armIK("right", -fwdSign, rimR, elbow);
+    const grip = +$("gripStrength").value;
+    gripHand("left", side === "left" ? Math.max(0.001, grip * (1 - amt)) : grip);
+    gripHand("right", side === "right" ? Math.max(0.001, grip * (1 - amt)) : grip);
+    if (side && hand.name === "point") curlFingers(side, amt);
     return true;
+  }
+  // ハンドルから離す手の行き先。カメラに近いほうの手を使う
+  const _sh = new THREE.Vector3(), _cam = new THREE.Vector3(), _lat = new THREE.Vector3(), _goal = new THREE.Vector3();
+  function freeHand(hand, amt) {
+    const h = vrm.humanoid, pos = {};
+    for (const sd of ["left", "right"]) { const b = h.getNormalizedBoneNode(sd + "UpperArm"); if (!b) return ""; pos[sd] = b.getWorldPosition(new THREE.Vector3()); }
+    const side = pos.left.distanceTo(camera.position) < pos.right.distanceTo(camera.position) ? "left" : "right";
+    _sh.copy(pos[side]);
+    _cam.subVectors(camera.position, _sh); _cam.y = 0; _cam.normalize();
+    _lat.set(-_cam.z, 0, _cam.x);
+    if (hand.name === "point") _goal.copy(_sh).addScaledVector(_cam, armLen * 0.10).add(_lat.set(0, armLen * 0.06, fwdSign * armLen * 0.80));
+    else {
+      // 顔にかぶらないように、肩より後ろ寄り・顔より低めに上げる
+      _goal.copy(_sh).addScaledVector(_cam, armLen * 0.34);
+      _goal.y += armLen * (hand.name === "wave" ? 0.06 : 0.10);
+      _goal.z -= fwdSign * armLen * 0.20;
+      if (hand.name === "wave") _goal.addScaledVector(_lat, armLen * 0.08 * Math.sin(hand.t * 8.5) * Math.min(1, hand.t * 2));
+    }
+    (side === "left" ? rimL : rimR).lerp(_goal, amt);
+    return side;
+  }
+  // 人さし指だけ伸ばす
+  function curlFingers(side, amt) {
+    for (const f of ["Middle", "Ring", "Little"]) for (const [a, b] of [["Proximal", "Intermediate"], ["Intermediate", "Distal"]]) {
+      const bone = vrm.humanoid.getNormalizedBoneNode(side + f + a), child = vrm.humanoid.getNormalizedBoneNode(side + f + b);
+      if (!bone || !child) continue;
+      bone.rotation.set(0, 0, -Math.sign(child.position.x || 1) * 1.25 * amt);
+    }
   }
 
   // 揺れだけだと棒立ちに見えるので、運転中らしい仕草をときどき挟む
@@ -5125,7 +5374,7 @@ if (THREE && VRMLoaderPlugin) {
     requestAnimationFrame(loop);
     if (window.WATCH_MODE) {
       const now = performance.now(), hid = getComputedStyle($("avatar")).visibility === "hidden" || $("avatar").classList.contains("stash")
-        || document.hidden || document.documentElement.classList.contains("brk");
+        || document.hidden || (document.documentElement.classList.contains("brk") && !document.documentElement.classList.contains("talk"));
       if (hid || now - lastDraw < 30) return;
       lastDraw = now;
     }
@@ -5167,8 +5416,9 @@ if (THREE && VRMLoaderPlugin) {
         hd.getWorldPosition(gazeV);
         const cx = camera.position.x - gazeV.x, cy = camera.position.y - gazeV.y, cz = camera.position.z - gazeV.z;
         const yaw = Math.atan2(fwdSign * cx, fwdSign * cz);
-        turnYaw = Math.max(-0.95, Math.min(0.95, yaw)) * s.gaze * 0.3;
-        turnPitch = -Math.max(-0.3, Math.min(0.3, Math.atan2(cy, Math.hypot(cx, cz)))) * s.gaze * fwdSign * 0.3;
+        const turn = 0.3 + 0.6 * (s.faceCam || 0);   // 小話のあいだは、顔ごと向く
+        turnYaw = Math.max(-0.95, Math.min(0.95, yaw)) * s.gaze * turn;
+        turnPitch = -Math.max(-0.3, Math.min(0.3, Math.atan2(cy, Math.hypot(cx, cz)))) * s.gaze * fwdSign * turn;
       }
     }
 
@@ -6845,9 +7095,11 @@ $("btnCopy").onclick = async () => {
       h.textContent = `記事 ${n + 1} / ${topics.length}` + (t.title ? `　${t.title}` : "");
       tl.insertBefore(h, row);
     });
-    $("wTitle").textContent = script.meta?.title || "";
-    const nLines = script.items.filter(it => it.line).length;
-    $("wInfo").textContent = (script.title ? script.title + " ／ " : "") + `${fmtTime(total)} ／ 発話 ${nLines}件` + (topics.length ? ` ／ 記事 ${topics.length}本` : "");
+    $("wTitle").textContent = $("wInfo").textContent = "";
+    const m = script.meta || {}, row = $("wRow");
+    row.querySelector(".t").textContent = script.title || m.title || script.videoId;
+    row.querySelector(".m span").textContent = [m.channelTitle, fmtTime(total), topics.length ? `記事 ${topics.length}本` : ""].filter(Boolean).join("・");
+    row.classList.add("on");
     $("wBig").style.display = "";
     showAbout();
     showStart(true);
@@ -6859,6 +7111,7 @@ $("btnCopy").onclick = async () => {
   const siteOf = u => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (e) { return ""; } };
   const mk = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   function jumpTo(t) {
+    talkCancel();
     $("wDesc").close();
     if (!started) { $("btnStart").click(); showStart(false); setTimeout(() => { seekWant = 0; try { player.seekTo(t, true); } catch (err) {} }, 600); }
     else { try { player.seekTo(t, true); player.playVideo(); } catch (err) {} }
@@ -6896,7 +7149,17 @@ $("btnCopy").onclick = async () => {
       row.appendChild(body);
       box.appendChild(row);
     }
-    $("iArtsH").hidden = box.hidden = !arts.length;
+    const told = talked.filter(x => httpUrl(x.url) && !arts.some(a => a.url === x.url));
+    for (const x of told) {
+      const row = mk("div", "art"), body = mk("a");
+      body.href = x.url; body.target = "_blank"; body.rel = "noopener noreferrer";
+      body.appendChild(mk("b", "", x.title));
+      if (x.article && x.article !== x.title) body.appendChild(mk("i", "", x.article));
+      body.appendChild(mk("i", "go", siteOf(x.url) + " で読む"));
+      row.appendChild(body);
+      box.appendChild(row);
+    }
+    $("iArtsH").hidden = box.hidden = !arts.length && !told.length;
     const ch = (s.chapters || []).filter(c => c && c.label && c.t < total);
     const cb = $("iChap");
     cb.replaceChildren();
@@ -6923,9 +7186,8 @@ $("btnCopy").onclick = async () => {
     const cur = d.querySelector(".art.now");
     d.querySelector(".body").scrollTop = cur ? Math.max(0, cur.offsetTop - 120) : 0;
   }
-  $("wInfoBtn").onclick = $("wInfoBtn2").onclick = openInfo;
+  $("wInfoBtn").onclick = $("wInfoBtn2").onclick = $("wRow").onclick = openInfo;
   $("iClose").onclick = () => $("wDesc").close();
-  document.querySelector("#wDesc .grab").onclick = () => $("wDesc").close();
   $("wDesc").addEventListener("click", e => { if (e.target === $("wDesc")) $("wDesc").close(); });
 
   // 声のクレジットと、話している記事（公開された台本に入っている）
@@ -6964,14 +7226,16 @@ $("btnCopy").onclick = async () => {
 
   // 台本が読み込まれるたびに作り直す
   const _load = loadScript;
-  loadScript = function (data, remember) { started = false; _load(data, remember); build(); };
+  loadScript = function (data, remember) { talkCancel(); started = false; _load(data, remember); build(); loadTalks(data); };
 
-  function showStart(on) { $("wStart").classList.toggle("on", on); }
+  function showStart(on) { $("wStart").classList.toggle("on", on); root.classList.toggle("pre", on); }
   function playing() { try { return player.getPlayerState() === 1; } catch (e) { return false; } }
 
   function togglePlay() {
-    if (!script) { openPicker(); return; }
+    if (!script) { if (!window.SHARE) openPicker(); return; }
     if (!started) { $("btnStart").click(); showStart(false); poke(); return; }
+    // 小話のために止まっているときに押したら、話を切り上げて映像に戻る
+    if (talkBusy) { const held = !!talkHeldAt; talkCancel(); if (held) { try { player.playVideo(); } catch (e) {} poke(); return; } }
     try { playing() ? player.pauseVideo() : player.playVideo(); } catch (e) {}
     poke();
   }
@@ -7026,9 +7290,18 @@ $("btnCopy").onclick = async () => {
     const ad = other || adRun >= 4 || (root.classList.contains("brk") && adRun > 0);
     if (root.classList.contains("brk") !== ad) root.classList.toggle("brk", ad);   // 名前を ad にすると、広告を消す道具がページごと隠すことがある
     if (ad && $("wStart").classList.contains("on")) showStart(false);
+    adTalk(ad);
     playLog.push([Math.round(performance.now() / 100) / 10, st, Math.round(raw * 10) / 10, Math.round((player?.getDuration?.() || 0)), ad ? "ad" : "", started ? 1 : 0].join(" "));
     if (playLog.length > 600) playLog.splice(0, 200);
   }
+  // 広告のあいだに話す。横持ちでは、キャラクターが映像の上にあって出せないので話さない
+  function adTalk(ad) {
+    if (!ad) { adTalkT = 0; return; }
+    if (talkBusy || adTalkT < 0 || !started || document.hidden || !root.classList.contains("booth") || root.classList.contains("no-talk")) return;
+    if (!adTalkT) adTalkT = Date.now();
+    if (Date.now() - adTalkT > 700) { adTalkT = -1; runTalk(); }   // 1回の広告につき1度
+  }
+  let adTalkT = 0;
   const playLog = [];
   window.__playLog = playLog;
 
@@ -7115,6 +7388,7 @@ $("btnCopy").onclick = async () => {
   prog.addEventListener("pointerup", e => {
     if (!dragging) return;
     dragging = false;
+    talkCancel();
     const t = fracAt(e) * total;
     if (!started) { $("btnStart").click(); showStart(false); setTimeout(() => { seekWant = 0; try { player.seekTo(t, true); } catch (err) {} }, 600); }
     else { try { player.seekTo(t, true); player.playVideo(); } catch (err) {} }
@@ -7122,13 +7396,17 @@ $("btnCopy").onclick = async () => {
   });
   prog.addEventListener("pointerleave", () => { if (!dragging) $("wTip").style.display = "none"; });
 
-  // 余白の使い方を決める。映像（16:9）の下に十分な空きがあれば、映像を上に寄せて、空いたところを字幕とキャラに使う
+  // 映像の下の、字幕とキャラを置ける所の始まり（題の行の下）
+  const ROW_H = 60;
+  const lowerTop = a => a.W * 9 / 16 + ROW_H;
+  // 余白の使い方を決める。映像（16:9）の下に十分な空きがあれば、映像を上に寄せて、空いたところを題と字幕とキャラに使う
   function layout() {
     const st = $("stage");
     const w = st.clientWidth, h = st.clientHeight;
     if (!w || !h) return;
     const vh = w * 9 / 16, barH = $("wBar").offsetHeight || 84;
-    const booth = h - vh - barH >= 140;
+    const booth = h - vh - ROW_H - barH >= 140;
+    root.style.setProperty("--d-top", Math.round(st.getBoundingClientRect().top + vh) + "px");
     root.style.setProperty("--bar-h", barH + "px");
     root.style.setProperty("--b-vh", vh + "px");
     root.classList.toggle("booth", booth);
@@ -7155,11 +7433,13 @@ $("btnCopy").onclick = async () => {
   // 動ける範囲。操作の帯が出ているあいだは、帯の上まで
   function wipeArea() {
     const st = $("stage"), W = st.clientWidth, H = st.clientHeight, barH = $("wBar").offsetHeight || 84;
-    const bar = root.classList.contains("booth") || root.classList.contains("list-open") || root.classList.contains("ui-on");
+    const bar = root.classList.contains("booth") || root.classList.contains("list-open") || root.classList.contains("ui-on") || root.classList.contains("pre");
     return { l: 8, t: 8, r: W - 8, b: H - (bar ? barH : 8), W, H, barH };
   }
   function wipeSize(want, a = wipeArea()) {
-    const ar = wipeAr(), maxH = a.H - a.barH - 16;
+    const ar = wipeAr();
+    // 縦持ちでは、題の行にかからないように、動画の中か、題の行の下に収まる大きさまで。下に置くときは、字幕の分も空ける
+    const maxH = root.classList.contains("booth") ? Math.max(a.W * 9 / 16 - a.t, a.b - lowerTop(a) - 8 - 96) : a.H - a.barH - 16;
     const max = Math.min(a.W - 16, maxH * ar), min = Math.min(96, max);
     const w = Math.max(min, Math.min(max, want));
     return { w, h: w / ar, min, max };
@@ -7181,7 +7461,14 @@ $("btnCopy").onclick = async () => {
   function placeWipe() {
     const v = wipeGet(), a = wipeArea(), z = wipeSize(v.w * a.W, a);
     let x = a.l + v.x * Math.max(0, a.r - a.l - z.w);
-    const y = a.t + v.y * Math.max(0, a.b - a.t - z.h);
+    let y = a.t + v.y * Math.max(0, a.b - a.t - z.h);
+    if (root.classList.contains("booth")) {   // 題の行には、かぶせない
+      const vh = a.W * 9 / 16, low = lowerTop(a) + 8;
+      if (y + z.h > vh && y < low) {
+        const fitsUp = a.t + z.h <= vh, fitsDown = low + z.h <= a.b + 1;
+        y = fitsUp && (!fitsDown || y + z.h / 2 < vh * 0.6) ? Math.min(y, vh - z.h) : low;
+      }
+    }
     if (v.stash === "l") x = -z.w - 10;
     if (v.stash === "r") x = a.W + 10;
     av.classList.toggle("stash", !!v.stash);
@@ -7208,7 +7495,7 @@ $("btnCopy").onclick = async () => {
       s.setProperty("--c-left", left + "px"); s.setProperty("--c-right", right + "px");
       return;
     }
-    const R = { l: 12, r: a.W - 12, t: a.W * 9 / 16 + 8, b: a.H - a.barH - 4 };
+    const R = { l: 12, r: a.W - 12, t: lowerTop(a) + 8, b: a.H - a.barH - 4 };
     const boxes = hidden || r.b <= R.t || r.t >= R.b ? [R] : [
       { ...R, b: r.t - 8 }, { ...R, t: r.b + 8 }, { ...R, r: r.l - 12 }, { ...R, l: r.r + 12 },
     ];
@@ -7264,6 +7551,8 @@ $("btnCopy").onclick = async () => {
     if (fingers.size) { startGesture(); return; }
     const done = g; g = null;
     av.classList.remove("grab");
+    // システムの操作に取られて途中で切れた動きは、場所を変えたことにしない
+    if (e.type === "pointercancel") { placeWipe(); return; }
     if (done.moved < 6 && !done.pinched) { tapWipe(e); return; }
     settleWipe(done);
   };
@@ -7280,9 +7569,9 @@ $("btnCopy").onclick = async () => {
     const out = px + n.w / 2 < 0 ? "l" : px + n.w / 2 > a.W ? "r" : "";
     const freeX = Math.max(1, a.r - a.l - n.w), freeY = Math.max(1, a.b - a.t - n.h);
     const xs = n.w > a.W * 0.75 ? [0.5] : [0, 1];
-    // 縦持ちでは、動画のすぐ下にも止まれる
+    // 縦持ちでは、題の行のすぐ下にも止まれる
     const ys = [0, 1];
-    if (root.classList.contains("booth")) { const u = (a.W * 9 / 16 + 8 - a.t) / freeY; if (u > 0.05 && u < 0.95) ys.push(u); }
+    if (root.classList.contains("booth")) { const u = (lowerTop(a) + 8 - a.t) / freeY; if (u > 0.05 && u < 0.95) ys.push(u); }
     const near = (list, p) => list.reduce((m, q) => Math.abs(q - p) < Math.abs(m - p) ? q : m);
     v.x = near(xs, (px - a.l) / freeX);
     v.y = near(ys, (py - a.t) / freeY);
@@ -7329,7 +7618,7 @@ $("btnCopy").onclick = async () => {
 
   $("wPlay").onclick = togglePlay;
   $("wBig").onclick = togglePlay;
-  $("wBack").onclick = () => { try { player.seekTo(Math.max(0, player.getCurrentTime() - 10), true); } catch (e) {} poke(); };
+  $("wBack").onclick = () => { if (talkBusy && talkHeldAt) { togglePlay(); return; } talkCancel(); try { player.seekTo(Math.max(0, player.getCurrentTime() - 10), true); } catch (e) {} poke(); };
   // セリフの一覧とプレイリストは、同じ場所に片方だけ出す
   const listOpen = plain => root.classList.contains("list-open") && root.classList.contains("pl-open") !== plain;
   $("wList").onclick = () => { const on = !listOpen(true); root.classList.remove("pl-open"); root.classList.toggle("list-open", on); poke(); };
@@ -7493,18 +7782,20 @@ $("btnCopy").onclick = async () => {
   $("wReset").onclick = () => { lsSet("wipe-p", ""); lsSet("wipe-l", ""); layout(); $("wSet").close(); };
   // シートの外を押すか、つまみを下へなぞると閉じる
   $("wSet").addEventListener("click", e => { if (e.target === $("wSet")) $("wSet").close(); });
-  const grab = document.querySelector("#wSet .grab");
-  grab.onclick = () => $("wSet").close();
-  grab.onpointerdown = e => {
-    const y0 = e.clientY;
-    grab.setPointerCapture(e.pointerId);
-    grab.onpointermove = ev => { $("wSet").style.transform = `translateY(${Math.max(0, ev.clientY - y0)}px)`; };
-    grab.onpointerup = grab.onpointercancel = ev => {
-      grab.onpointermove = grab.onpointerup = grab.onpointercancel = null;
-      $("wSet").style.transform = "";
-      if (ev.clientY - y0 > 60) $("wSet").close();
+  for (const d of [$("wSet"), $("wDesc")]) {
+    const grab = d.querySelector(".grab");
+    grab.onclick = () => d.close();
+    grab.onpointerdown = e => {
+      const y0 = e.clientY;
+      grab.setPointerCapture(e.pointerId);
+      grab.onpointermove = ev => { d.style.transform = `translateY(${Math.max(0, ev.clientY - y0)}px)`; };
+      grab.onpointerup = grab.onpointercancel = ev => {
+        grab.onpointermove = grab.onpointerup = grab.onpointercancel = null;
+        d.style.transform = "";
+        if (ev.clientY - y0 > 60) d.close();
+      };
     };
-  };
+  }
   $("wSetBtn").onclick = () => openSet();
   $("wSetSave").onclick = async () => {
     const slug = repoSlug($("wRepo").value);
@@ -7515,25 +7806,52 @@ $("btnCopy").onclick = async () => {
     $("ghPat").value = $("wPat").value.trim();
     $("btnRepoSave").click();
     msg.textContent = "読み込んでいます…"; msg.className = "hint";
-    // アバターの調整値を取り込むと画面が読み直されるので、読み直したあとも台本選びを開く
-    try { sessionStorage.setItem(LS + "open-picker", String(Date.now())); } catch (e) {}
     try { await $("btnSyncPull").onclick(); } catch (e) {}
     $("wSet").close();
     openPicker();   // ここで台本の一覧が出れば、接続は通っている
   };
   // 台本選びで接続の失敗が出たら、直す入口を出す
-  // 接続がまだ無いときは、詳しい画面向けの言い方を、この画面の言い方に替える
-  const NO_REPO = "まだデータの接続がありません。「接続する」を押して、リポジトリとトークンを入れてください。";
+  // 接続がまだ無いときは、準備の案内を一覧の場所に出す
   const NO_SCRIPT = "つながりました。まだ台本がありません。AIエージェントに台本を頼むと、ここに並びます。";
   const noRepo = () => !lsGet("data-repo") || !lsGet("github-pat");
   new MutationObserver(() => {
     const t = $("pickHint").textContent;
-    if (noRepo() && t !== NO_REPO && /設定してください|入れてください/.test(t)) { $("pickHint").textContent = NO_REPO; return; }
+    if (noRepo()) {
+      if (t) $("pickHint").textContent = "";
+      $("pickFix").style.display = "none";
+      if (!$("pickList").querySelector(".guide")) showGuide();
+      return;
+    }
     if (t.startsWith("まだ台本が保存されていません")) { $("pickHint").textContent = NO_SCRIPT; return; }
-    $("pickFix").textContent = noRepo() ? "接続する" : "接続を直す";
     $("pickFix").style.display = /トークン|リポジトリ|権限|見つかりません|設定/.test($("pickHint").textContent) && !$("pickList").children.length ? "" : "none";
   }).observe($("pickHint"), { childList: true, characterData: true, subtree: true });
-  $("pickFix").onclick = () => { $("pickDlg").close(); openSet(noRepo() ? "リポジトリとトークンを入れて「保存して読み込む」を押してください。" : "トークンを貼り直して「保存して読み込む」を押してください。"); };
+  $("pickFix").onclick = () => openSet("トークンを貼り直して「保存して読み込む」を押してください。");
+  function showGuide() {
+    const g = el('<div class="guide"></div>');
+    g.append(...$("makeNew").cloneNode(true).childNodes);
+    const b = g.querySelector("button");
+    b.removeAttribute("id");
+    b.onclick = () => $("makeConnect").onclick();
+    $("pickList").replaceChildren(g);
+  }
+
+  // 台本の一覧が、アプリの入口になる。見ている台本があるときは、動画の画面へ戻れる
+  $("pickClose").textContent = "動画に戻る";
+  const _openPicker = openPicker;
+  openPicker = function () { const p = _openPicker(); syncHome(); return p; };
+  const syncHome = () => { $("pickClose").style.display = script ? "" : "none"; };
+  $("pickDlg").addEventListener("cancel", e => { if (!script) e.preventDefault(); });
+  $("pickSet").onclick = () => openSet();
+  // ほかのアプリで台本を頼んで戻ってきたら、一覧を読み直す
+  let hidAt = 0;
+  document.addEventListener("visibilitychange", async () => {
+    if (document.hidden) { hidAt = Date.now(); return; }
+    const top = [...document.querySelectorAll("dialog[open]")];
+    if (Date.now() - hidAt < 30000 || noRepo() || !$("pickDlg").open || top.length > 1 || $("pickQ").value) return;
+    const y = $("pickList").scrollTop;
+    await openPicker();
+    $("pickList").scrollTop = y;
+  });
 
   // 台本の作り方
   let madeVideos = new Set();   // もう台本がある動画
@@ -7565,7 +7883,7 @@ $("btnCopy").onclick = async () => {
   for (const r of document.querySelectorAll("[name=makeKind]")) r.onchange = makeText;
   $("makeTheme").oninput = makeText;
   $("wMake").onclick = openMake;
-  $("pickMake").onclick = () => { $("pickDlg").close(); openMake(); };
+  $("pickMake").onclick = () => openMake();
   $("makeUrl").oninput = makeText;
   $("makeConnect").onclick = () => { $("makeDlg").close(); openSet("リポジトリとトークンを入れて「保存して読み込む」を押してください。"); };
   $("makeClose").onclick = () => $("makeDlg").close();
@@ -7608,16 +7926,14 @@ $("btnCopy").onclick = async () => {
     else if (e.key === "f") $("wFs").click();
   });
 
-  // 台本がまだ無いとき：選ぶところから始める
+  // 台本の一覧から始める。共有URLで開いたときは、動画の画面から始める
   $("wPlay").innerHTML = ICON_PLAY;
+  if (!window.SHARE) openPicker();
   setTimeout(() => {
-    let reopen = false;
-    try { reopen = Date.now() - Number(sessionStorage.getItem(LS + "open-picker") || 0) < 15000; sessionStorage.removeItem(LS + "open-picker"); } catch (e) {}
-    if (reopen) openPicker();
+    syncHome();
     if (script) { if (!started) build(); return; }
     $("wTitle").textContent = "ドライブ実況ワイプ";
-    if (window.SHARE) { $("wInfo").textContent = window.SHARE.error || "読み込んでいます…"; $("wBig").style.display = "none"; showStart(true); return; }
-    $("wInfo").textContent = "見る台本を選んでください。";
+    if (window.SHARE) $("wInfo").textContent = window.SHARE.error || "読み込んでいます…";
     $("wBig").style.display = "none";
     showStart(true);
   }, 1200);

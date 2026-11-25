@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>
   // ふつうに開くと、見るだけの画面になる。台本づくりや細かい設定の画面は ?edit を付けて開く
-  window.APP_VERSION = 'v0.21.3'.startsWith('v') || /^master-/.test('v0.21.3') ? 'v0.21.3' : '開発版';
+  window.APP_VERSION = 'v0.21.4'.startsWith('v') || /^master-/.test('v0.21.4') ? 'v0.21.4' : '開発版';
   // ?v=持ち主/リポジトリ/台本の名前 で開くと、その人が公開した台本を、接続なしで再生する
   (() => {
     const q = new URLSearchParams(location.search);
@@ -1513,7 +1513,7 @@
     <p class="sub" id="iSub"></p>
     <div class="stats" id="iStats"></div>
     <h3>元の動画</h3>
-    <a class="media" id="iVideo" target="_blank" rel="noopener noreferrer"><img alt="" id="iThumb"><span><b id="iVTitle"></b><i id="iVCh"></i><i class="go">YouTube で開く</i></span></a>
+    <a class="media" id="iVideo" target="_blank" rel="noopener"><img alt="" id="iThumb"><span><b id="iVTitle"></b><i id="iVCh"></i><i class="go">YouTube で開く</i></span></a>
     <h3 id="iArtsH">取り上げた記事</h3>
     <div id="iArts"></div>
     <h3 id="iChapH">チャプター</h3>
@@ -1604,8 +1604,8 @@
     <button type="button" class="sh bk" data-page="main"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span class="l">声の大きさ</span></button>
     <p class="note" style="margin-bottom:0">動画のあいだ</p>
     <div class="seg wVol" data-k="vol-voice" role="radiogroup" aria-label="動画のあいだの声の大きさ"><button type="button" role="radio" data-v="low">小さめ</button><button type="button" role="radio" data-v="mid">ふつう</button><button type="button" role="radio" data-v="high">大きめ</button></div>
-    <p class="note" style="margin-bottom:0">広告のあいだ</p>
-    <div class="seg wVol" data-k="vol-talk" role="radiogroup" aria-label="広告のあいだの声の大きさ"><button type="button" role="radio" data-v="low">小さめ</button><button type="button" role="radio" data-v="mid">ふつう</button><button type="button" role="radio" data-v="high">大きめ</button></div>
+    <p class="note" style="margin-bottom:0">小話</p>
+    <div class="seg wVol" data-k="vol-talk" role="radiogroup" aria-label="小話の声の大きさ"><button type="button" role="radio" data-v="low">小さめ</button><button type="button" role="radio" data-v="mid">ふつう</button><button type="button" role="radio" data-v="high">大きめ</button></div>
     <p class="note">次のセリフから変わります。</p>
   </div>
   <div class="page" data-name="caption">
@@ -1617,7 +1617,8 @@
     <button type="button" class="sh bk" data-page="main"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span class="l">キャラクター</span></button>
     <label class="sh"><span class="l">キャラクターを出す</span><input type="checkbox" class="sw" data-show="avatar"></label>
     <label class="sh"><span class="l">背景を出す</span><input type="checkbox" class="sw" data-show="avbg"></label>
-    <label class="sh"><span class="l">広告のあいだに話す</span><input type="checkbox" class="sw" data-show="talk"></label>
+    <p class="note" style="margin-bottom:0">小話</p>
+    <div class="seg" id="wTalk" role="radiogroup" aria-label="小話"><button type="button" role="radio" data-v="ad">広告のあいだ</button><button type="button" role="radio" data-v="before">動画の前</button><button type="button" role="radio" data-v="off">話さない</button></div>
     <p class="note" style="margin-bottom:0">こちらを見る回数</p>
     <div class="seg" id="wLook" role="radiogroup"><button type="button" data-v="few">少なめ</button><button type="button" data-v="mid">ふつう</button><button type="button" data-v="many">多め</button></div>
     <p class="note" style="margin-bottom:0">表情の多さ</p>
@@ -1970,7 +1971,7 @@ function setupPlayer(videoId) {
           tick();
         }
         if (e.data === YT.PlayerState.ENDED && started) { lastT = -1; adHold = seekMark = null; plEnded(); }
-        // 一時停止したまま喋り続けると映像とずれるので止める（広告のあいだの小話は、映像と関係がないので続ける）
+        // 一時停止したまま喋り続けると映像とずれるので止める（小話は、映像と関係がないので続ける）
         if ((e.data === YT.PlayerState.PAUSED && !talkBusy) || e.data === YT.PlayerState.ENDED) {
           dropQueue();
           try { cancelSpeak(); } catch (err) {}
@@ -3565,7 +3566,9 @@ function tick() {
   if (!started || !player || !player.getCurrentTime) return;
   const t = contentTime();
   if (t === null) { tickRAF = requestAnimationFrame(tick); return; }
-  // 小話の途中で広告が終わったら、映像を止めて、話し終わるのを待つ
+  // 「動画の前」なら、映像が出たところで止めて、話してから走り出す。
+  // 「広告のあいだ」なら、話の途中で広告が終わったときに、映像を止めて話し終わるのを待つ
+  if (!talkBusy && introDue()) runTalk("before");
   if (talkBusy) { talkHoldVideo(); tickRAF = requestAnimationFrame(tick); return; }
 
   // シーク検出。巻き戻したら読み直し、飛ばしたら読まずに消化済みにする
@@ -3594,20 +3597,27 @@ function tick() {
   tickRAF = requestAnimationFrame(tick);
 }
 
-/* ---------- 広告のあいだの小話 ----------
-   広告が出たら、talks/index.json の話を1つ選んで話す。広告が先に終わったら、映像を止めたまま話し終えて、
-   ひとこと言ってから映像に戻る。広告そのもの（音・画面）には手を加えない。 */
+/* ---------- 小話 ----------
+   talks/index.json の話を話す。話すところは設定で選ぶ。
+     広告のあいだ … 広告が出たら話す。広告が先に終わったら、映像を止めたまま話し終えてから走り出す
+     動画の前     … 広告が終わって映像が出たところで止め、1つ話してから走り出す。広告のあいだは話さない
+   共有URLで開いた人には、広告のあいだは話さない。 */
+function talkWhen() {
+  const v = lsGet("talk-when", lsGet("show-talk") === "0" ? "off" : "");
+  if (window.SHARE) return v === "off" ? "off" : "before";
+  return ["ad", "before", "off"].includes(v) ? v : "ad";
+}
 let talks = [], talkTag = "", talkDir = "", talkIds = null;   // 話、声の取り置きの名前、置き場、声のあるセリフ
 let talkBusy = false, talkFace = false, talkQuiet = 0, talkHeldAt = 0, talkSeq = 0, talkAdOver = false;
-let talkSeen = false;          // この台本で、映像が1度でも流れたか
+let talkSeen = false, introDone = false;   // この台本で、映像が1度でも流れたか／ひとことを済ませたか
 let talked = [];               // この台本を見ているあいだに話した、記事の話
-const TALK_HOLD_MAX = 10000;   // 映像を止めて待たせるのは、ここまで。過ぎたら、区切りのよい所で戻る
+const TALK_HOLD_MAX = 18000;   // 映像を止めて待たせるのは、ここまで。過ぎたら、区切りのよい所で戻る
 
 // 広告は再生を押してすぐ出るので、前に読んだ小話を先に使い、新しいものは裏で読み直す。
 // 声がまだ決まっていなくても、小話そのものは始められるようにする（声を待つのは talkClip）
 let talkVoice = Promise.resolve();
 async function loadTalks(data) {
-  talked = []; talkSeen = false;
+  talked = []; talkSeen = introDone = false;
   if (!window.WATCH_MODE) return;
   const S = window.SHARE, home = S ? S.base : lsGet("data-repo");
   if (!S && (!home || !lsGet("github-pat"))) { talks = []; return; }
@@ -3718,18 +3728,25 @@ function talkCancel() {
   try { cancelSpeak(); } catch (e) {}
   talkEnd();
 }
-async function runTalk() {
+// いま、動画の前のひとことを話すところか（はじめて映像が出たとき1度だけ）
+function introDue() {
+  if (introDone || talkSeen || !window.WATCH_MODE || !started) return false;
+  introDone = true;
+  return talkWhen() === "before" && talks.length > 0 && !document.hidden;
+}
+async function runTalk(mode) {
   if (talkBusy || !talks.length || !started) return;
-  const root = document.documentElement, my = ++talkSeq, phase = talkSeen ? "mid" : "start", live = () => my === talkSeq;
-  // 出発前の話は、はじめから見るときだけ。途中から見るときは、途中の話
-  const first = pickTalk(phase === "start" && startPos() < 30 ? "start" : "mid");
-  if (!first) return;
+  const root = document.documentElement, my = ++talkSeq, again = startPos() >= 30, live = () => my === talkSeq;
+  const phase = !talkSeen && !again ? "start" : "mid";   // 出発前の話は、はじめから見るときだけ
+  // 動画の前に話すとき、続きから見る人には、短く声をかけるだけ
+  const first = mode === "before" && again ? null : pickTalk(phase);
+  if (!first && !(mode === "before" && bridgeTalk("back"))) return;
   talkBusy = talkFace = true; talkHeldAt = 0; talkAdOver = false;
   root.classList.add("talk");
   dropQueue();
   // 話しかけのセリフがあれば、言い終わるのを待つ
   for (let i = 0; i < 80 && draining && live(); i++) await sleep(100);
-  window.__playLog?.push(`${Math.round(performance.now() / 100) / 10} 小話: ${first.title}`);
+  window.__playLog?.push(`${Math.round(performance.now() / 100) / 10} 小話: ${first?.title || "続きから"}`);
   const used = [];
   const speak = async l => {
     if ($("showCaption").checked) setCaption(l.line);
@@ -3744,12 +3761,13 @@ async function runTalk() {
   };
   try {
     if (!live()) return;
-    for (let t = first; t && live(); t = !talkAdOver && used.length < 3 ? pickTalk("mid", used) : null) {
+    if (mode === "before") await sleep(500);
+    for (let t = first; t && live(); t = mode === "ad" && !talkAdOver && used.length < 3 ? pickTalk("mid", used) : null) {
       used.push(t.id);
       let all = true;
       for (const l of t.lines) {
         if (!live()) return;
-        if (talkHeldAt && Date.now() - talkHeldAt > TALK_HOLD_MAX) { all = false; break; }
+        if (talkHeldAt && Date.now() - talkHeldAt > (mode === "ad" ? 10000 : TALK_HOLD_MAX)) { all = false; break; }
         await speak(l);
       }
       if (!live()) return;
@@ -3758,12 +3776,12 @@ async function runTalk() {
         if (t.url && !talked.some(x => x.url === t.url)) talked.push({ title: t.title, article: t.article || "", url: t.url });
       }
       // 広告がまだ続いていて、次の話まで少し間をあける
-      for (let i = 0; i < 6 && live() && !talkAdOver; i++) await sleep(250);
+      if (mode === "ad") for (let i = 0; i < 6 && live() && !talkAdOver; i++) await sleep(250);
     }
     if (live() && talkHeldAt) {
       // 話し終えて、ひと息おいてから声をかけ、前を向いてから走り出す
-      await sleep(900);
-      const b = live() ? bridgeTalk(phase === "start" ? "go" : "back") : null;
+      if (first) await sleep(900);
+      const b = live() ? bridgeTalk(phase === "mid" ? "back" : "go") : null;
       if (b) await speak(b.lines[0]);
       talkFace = false;
       if (live()) await sleep(1400);
@@ -7433,18 +7451,26 @@ $("btnCopy").onclick = async () => {
     if (root.classList.contains("brk") !== ad) root.classList.toggle("brk", ad);   // 名前を ad にすると、広告を消す道具がページごと隠すことがある
     if (ad && $("wStart").classList.contains("on")) showStart(false);
     adTalk(ad);
+    wasAd = ad;
     playLog.push([Math.round(performance.now() / 100) / 10, st, Math.round(raw * 10) / 10, Math.round((player?.getDuration?.() || 0)), ad ? "ad" : "", started ? 1 : 0].join(" "));
     if (playLog.length > 600) playLog.splice(0, 200);
   }
-  // 広告のあいだに話す。横持ちでは、キャラクターが映像の上にあって出せないので話さない
+  let wasAd = false;
+  // 広告のあいだに話す。横持ちでは、キャラクターが映像の上にあって出せないので話さない。
+  // 「動画の前」の人と、共有で開いた人には、広告のあいだは小話をしない
   function adTalk(ad) {
-    if (!ad) { adTalkWait = false; if (adTalkT) talkQuiet = Math.max(talkQuiet, Date.now() + 1500); adTalkT = 0; return; }
-    if (talkBusy || adTalkT < 0 || !started || document.hidden || !root.classList.contains("booth") || root.classList.contains("no-talk")) return;
+    if (!ad) { adTalkWait = false; if (wasAd) talkQuiet = Math.max(talkQuiet, Date.now() + 1500); adTalkT = 0; return; }
+    if (talkWhen() !== "ad") {
+      // 広告が始まったら話をやめる。共有で開いた人には、話しかけの実況もそこでやめる
+      if (!wasAd) { talkCancel(); if (window.SHARE) { dropQueue(); try { cancelSpeak(); } catch (e) {} } }
+      return;
+    }
+    if (talkBusy || adTalkT < 0 || !started || document.hidden || !root.classList.contains("booth")) return;
     if (!adTalkT) adTalkT = Date.now();
     if (Date.now() - adTalkT < 700) return;
     // 1回の広告につき1度。まだ小話を読み込めていなければ、読み込めるまで待つ
     if (!talks.length) { if (!adTalkWait) { adTalkWait = true; playLog.push(`${Math.round(performance.now() / 100) / 10} 小話を待っている`); } return; }
-    runTalk();
+    runTalk("ad");
     if (talkBusy) adTalkT = -1;
   }
   let adTalkT = 0, adTalkWait = false;
@@ -7882,6 +7908,7 @@ $("btnCopy").onclick = async () => {
     radio($("wQual"), [["auto", "自動"], ...levels.map(n => [n, n + "p"])], q, v => { lsSet("quality", String(v)); applyQuality(); });
     radio($("wSpeed"), SPEEDS.map(n => [n, n === 1 ? "標準" : n + "倍"]), playRate, v => setRate(v));
     for (const b of document.querySelectorAll("#wLook button")) b.setAttribute("aria-checked", b.dataset.v === lsGet("look", "mid"));
+    for (const b of document.querySelectorAll("#wTalk button")) { b.hidden = !!window.SHARE && b.dataset.v === "ad"; b.setAttribute("aria-checked", b.dataset.v === talkWhen()); }
     for (const b of document.querySelectorAll("#wMood button")) b.setAttribute("aria-checked", b.dataset.v === lsGet("mood", "mid"));
     for (const g of document.querySelectorAll("#wSet .wVol")) for (const b of g.children) b.setAttribute("aria-checked", b.dataset.v === lsGet(g.dataset.k, "mid"));
     $("svV").textContent = { low: "小さめ", mid: "ふつう", high: "大きめ" }[lsGet("vol-voice", "mid")] || "ふつう";
@@ -7928,6 +7955,7 @@ $("btnCopy").onclick = async () => {
   }
   for (const b of document.querySelectorAll("#wSet [data-page]")) b.onclick = () => setPage(b.dataset.page);
   for (const g of document.querySelectorAll("#wSet .wVol")) for (const b of g.children) b.onclick = () => { lsSet(g.dataset.k, b.dataset.v); refreshSet(); };
+  for (const b of document.querySelectorAll("#wTalk button")) b.onclick = () => { lsSet("talk-when", b.dataset.v); refreshSet(); };
   for (const b of document.querySelectorAll("#wMood button")) b.onclick = () => { lsSet("mood", b.dataset.v); refreshSet(); };
   for (const b of document.querySelectorAll("#wLook button")) b.onclick = () => { lsSet("look", b.dataset.v); refreshSet(); };
   $("wReset").onclick = () => { lsSet("wipe-p", ""); lsSet("wipe-l", ""); layout(); $("wSet").close(); };

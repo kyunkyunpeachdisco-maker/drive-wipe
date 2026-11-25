@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>
   // ふつうに開くと、見るだけの画面になる。台本づくりや細かい設定の画面は ?edit を付けて開く
-  window.APP_VERSION = 'v0.21.0'.startsWith('v') || /^master-/.test('v0.21.0') ? 'v0.21.0' : '開発版';
+  window.APP_VERSION = 'v0.21.1'.startsWith('v') || /^master-/.test('v0.21.1') ? 'v0.21.1' : '開発版';
   // ?v=持ち主/リポジトリ/台本の名前 で開くと、その人が公開した台本を、接続なしで再生する
   (() => {
     const q = new URLSearchParams(location.search);
@@ -1584,6 +1584,7 @@
   <div class="page on" data-name="main">
     <button type="button" class="sh" data-page="quality"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M19 7h1M4 17h1M11 17h9"/><circle cx="16" cy="7" r="2.4"/><circle cx="8" cy="17" r="2.4"/></svg><span class="l">画質</span><span class="v" id="svQ"></span></button>
     <button type="button" class="sh" data-page="speed"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke-dasharray="3.2 2.6"/><path d="M10 8.5v7l5.5-3.5z" fill="currentColor"/></svg><span class="l">再生速度</span><span class="v" id="svS"></span></button>
+    <button type="button" class="sh" data-page="vol"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5v5h3.5L12 19V5L7.5 9.5z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg><span class="l">声の大きさ</span><span class="v" id="svV"></span></button>
     <button type="button" class="sh" data-page="caption"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 11h4M14 11h3M7 15h7M17 15h0"/></svg><span class="l">字幕</span><span class="v" id="svC"></span></button>
     <button type="button" class="sh" data-page="avatar"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20c.8-4 3.8-6 7.5-6s6.7 2 7.5 6"/></svg><span class="l">キャラクター</span><span class="v" id="svA"></span></button>
     <button type="button" class="sh" data-page="cards"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="10" height="6" rx="1.5"/><rect x="15" y="4" width="6" height="4" rx="1.5"/><path d="M3 15h18M3 19h12"/></svg><span class="l">記事と場所の表示</span><span class="v" id="svT"></span></button>
@@ -1598,6 +1599,14 @@
   <div class="page" data-name="speed">
     <button type="button" class="sh bk" data-page="main"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span class="l">再生速度</span></button>
     <div id="wSpeed" role="radiogroup"></div>
+  </div>
+  <div class="page" data-name="vol">
+    <button type="button" class="sh bk" data-page="main"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span class="l">声の大きさ</span></button>
+    <p class="note" style="margin-bottom:0">動画のあいだ</p>
+    <div class="seg wVol" data-k="vol-voice" role="radiogroup" aria-label="動画のあいだの声の大きさ"><button type="button" role="radio" data-v="low">小さめ</button><button type="button" role="radio" data-v="mid">ふつう</button><button type="button" role="radio" data-v="high">大きめ</button></div>
+    <p class="note" style="margin-bottom:0">広告のあいだ</p>
+    <div class="seg wVol" data-k="vol-talk" role="radiogroup" aria-label="広告のあいだの声の大きさ"><button type="button" role="radio" data-v="low">小さめ</button><button type="button" role="radio" data-v="mid">ふつう</button><button type="button" role="radio" data-v="high">大きめ</button></div>
+    <p class="note">次のセリフから変わります。</p>
   </div>
   <div class="page" data-name="caption">
     <button type="button" class="sh bk" data-page="main"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span class="l">字幕</span></button>
@@ -2124,6 +2133,31 @@ function revealCaption(sec) {
 }
 
 // 波形からの口パクは共通なので、鳴らす部分をひとつにまとめる
+// 声の音量。作った声は動画や広告より小さいので、大きくしてから、割れないように抑えて鳴らす。
+// iPhone では動画の音量をアプリから下げられないので、ふだんの声も大きくする（ほかでは、話すあいだ動画の音を下げている）
+const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+// [抑える前にかける倍率, 抑えたあとの倍率]。VOICEVOX の声（平均 -22dB）で測って決めた値
+const VOL_TALK = { low: [3.2, 0.6], mid: [3.2, 0.85], high: [7, 0.95] };
+const VOL_VOICE = IOS ? { low: [2, 0.5], mid: [2, 0.78], high: [3.2, 1.05] } : { low: [1, 0.4], mid: null, high: [2, 0.78] };
+function voiceLevel() {
+  if (!window.WATCH_MODE) return null;   // null なら、今までと同じ音
+  const t = talkBusy ? VOL_TALK : VOL_VOICE, v = lsGet(talkBusy ? "vol-talk" : "vol-voice", "mid");
+  return v in t ? t[v] : t.mid;
+}
+let voiceChain = null;
+function voiceOut(ctx) {
+  const lv = voiceLevel();
+  if (!lv) return ctx.destination;
+  if (!voiceChain || voiceChain.ctx !== ctx) {
+    const pre = ctx.createGain(), comp = ctx.createDynamicsCompressor(), post = ctx.createGain();
+    comp.threshold.value = -12; comp.knee.value = 6; comp.ratio.value = 12; comp.attack.value = 0.003; comp.release.value = 0.15;
+    pre.connect(comp); comp.connect(post); post.connect(ctx.destination);
+    voiceChain = { ctx, pre, post };
+  }
+  voiceChain.pre.gain.value = lv[0];
+  voiceChain.post.gain.value = lv[1];
+  return voiceChain.pre;
+}
 function playBuffer(ctx, audio) {
   return new Promise(resolve => {
     const src = ctx.createBufferSource();
@@ -2131,7 +2165,7 @@ function playBuffer(ctx, audio) {
     an.fftSize = 256;
     const data = new Uint8Array(an.frequencyBinCount);
     src.buffer = audio;
-    src.connect(an); an.connect(ctx.destination);
+    src.connect(an); an.connect(voiceOut(ctx));
     amplitude = () => {
       an.getByteTimeDomainData(data);
       let peak = 0;
@@ -7736,6 +7770,8 @@ $("btnCopy").onclick = async () => {
     radio($("wQual"), [["auto", "自動"], ...levels.map(n => [n, n + "p"])], q, v => { lsSet("quality", String(v)); applyQuality(); });
     radio($("wSpeed"), SPEEDS.map(n => [n, n === 1 ? "標準" : n + "倍"]), playRate, v => setRate(v));
     for (const b of document.querySelectorAll("#wLook button")) b.setAttribute("aria-checked", b.dataset.v === lsGet("look", "mid"));
+    for (const g of document.querySelectorAll("#wSet .wVol")) for (const b of g.children) b.setAttribute("aria-checked", b.dataset.v === lsGet(g.dataset.k, "mid"));
+    $("svV").textContent = { low: "小さめ", mid: "ふつう", high: "大きめ" }[lsGet("vol-voice", "mid")] || "ふつう";
   }
   // 画質：YouTubeは画質を選ばせないが、枠の大きさで決めている。枠を大きく（小さく）作り、縮めて（伸ばして）見せる
   function applyQuality() {
@@ -7778,6 +7814,7 @@ $("btnCopy").onclick = async () => {
     c.onchange = () => { lsSet("show-" + k, c.checked ? "1" : "0"); apply(); refreshSet(); layout(); };
   }
   for (const b of document.querySelectorAll("#wSet [data-page]")) b.onclick = () => setPage(b.dataset.page);
+  for (const g of document.querySelectorAll("#wSet .wVol")) for (const b of g.children) b.onclick = () => { lsSet(g.dataset.k, b.dataset.v); refreshSet(); };
   for (const b of document.querySelectorAll("#wLook button")) b.onclick = () => { lsSet("look", b.dataset.v); refreshSet(); };
   $("wReset").onclick = () => { lsSet("wipe-p", ""); lsSet("wipe-l", ""); layout(); $("wSet").close(); };
   // シートの外を押すか、つまみを下へなぞると閉じる

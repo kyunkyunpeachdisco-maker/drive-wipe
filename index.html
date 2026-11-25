@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>
   // ふつうに開くと、見るだけの画面になる。台本づくりや細かい設定の画面は ?edit を付けて開く
-  window.APP_VERSION = 'v0.19.0'.startsWith('v') || /^master-/.test('v0.19.0') ? 'v0.19.0' : '開発版';
+  window.APP_VERSION = 'v0.20.0'.startsWith('v') || /^master-/.test('v0.20.0') ? 'v0.20.0' : '開発版';
   // ?v=持ち主/リポジトリ/台本の名前 で開くと、その人が公開した台本を、接続なしで再生する
   (() => {
     const q = new URLSearchParams(location.search);
@@ -935,7 +935,7 @@
     <h2><span class="num">3</span>声を選ぶ</h2>
     <div class="now" id="voiceNow"></div>
     <p class="hint">台本の声は、AI エージェントに「声を作って」と頼むと作られます。選んだ声は、次に声を作るときから使われます。もう作ってある声は変わりません。</p>
-    <p class="hint">声は、VOICEVOX というソフトにある声から選びます。VOICEVOX を起動している PC で、［声の一覧を読み込む］を押すと、選べる声が出ます。</p>
+    <p class="hint">声は、VOICEVOX というソフトにある声から選びます。［声の一覧を読み込む］を押すと、選べる声が出ます。</p>
     <div class="row" style="margin-top:8px"><button id="vvLoad" class="fixed">声の一覧を読み込む</button></div>
     <p class="hint" id="vvMsg"></p>
     <div id="voiceRow">
@@ -1749,7 +1749,8 @@ function buildCues(data, withComments) {
   const out = [];
   for (const it of (data.items || [])) {
     if (!it.line) continue;
-    out.push({ at: it.abs, text: it.line, kind: it.kind || "scene", act: it.act, amount: it.amount || 0 });
+    out.push({ at: it.abs, text: it.line, kind: it.kind || "scene", act: it.act, amount: it.amount || 0,
+               face: it.face || "", gesture: it.gesture || "" });
   }
   if (withComments) {
     for (const c of (data.comments || [])) {
@@ -3179,6 +3180,40 @@ function wantedGaze(dt) {
 }
 let lastFrame = performance.now();
 
+// 台本の印（表情・しぐさ）。セリフを話しているあいだだけ付ける
+const FACE_IDS = ["smile", "surprised", "troubled", "pout"];
+const faceMix = {};   // 表情ごとの効き（0〜1）。0.25秒かけて移る
+let moodFace = "", moodGesture = "", gestureAt = 0, gestureOn = false, gestureAmp = 0;
+// しぐさの形。u は 0→1。角度はラジアンで、首と頭に足す（運転中なので小さく短く）
+const bump = u => Math.sin(Math.min(1, Math.max(0, u)) * Math.PI);
+const GESTURE_SHAPES = {
+  nod:    { dur: 0.9, f: u => ({ pitch: 0.11 * Math.sin(u * Math.PI * 2) ** 2 }) },   // 小さく2回
+  tilt:   { dur: 1.8, f: u => ({ roll: 0.13 * Math.min(1, bump(u) * 1.6), yaw: 0.04 * bump(u) }) },
+  shake:  { dur: 1.0, f: u => ({ yaw: 0.10 * Math.sin(u * Math.PI * 4) * bump(u) }) },
+  glance: { dur: 1.1, away: true, f: u => ({ yaw: 0.25 * Math.min(1, bump(u) * 1.5), pitch: 0.05 * bump(u) }) },   // VRM ではカメラと逆の側へ
+};
+function setMood(face, gesture) {
+  moodFace = FACE_IDS.includes(face) ? face : "";
+  if (GESTURE_SHAPES[gesture]) { moodGesture = gesture; gestureAt = performance.now(); gestureOn = true; gestureAmp = 1; }
+  else if (!gesture) gestureOn = false;   // 話し終えた・止めた。途中のしぐさはすぐに引っ込める
+}
+function moodStep(now, dt) {
+  for (const k of FACE_IDS) {
+    const v = faceMix[k] || 0, want = k === moodFace ? 1 : 0;
+    faceMix[k] = want > v ? Math.min(want, v + dt / 250) : Math.max(want, v - dt / 250);
+  }
+  const g = { yaw: 0, pitch: 0, roll: 0 };
+  const sh = GESTURE_SHAPES[moodGesture];
+  if (sh) {
+    const u = (now - gestureAt) / 1000 / sh.dur;
+    if (!gestureOn) gestureAmp = Math.max(0, gestureAmp - dt / 200);
+    if (u >= 1 || gestureAmp <= 0) { moodGesture = ""; gestureOn = false; }
+    else { const o = sh.f(u); for (const k in o) g[k] = o[k] * gestureAmp; g.away = !!sh.away; }
+  }
+  return g;
+}
+const smooth01 = v => v * v * (3 - 2 * v);
+
 function setAct(act, amount) {
   const a = Math.min(1, Math.max(0, amount || 0.5));
   if (act === "turn_left" || act === "curve_left") wheelTarget = -a;
@@ -3200,9 +3235,12 @@ function drawAvatar(now) {
   const sway = Math.sin(t * 0.9) * 3 + Math.sin(t * 2.7) * 1.2;   // 路面の揺れ
   const breathe = Math.sin(t * 1.4) * 2;
   const mouth = speaking ? amplitude() : 0;
+  const gest = moodStep(now, dt);
+  const fw = {};
+  for (const k of FACE_IDS) fw[k] = smooth01(faceMix[k]);
 
   // VRM側（module script）から読むための状態。描画方式を差し替えても共通で使う
-  window.avatarState = { wheel, gaze, mouth, blink, sway, breathe, dt };
+  window.avatarState = { wheel, gaze, mouth, blink, sway, breathe, dt, face: fw, gesture: gest, gestureOn: !!moodGesture };
 
   if (window.__vrmReady) { requestAnimationFrame(drawAvatar); return; }  // VRM表示中は簡易アバターを描かない
   fx.clearRect(0, 0, W, H);
@@ -3223,6 +3261,11 @@ function drawAvatar(now) {
   fx.fillStyle = "#f0cdb4";
   fx.fillRect(-W * 0.07, H * 0.46, W * 0.14, H * 0.16);
 
+  // しぐさ：首の付け根を軸に、頭だけを動かす
+  fx.translate(0, H * 0.50);
+  fx.rotate(gest.roll + gest.yaw * 0.25);
+  fx.translate(gest.yaw * W * 0.10, gest.pitch * H * 0.30 - H * 0.50);
+
   // 髪（後ろ）
   fx.fillStyle = "#4a3b34";
   fx.beginPath(); fx.ellipse(0, H * 0.30, W * 0.25, H * 0.25, 0, 0, Math.PI * 2); fx.fill();
@@ -3240,17 +3283,50 @@ function drawAvatar(now) {
   // 目（gaze=0で前方＝やや下向き、1でカメラ正面）
   const ex = (1 - gaze) * -W * 0.018;
   const ey = H * 0.31 + (1 - gaze) * H * 0.012;
+  // 表情：笑うと目を細め、驚くと見開く。笑う・驚くのあいだはまばたきしない
+  const open = 1 - fw.smile * 0.45 + fw.surprised * 0.3 - fw.troubled * 0.1;
+  const bl = blink * Math.max(0, 1 - fw.smile - fw.surprised);
   for (const sx of [-1, 1]) {
     fx.fillStyle = "#fff";
-    fx.beginPath(); fx.ellipse(sx * W * 0.085, ey, W * 0.045, H * 0.030 * (1 - blink * 0.92), 0, 0, Math.PI * 2); fx.fill();
+    fx.beginPath(); fx.ellipse(sx * W * 0.085, ey, W * 0.045, H * 0.030 * open * (1 - bl * 0.92), 0, 0, Math.PI * 2); fx.fill();
     fx.fillStyle = "#2b2b33";
-    fx.beginPath(); fx.ellipse(sx * W * 0.085 + ex, ey, W * 0.022, H * 0.020 * (1 - blink * 0.92), 0, 0, Math.PI * 2); fx.fill();
+    fx.beginPath(); fx.ellipse(sx * W * 0.085 + ex, ey, W * 0.022, H * 0.020 * Math.min(1, open) * (1 - bl * 0.92), 0, 0, Math.PI * 2); fx.fill();
+  }
+  // 眉は、表情を付けているときだけ描く
+  const browOn = Math.min(1, FACE_IDS.reduce((a, k) => a + fw[k], 0) - fw.smile * 0.5);
+  if (browOn > 0.01) {
+    fx.save();
+    fx.globalAlpha = browOn;
+    fx.strokeStyle = "#4a3b34"; fx.lineWidth = W * 0.016; fx.lineCap = "round";
+    const lift = H * (0.022 * fw.surprised + 0.008 * fw.smile);
+    const inner = H * (-0.020 * fw.troubled + 0.011 * fw.pout);
+    const outer = H * (0.006 * fw.troubled - 0.004 * fw.pout);
+    for (const sx of [-1, 1]) {
+      fx.beginPath();
+      fx.moveTo(sx * W * 0.045, H * 0.262 - lift + inner);
+      fx.lineTo(sx * W * 0.125, H * 0.262 - lift + outer);
+      fx.stroke();
+    }
+    fx.restore();
   }
 
-  // 口（喋っている間だけ開く）
+  // 口（喋っている間だけ開く）。驚くと丸く、むっとすると狭く
   fx.fillStyle = "#8d4a4a";
-  const mh = H * (0.008 + mouth * 0.05);
-  fx.beginPath(); fx.ellipse(0, H * 0.42, W * (0.035 + mouth * 0.02), mh, 0, 0, Math.PI * 2); fx.fill();
+  const mh = H * (0.008 + mouth * 0.05 + fw.surprised * 0.014);
+  fx.beginPath(); fx.ellipse(0, H * 0.42, W * (0.035 + mouth * 0.02) * (1 - fw.pout * 0.3 - fw.surprised * 0.15), mh, 0, 0, Math.PI * 2); fx.fill();
+  // 口の端：笑うと上げ、困ると下げる
+  const curve = fw.smile - 0.7 * fw.troubled;
+  if (Math.abs(curve) > 0.01) {
+    fx.save();
+    fx.globalAlpha = Math.min(1, Math.abs(curve));
+    fx.strokeStyle = "#8d4a4a"; fx.lineWidth = W * 0.012; fx.lineCap = "round";
+    const mw = W * (0.06 + mouth * 0.015);
+    fx.beginPath();
+    fx.moveTo(-mw, H * 0.42 - Math.sign(curve) * H * 0.012);
+    fx.quadraticCurveTo(0, H * 0.42 + Math.sign(curve) * H * 0.03, mw, H * 0.42 - Math.sign(curve) * H * 0.012);
+    fx.stroke();
+    fx.restore();
+  }
 
   fx.restore();
 
@@ -3390,7 +3466,9 @@ async function drain() {
       const vol = player?.getVolume ? player.getVolume() : 100;
       // 声が無いときは、動画の音を下げない
       if (!window.WATCH_MODE || audioCache.get(c.id)) try { player.setVolume(+$("duck").value); } catch (e) {}
+      setMood(c.face, c.gesture);
       try { await say(c.text, c); } catch (e) { status("音声エラー: " + e.message, "err"); }
+      setMood("", "");
       try { player.setVolume(vol); } catch (e) {}
       $("caption").textContent = "";
       gazeTarget = 0;
@@ -5015,7 +5093,7 @@ if (THREE && VRMLoaderPlugin) {
       if (gestureT >= gesture.dur) { gesture = null; nextGesture = 5 + Math.random() * 8; }
     } else {
       nextGesture -= dt;
-      if (nextGesture <= 0 && idle > 0) {
+      if (nextGesture <= 0 && idle > 0 && !window.avatarState?.gestureOn) {
         gesture = GESTURES[Math.floor(Math.random() * GESTURES.length)];
         gestureT = 0;
       }
@@ -5023,6 +5101,24 @@ if (THREE && VRMLoaderPlugin) {
     if (!gesture) return { yaw: 0, pitch: 0 };
     const k = ease(gestureT / gesture.dur) * idle;
     return { yaw: gesture.yaw * k, pitch: gesture.pitch * k };
+  }
+  // 台本の表情を、モデルの表情に当てる。three-vrm は VRM0 の Joy・Fun・Sorrow を happy・relaxed・sad に直す。
+  // 驚きは VRM0 の決まった名前がなく、VRoid では Surprised という名前で入っている
+  // parts は [表情の名前, 強さ]。モデルにない名前は飛ばす。happy を強くすると目を閉じきるので半分まで
+  // mouth は「あ」を弱める割合、blink はまばたきを止める割合
+  const FACE_LOOK = {
+    smile:     { parts: [["happy", 0.45], ["relaxed", 0.45]], mouth: 0.5, blink: 1 },
+    surprised: { parts: [["surprised", 0.9]], mouth: 0.6, blink: 1 },
+    troubled:  { parts: [["sad", 0.8]], mouth: 0.5, blink: 0.4 },
+    pout:      { parts: [["angry", 0.85]], mouth: 0.5, blink: 0.4 },
+  };
+  const usedFaceNames = new Set();
+  let faceNames = null, faceNamesOf = null;
+  function faceName(ex, name) {
+    if (faceNamesOf !== ex) { faceNamesOf = ex; faceNames = new Map((ex.expressions || []).map(e => [String(e.expressionName).toLowerCase(), e.expressionName])); }
+    const hit = faceNames.get(name);
+    if (hit) usedFaceNames.add(hit);
+    return hit || null;
   }
   let lastDraw = 0;
   function loop() {
@@ -5042,11 +5138,21 @@ if (THREE && VRMLoaderPlugin) {
       if (el > 12) window.__wheelDemo = 0; else s.wheel = Math.sin(el * 1.2) * 0.8;
     }
 
-    // 口
+    // 口と表情。表情の口の形に「あ」を重ねると開きすぎるので、表情のあいだは「あ」を弱める
     const ex = vrm.expressionManager;
     if (ex) {
-      ex.setValue("aa", Math.min(1, s.mouth * 1.1));
-      ex.setValue("blink", Math.min(1, s.blink));
+      const sum = {};
+      let mouthCut = 0, blinkCut = 0;
+      for (const [id, w] of Object.entries(s.face || {})) {
+        const look = FACE_LOOK[id];
+        if (!look || !w) continue;
+        for (const [n, k] of look.parts) { const name = faceName(ex, n); if (name) sum[name] = Math.min(1, (sum[name] || 0) + k * w); }
+        mouthCut = Math.max(mouthCut, look.mouth * w);
+        blinkCut = Math.max(blinkCut, look.blink * w);
+      }
+      for (const name of usedFaceNames) ex.setValue(name, sum[name] || 0);
+      ex.setValue("aa", Math.min(1, s.mouth * 1.1) * (1 - mouthCut));
+      ex.setValue("blink", Math.min(1, s.blink) * (1 - blinkCut));
     }
     // 視線：基本は進行方向（道路）。雑談のときだけカメラの方を向く
     if (lookTarget) {
@@ -5081,11 +5187,19 @@ if (THREE && VRMLoaderPlugin) {
       // 喋っている間は音量に合わせて小さくうなずく
       const nod = speakingNod(s.mouth) * idle;
       if (spine) { euler.set(bob, -s.wheel * 0.10 + g.yaw * 0.15, roll); spine.rotation.copy(euler); }
-      if (neck) { euler.set(Math.sin(t * 0.6) * 0.03 * idle + g.pitch * 0.35, -s.wheel * 0.12 + g.yaw * 0.35 + turnYaw * 0.35, -roll * 0.6); neck.rotation.copy(euler); }
+      // 台本のしぐさ（うなずく・首をかしげるなど）は、いまの動きに足す
+      const sg = { yaw: 0, pitch: 0, roll: 0, ...s.gesture };
+      // 横を見るしぐさは、カメラと逆の側を向く（カメラの側だと、こちらを見たように見える）
+      if (sg.away && sg.yaw && headB) {
+        headB.getWorldPosition(gazeV);
+        const camYaw = Math.atan2(fwdSign * (camera.position.x - gazeV.x), fwdSign * (camera.position.z - gazeV.z));
+        if (camYaw) sg.yaw = -Math.sign(camYaw) * Math.abs(sg.yaw);
+      }
+      if (neck) { euler.set(Math.sin(t * 0.6) * 0.03 * idle + g.pitch * 0.35 + sg.pitch * 0.3, -s.wheel * 0.12 + g.yaw * 0.35 + turnYaw * 0.35 + sg.yaw * 0.35, -roll * 0.6 + sg.roll * 0.3); neck.rotation.copy(euler); }
       if (headB) {
-        euler.set(Math.sin(t * 1.1) * 0.025 * idle + g.pitch * 0.65 + nod + turnPitch * 0.5,
-                  -s.wheel * 0.18 + Math.sin(t * 0.37) * 0.10 * idle + g.yaw * 0.65 + turnYaw * 0.5,
-                  Math.sin(t * 0.83) * 0.02 * idle);
+        euler.set(Math.sin(t * 1.1) * 0.025 * idle + g.pitch * 0.65 + nod + turnPitch * 0.5 + sg.pitch * 0.7,
+                  -s.wheel * 0.18 + Math.sin(t * 0.37) * 0.10 * idle + g.yaw * 0.65 + turnYaw * 0.5 + sg.yaw * 0.65,
+                  Math.sin(t * 0.83) * 0.02 * idle + sg.roll * 0.7);
         headB.rotation.copy(euler);
       }
 
@@ -7542,23 +7656,44 @@ $("btnCopy").onclick = async () => {
     }
   }
   $("voice").addEventListener("change", showVoice);
+  // リポジトリにある声の一覧（Actions が audio/voices.json に書く）。VOICEVOX のないスマホでも、声を選べる
+  async function repoVoices() {
+    if (!lsGet("data-repo") || !lsGet("github-pat")) return 0;
+    try {
+      const raw = await ghGetRaw("audio/voices.json");
+      const list = raw ? (JSON.parse(new TextDecoder().decode(raw)).voices || []).filter(v => v && v.id != null && v.name) : [];
+      if (!list.length) return 0;
+      // 選んでいる読み上げの仕組みは書き換えない。この画面の中だけ VOICEVOX にする
+      $("engine").value = "voicevox"; syncEngineRows();
+      $("voice").innerHTML = list.map(v => `<option value="${escapeHtml(String(v.id))}">${escapeHtml(String(v.name))}</option>`).join("");
+      const saved = lsGet(V);
+      if (saved && list.some(v => String(v.id) === saved)) $("voice").value = saved;
+      $("btnTest").hidden = true;   // その場で声を出すには、VOICEVOX が要る
+      return list.length;
+    } catch (e) { return 0; }
+  }
   async function loadVoices(byHand) {
     $("vvLoad").disabled = true;
+    let n = 0, viaRepo = false;
     try {
       await voicesReady;
       // 選んでいる読み上げの仕組みは書き換えない（保存されて、見る画面にも渡るため）。この画面の中だけ VOICEVOX にする
-      if ($("engine").value !== "voicevox" || byHand) { $("engine").value = "voicevox"; syncEngineRows(); clearAudioCache(); await refreshVoices(); }
+      if (byHand || $("engine").value === "voicevox") {
+        $("btnTest").hidden = false;
+        if ($("engine").value !== "voicevox" || byHand) { $("engine").value = "voicevox"; syncEngineRows(); clearAudioCache(); await refreshVoices(); }
+        n = [...$("voice").options].filter(o => o.value).length;
+      }
+      if (!n) { n = await repoVoices(); viaRepo = n > 0; }
     } finally { $("vvLoad").disabled = false; }
-    const n = [...$("voice").options].filter(o => o.value).length;
     $("vvMsg").className = n ? "hint" : "hint err";
-    $("vvMsg").textContent = n ? `声が ${n} 件見つかりました。声を選んだら、［保存する］を押します。`
-      : byHand ? "VOICEVOX につながりませんでした。下の［VOICEVOX につながらないとき］を開きます。" : "";
+    $("vvMsg").textContent = n ? `声が ${n} 件あります。声を選んだら、［保存する］を押します。` + (viaRepo ? "声を聞いて確かめるには、VOICEVOX を起動している PC で開きます。" : "")
+      : byHand ? "声の一覧がありません。AI エージェントに「声の一覧を作って」と頼むと、選べるようになります。VOICEVOX を起動している PC では、下の［VOICEVOX につながらないとき］を開きます。" : "";
     showVoice();
   }
   $("vvLoad").onclick = () => loadVoices(true);
   $("vvUrl").addEventListener("change", () => loadVoices(true));
-  // 前から VOICEVOX を選んでいる PC では、開いたときに一覧が出る
-  if ($("engine").value === "voicevox") loadVoices(false); else showVoice();
+  // 開いたときに、一覧を出す（VOICEVOX を選んでいる PC ではそこから、ほかではリポジトリから）
+  loadVoices(false);
 
   // 保存先の接続
   function showRepo() {

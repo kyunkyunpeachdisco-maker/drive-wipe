@@ -2,16 +2,16 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <script>
   // ふつうに開くと、見るだけの画面になる。台本づくりや細かい設定の画面は ?edit を付けて開く
-  window.APP_VERSION = 'v0.15.1'.startsWith('v') || /^master-/.test('v0.15.1') ? 'v0.15.1' : '開発版';
+  window.APP_VERSION = 'v0.16.0'.startsWith('v') || /^master-/.test('v0.16.0') ? 'v0.16.0' : '開発版';
   window.WATCH_MODE = !new URLSearchParams(location.search).has("edit");
   if (window.WATCH_MODE) document.documentElement.classList.add("watch");
 </script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <title>ドライブ実況ワイプ - 記事を語るキャラとドライブ動画を見る</title>
 <meta name="apple-mobile-web-app-title" content="ドライブ実況">
 <meta name="application-name" content="ドライブ実況">
@@ -438,14 +438,45 @@
   /* ワイプと字幕は、枠ではなく映像そのもの（16:9）に合わせて置く。枠が縦長でも映像の上に乗る */
   html.watch #stage { container-type: size; }
   html.watch.no-caption #caption, html.watch.no-topic #wTopic, html.watch.no-place #wPlace, html.watch.no-avatar #avatar { visibility: hidden !important; }
-  #wShow label { display: flex; align-items: center; gap: 10px; margin: 0; padding: 8px 0; font-size: 15px; color: var(--fg); cursor: pointer; }
-  #wShow input { width: 20px; height: 20px; margin: 0; flex: 0 0 auto; }
-  html.watch.no-avbg #avatar { background: none !important; backdrop-filter: none; box-shadow: none; outline: none; }
+  #wSet { border: 0; padding: 0; color: #fff; background: #212121; border-radius: 16px; width: calc(100% - 16px); max-width: 480px; max-height: 80dvh; margin: auto auto 8px; overflow: hidden; }
+  #wSet[open] { display: flex; flex-direction: column; animation: shUp .22s ease-out; }
+  #wSet::backdrop { background: rgba(0,0,0,.35); }
+  @keyframes shUp { from { transform: translateY(40px); opacity: .4; } to { transform: none; opacity: 1; } }
+  @media (max-height: 500px) { #wSet { margin: auto 16px 8px auto; width: 380px; max-height: calc(100dvh - 16px); } }
+  @media (min-width: 900px) and (min-height: 501px) { #wSet { margin: auto 16px 90px auto; width: 380px; } }
+  #wSet .grab { flex: 0 0 auto; padding: 10px 0 6px; touch-action: none; cursor: grab; }
+  #wSet .grab::before { content: ""; display: block; width: 40px; height: 4px; margin: 0 auto; border-radius: 2px; background: #5a5a5a; }
+  #wSet .page { overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 0 0 12px; display: none; }
+  #wSet .page.on { display: block; }
+  #wSet .sh { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 8px 20px; margin: 0; background: none; border: 0; border-radius: 0; color: #fff; font-size: 16px; font-weight: 400; text-align: left; cursor: pointer; text-decoration: none; box-sizing: border-box; }
+  #wSet .sh:hover { background: rgba(255,255,255,.08); }
+  #wSet .sh > svg { flex: 0 0 24px; width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  #wSet .sh .l { flex: 1 1 auto; min-width: 0; }
+  #wSet .sh .v { flex: 0 1 auto; color: #aaa; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55%; }
+  #wSet .sh .v::after { content: "›"; margin-left: 10px; color: #fff; font-size: 18px; }
+  #wSet .sh .v.plain::after { content: none; }
+  #wSet .sh .ck { flex: 0 0 24px; text-align: center; visibility: hidden; }
+  #wSet .sh[aria-checked="true"] .ck { visibility: visible; }
+  #wSet .bk { font-weight: 600; border-bottom: 1px solid #3a3a3a; margin-bottom: 4px; }
+  #wSet .note { margin: 4px 20px 8px; color: #aaa; font-size: 13px; line-height: 1.6; }
+  #wSet .form { padding: 0 20px; }
+  #wSet .form label { color: #ccc; }
+  #wSet .form input { width: 100%; box-sizing: border-box; background: #2c2c2c; color: #fff; border: 1px solid #4a4a4a; border-radius: 10px; padding: 10px 12px; }
+  #wSet a:not(.sh) { color: #9d9cff; }
+  #wSet input.sw { appearance: none; -webkit-appearance: none; flex: 0 0 46px; width: 46px; height: 28px; margin: 0; padding: 0; border: 0; border-radius: 14px; background: #5a5a5a; position: relative; transition: background .2s; cursor: pointer; }
+  #wSet input.sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 24px; height: 24px; border-radius: 50%; background: #fff; transition: transform .2s; }
+  #wSet input.sw:checked { background: #5d5cde; }
+  #wSet input.sw:checked::after { transform: translateX(18px); }
+  #wSet .seg { display: flex; gap: 6px; padding: 4px 20px 8px; }
+  #wSet .seg button { flex: 1; border: 0; border-radius: 10px; padding: 9px 0; background: #333; color: #ddd; font-size: 14px; }
+  #wSet .seg button[aria-checked="true"] { background: #fff; color: #111; font-weight: 600; }
+  html.watch.no-avbg #avatar { background: none !important; box-shadow: none; }
+  html.watch.no-avatar #wTab { display: none; }
   html.watch #caption b, html.watch #caption i { font: inherit; }
   html.watch #caption i { color: transparent; text-shadow: none; }
   /* 広告のあいだは、映像の上に何もかぶせない */
   html.watch.ad #wTap { pointer-events: none; }
-  html.watch.ad #wTopic, html.watch.ad #wPlace, html.watch.ad:not(.booth) #avatar, html.watch.ad #caption { visibility: hidden !important; }
+  html.watch.ad #wTopic, html.watch.ad #wPlace, html.watch.ad #avatar.over, html.watch.ad #caption { visibility: hidden !important; }
   html.watch.ad:not(.booth):not(.list-open) #wBar { opacity: 0; pointer-events: none; }
   /* 動画の枠そのものを16:9にする。横長の枠に任せると、iPhoneの横持ちで映像が片側に寄ることがある */
   html.watch:not(.booth) #ytbox { inset: 0; margin: auto; width: min(100cqw, 100cqh * 16 / 9); height: min(100cqh, 100cqw * 9 / 16); }
@@ -499,12 +530,23 @@
   #wTap { position: absolute; inset: 0; z-index: 2; cursor: pointer; }
   /* 字幕：下の中央。1行ずつ背景を敷いて、どんな映像の上でも読めるようにする */
   html.watch #caption {
-    left: 4%; right: calc(var(--wipe-w, 22%) * .8 + 5%) !important; bottom: 13%; text-align: center; font-weight: 600;
+    left: var(--c-left, 6%); right: var(--c-right, 6%) !important; bottom: 13%; text-align: center; font-weight: 600;
     font-size: clamp(14px, 2.3vw, 24px); line-height: 1.75; text-shadow: none; min-height: 0;
   }
   html.watch #caption:not(:empty) { z-index: 3; }
-  /* ワイプはひとまわり小さくして、操作の帯にかからない高さへ上げる。字幕はその左に収める */
-  html.watch #avatar { width: calc(var(--wipe-w, 22%) * .8); bottom: 13%; border-radius: 16px; outline: 2px solid rgba(255,255,255,.75); outline-offset: -2px; }
+  /* ワイプ：iPhoneのピクチャインピクチャのように、つまんで大きさ、なぞって位置を変える */
+  html.watch #avatar {
+    left: 0 !important; top: 0 !important; right: auto !important; bottom: auto !important; z-index: 3;
+    width: var(--w-w, 200px) !important; height: var(--w-h, 150px) !important; max-width: none; aspect-ratio: auto;
+    transform: translate3d(var(--w-x, 0px), var(--w-y, 0px), 0); transition: transform .32s cubic-bezier(.2,.9,.25,1), width .25s, height .25s;
+    border-radius: 14px; pointer-events: auto; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none;
+    backdrop-filter: none; box-shadow: 0 4px 18px rgba(0,0,0,.45);
+  }
+  html.watch #avatar.grab { transition: none; cursor: grabbing; }
+  html.watch #avatar.stash { opacity: .9; }
+  #wTab { position: absolute; top: 0; left: 0; z-index: 3; width: 26px; height: 64px; padding: 0; border: 0; border-radius: 0 12px 12px 0; background: rgba(40,40,40,.92); color: #fff; font-size: 16px; display: none; align-items: center; justify-content: center; }
+  html.watch #wTab.on { display: flex; }
+  #wTab.right { border-radius: 12px 0 0 12px; }
   /* 字幕と札は、ふわっと出入りさせる */
   html.watch #caption span { animation: wIn .22s ease-out; }
   @keyframes wIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
@@ -515,23 +557,12 @@
      映像を上に寄せ、空いた下の帯にキャラと字幕を出す。映像の上には何もかぶせない */
   html.watch.booth #ytbox { inset: 0 0 auto 0; height: var(--b-vh); }
   html.watch.booth #overlay { position: absolute; inset: 0; width: 100%; height: 100%; aspect-ratio: auto; }
-  html.watch.booth #avatar {
-    left: auto !important; right: 4% !important; bottom: auto !important;
-    top: calc(var(--b-top) + (var(--b-h) - var(--b-avh)) / 2) !important;
-    width: var(--b-avw) !important; height: var(--b-avh) !important; max-width: none; aspect-ratio: auto;
-    box-shadow: none; outline: 0; backdrop-filter: none; border-radius: 14px;
-  }
   html.watch.booth #caption {
-    left: 5%; right: calc(8% + var(--b-avw)) !important; top: var(--b-top); height: var(--b-h); bottom: auto;
-    display: flex; align-items: center; text-align: left;
-    font-size: clamp(15px, 4.4cqw, 30px); line-height: 1.6;
+    left: var(--c-l, 5%) !important; right: auto !important; width: var(--c-w, 90%); top: var(--c-t, 0); height: var(--c-h, auto); bottom: auto;
+    display: flex; align-items: center; justify-content: center; text-align: center;
+    font-size: var(--c-fs, 20px); line-height: 1.5;
   }
   html.watch.booth #caption span { background: none; padding: 0; border-radius: 0; }
-  html.watch.booth-tall #avatar { right: calc(50% - var(--b-avw) / 2) !important; top: calc(var(--b-top) + 8px) !important; }
-  html.watch.booth-tall #caption {
-    left: 6%; right: 6% !important; top: var(--b-captop); height: var(--b-caph);
-    align-items: flex-start; justify-content: center; text-align: center; font-size: clamp(16px, 5cqw, 30px);
-  }
   /* 帯の中は操作が常に見えていてよい。映像に重ならないので、消す必要がない */
   html.watch.booth #wBar { opacity: 1; pointer-events: auto; background: none; padding-top: 6px; }
   html.watch.booth:not(.ui-on) #stage { cursor: auto; }
@@ -1223,36 +1254,66 @@
 </dialog>
 
 <!-- 見る画面の設定（再生中でも開ける） -->
-<dialog id="wSet">
-  <h2 style="margin-top:0;font-size:17px">設定</h2>
-  <p style="margin:0 0 2px;font-size:14px;font-weight:600">画面に表示するもの</p>
-  <div id="wShow" style="margin-bottom:16px">
-    <label><input type="checkbox" data-show="caption">字幕</label>
-    <label><input type="checkbox" data-show="capstep">字幕を少しずつ出す</label>
-    <label><input type="checkbox" data-show="topic">いま話している記事</label>
-    <label><input type="checkbox" data-show="place">場所</label>
-    <label><input type="checkbox" data-show="avatar">キャラクター</label>
-    <label><input type="checkbox" data-show="avbg">キャラクターの背景</label>
+<dialog id="wSet" aria-label="設定">
+  <div class="grab"></div>
+  <div class="page on" data-name="main">
+    <button type="button" class="sh" data-page="quality"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M19 7h1M4 17h1M11 17h9"/><circle cx="16" cy="7" r="2.4"/><circle cx="8" cy="17" r="2.4"/></svg><span class="l">画質</span><span class="v" id="svQ"></span></button>
+    <button type="button" class="sh" data-page="speed"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke-dasharray="3.2 2.6"/><path d="M10 8.5v7l5.5-3.5z" fill="currentColor"/></svg><span class="l">再生速度</span><span class="v" id="svS"></span></button>
+    <button type="button" class="sh" data-page="caption"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 11h4M14 11h3M7 15h7M17 15h0"/></svg><span class="l">字幕</span><span class="v" id="svC"></span></button>
+    <button type="button" class="sh" data-page="avatar"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20c.8-4 3.8-6 7.5-6s6.7 2 7.5 6"/></svg><span class="l">キャラクター</span><span class="v" id="svA"></span></button>
+    <button type="button" class="sh" data-page="cards"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="10" height="6" rx="1.5"/><rect x="15" y="4" width="6" height="4" rx="1.5"/><path d="M3 15h18M3 19h12"/></svg><span class="l">記事と場所の表示</span><span class="v" id="svT"></span></button>
+    <button type="button" class="sh" data-page="repo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 15l6-6"/><path d="M11 6l2-2a4 4 0 0 1 6 6l-2 2"/><path d="M13 18l-2 2a4 4 0 0 1-6-6l2-2"/></svg><span class="l">データの接続</span><span class="v" id="svD"></span></button>
+    <button type="button" class="sh" data-page="other"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="18.5" cy="12" r="1.4"/></svg><span class="l">そのほか</span><span class="v" id="svO"></span></button>
   </div>
-  <p style="margin:0 0 6px;font-size:14px;font-weight:600">データの接続</p>
-  <p class="hint" style="margin:0 0 8px">台本・音声・アバターを置いているリポジトリと、それを読むためのトークンです。</p>
-  <label for="wRepo">リポジトリ</label>
-  <input type="text" id="wRepo" placeholder="例: yourname/drive-wipe-data" autocapitalize="off" autocorrect="off" spellcheck="false">
-  <label for="wPat">トークン</label>
-  <input type="password" id="wPat" placeholder="github_pat_…（変えないときは空のまま）" autocapitalize="off" autocorrect="off" spellcheck="false">
-  <p class="hint">期限が切れたら、<a href="https://github.com/settings/personal-access-tokens/new?name=drive-wipe" target="_blank" rel="noopener">ここから発行し直して</a>貼り直します。
-    対象のリポジトリだけを選び、<code>Contents: Read and write</code> を付けます。</p>
-  <p class="hint" id="wSetMsg"></p>
-  <div class="row" style="margin-top:10px">
-    <button id="wSetSave" class="fixed primary">保存して読み込む</button>
-    <button id="wSetClose" class="fixed">閉じる</button>
+  <div class="page" data-name="quality">
+    <button type="button" class="sh bk" data-page="main"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span class="l">画質</span></button>
+    <div id="wQual" role="radiogroup"></div>
+    <p class="note">画質は目安です。通信の状態によって、YouTube が下げることがあります。</p>
   </div>
-  <p style="margin:18px 0 4px;font-size:14px;font-weight:600">そのほか</p>
-  <p class="hint" style="margin:0"><a href="./?edit">声・アバターの設定</a>を開くと、再生は止まります。</p>
-  <p class="hint">再生がおかしいときは、直後に <button type="button" id="wLog" style="padding:2px 8px;font-size:12px">再生の記録をコピー</button> を押して、記録を作者に送ってください。</p>
-  <p class="hint">バージョン: <span id="wVer"></span></p>
-  <p class="hint" id="wA2hs">iPhoneで上のタブやアドレスバーを消すには、Safariの共有メニューから「ホーム画面に追加」して、ホーム画面から開きます。
-    ホーム画面から開いたときはSafariとは記憶が別なので、最初にこの画面で接続を入れ直します。</p>
+  <div class="page" data-name="speed">
+    <button type="button" class="sh bk" data-page="main"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span class="l">再生速度</span></button>
+    <div id="wSpeed" role="radiogroup"></div>
+  </div>
+  <div class="page" data-name="caption">
+    <button type="button" class="sh bk" data-page="main"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span class="l">字幕</span></button>
+    <label class="sh"><span class="l">字幕を出す</span><input type="checkbox" class="sw" data-show="caption"></label>
+    <label class="sh"><span class="l">字幕を少しずつ出す</span><input type="checkbox" class="sw" data-show="capstep"></label>
+  </div>
+  <div class="page" data-name="avatar">
+    <button type="button" class="sh bk" data-page="main"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span class="l">キャラクター</span></button>
+    <label class="sh"><span class="l">キャラクターを出す</span><input type="checkbox" class="sw" data-show="avatar"></label>
+    <label class="sh"><span class="l">背景を出す</span><input type="checkbox" class="sw" data-show="avbg"></label>
+    <p class="note" style="margin-bottom:0">こちらを見る回数</p>
+    <div class="seg" id="wLook" role="radiogroup"><button type="button" data-v="few">少なめ</button><button type="button" data-v="mid">ふつう</button><button type="button" data-v="many">多め</button></div>
+    <button type="button" class="sh" id="wReset"><span class="l">大きさと位置を元に戻す</span></button>
+    <p class="note">キャラクターをなぞると、位置が変わります。2本の指でつまむと、大きさが変わります。2回たたくと、小・中・大に変わります。画面の端の外へ動かすと、しまわれます。パソコンでは、ホイールで大きさが変わります。</p>
+    <a class="sh" href="./?edit"><span class="l">声・アバターの設定を開く</span><span class="v plain">再生は止まります</span></a>
+  </div>
+  <div class="page" data-name="cards">
+    <button type="button" class="sh bk" data-page="main"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span class="l">記事と場所の表示</span></button>
+    <label class="sh"><span class="l">いま話している記事</span><input type="checkbox" class="sw" data-show="topic"></label>
+    <label class="sh"><span class="l">場所</span><input type="checkbox" class="sw" data-show="place"></label>
+  </div>
+  <div class="page" data-name="repo">
+    <button type="button" class="sh bk" data-page="main"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span class="l">データの接続</span></button>
+    <p class="note">台本・音声・アバターを置いているリポジトリと、アプリがリポジトリを読み書きするためのトークンです。</p>
+    <div class="form">
+      <label for="wRepo">リポジトリ</label>
+      <input type="text" id="wRepo" placeholder="例: yourname/drive-wipe-data" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <label for="wPat">トークン</label>
+      <input type="password" id="wPat" placeholder="github_pat_…（変えないときは空のまま）" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <p class="hint" id="wSetMsg"></p>
+      <div class="row" style="margin-top:10px"><button id="wSetSave" class="fixed primary">保存して読み込む</button></div>
+    </div>
+    <p class="note">トークンの期限が切れたら、<a href="https://github.com/settings/personal-access-tokens/new?name=drive-wipe" target="_blank" rel="noopener">トークンの発行ページ</a>で作り直して、貼り直します。対象のリポジトリだけを選び、Contents を Read and write にします。</p>
+  </div>
+  <div class="page" data-name="other">
+    <button type="button" class="sh bk" data-page="main"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span class="l">そのほか</span></button>
+    <button type="button" class="sh" id="wLog"><span class="l">再生の記録をコピー</span><span class="v plain" id="wLogV"></span></button>
+    <p class="note">再生がおかしいときは、直後に記録をコピーして、作者に送ってください。</p>
+    <div class="sh" style="cursor:default"><span class="l">バージョン</span><span class="v plain" id="wVer"></span></div>
+    <p class="note" id="wA2hs">iPhoneで上のタブやアドレスバーを消すには、Safariの共有メニューから「ホーム画面に追加」して、ホーム画面から開きます。ホーム画面から開いたときはSafariとは記憶が別なので、最初に「データの接続」を入れ直します。</p>
+  </div>
 </dialog>
 
 
@@ -1427,8 +1488,8 @@ function loadScript(data, remember = true) {
   if (remember) idbSet("script", data).catch(() => {});
   script = data;
   cueBase += 100000;
-  noteSeek();
-  queue = []; audioCache.clear();
+  noteSeek(startPos());
+  dropQueue(); audioCache.clear();
   try { cancelSpeak(); } catch (e) {}
   $("caption").textContent = "";
   cues = buildCues(data, $("useComments").checked);
@@ -1514,20 +1575,21 @@ function setupPlayer(videoId) {
         status("動画を読み込みました。");
         // 自分の操作で位置を動かしたことを覚える（広告で時間が飛んだのと区別する）
         const rawSeek = player.seekTo.bind(player);
-        player.seekTo = (...a) => { noteSeek(); return rawSeek(...a); };
+        player.seekTo = (...a) => { noteSeek(a[0]); return rawSeek(...a); };
         if (script && script.videoId !== videoId) player.cueVideoById({ videoId: script.videoId, startSeconds: startPos() });
         if (pendingStart) { pendingStart = false; startVideo(); }
       },
       onStateChange: e => {
         if (e.data === YT.PlayerState.PLAYING) {
+          if (window.WATCH_MODE && player.getPlaybackRate?.() !== playRate) try { player.setPlaybackRate(playRate); } catch (err) {}
           if (seekWant && player.getCurrentTime() < seekWant - 5) player.seekTo(seekWant, true);
           seekWant = 0;
           tick();
         }
-        if (e.data === YT.PlayerState.ENDED && started) { lastT = -1; adHold = null; plEnded(); }
+        if (e.data === YT.PlayerState.ENDED && started) { lastT = -1; adHold = seekMark = null; plEnded(); }
         // 一時停止したまま喋り続けると映像とずれるので止める
         if (e.data === YT.PlayerState.PAUSED || e.data === YT.PlayerState.ENDED) {
-          queue = [];
+          dropQueue();
           try { cancelSpeak(); } catch (err) {}
           $("caption").textContent = "";
         }
@@ -1614,12 +1676,48 @@ async function decodeClip(c, speed = 1) {
 
 // 取り込んだ音声はエンジンを問わず鳴らせる。スマホに内蔵音声しかなくても再生できる
 async function playClip(c, speed, caption) {
-  const audio = await decodeClip(c, speed);
+  const gen = sayGen;
+  let audio = await decodeClip(c, speed);
+  if (caption && gen !== sayGen) return;   // 用意する間に、台本が替わった・位置が動いた・止められた
+  if (caption && playRate !== 1) audio = stretchAudio(audio, playRate);
   if (caption) revealCaption(audio.duration);
   return playBuffer(audioCtx(), audio);
 }
+// 再生速度。動画に合わせて、声と字幕も同じ速さにする
+let playRate = 1;
+// 声の高さを変えずに長さだけ変える（短い区間を、波形の合うところで重ねてつなぐ）
+function stretchAudio(buf, rate) {
+  const x = buf.getChannelData(0), sr = buf.sampleRate;
+  const N = Math.round(sr * 0.04) & ~1, H = N >> 1, S = Math.round(sr * 0.012);
+  const outLen = Math.ceil(x.length / rate) + N;
+  const y = new Float32Array(outLen), win = new Float32Array(N);
+  for (let i = 0; i < N; i++) win[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / N);
+  let prev = 0, end = 0;
+  for (let k = 0; ; k++) {
+    const want = Math.round(k * H * rate);
+    if (want + N >= x.length || k * H + N >= outLen) break;
+    let pos = want;
+    if (k > 0) {
+      const cont = prev + H;   // ひとつ前の区間の、自然な続き
+      let best = -Infinity;
+      for (let d = -S; d <= S; d += 2) {
+        const p = want + d;
+        if (p < 0 || p + N >= x.length || cont + H >= x.length) continue;
+        let c = 0;
+        for (let i = 0; i < H; i += 3) c += x[p + i] * x[cont + i];
+        if (c > best) { best = c; pos = p; }
+      }
+    }
+    for (let i = 0; i < N; i++) y[k * H + i] += x[pos + i] * win[i];
+    prev = pos; end = k * H + N;
+  }
+  if (!end) return buf;
+  const out = audioCtx().createBuffer(1, end, sr);
+  out.copyToChannel(y.subarray(0, end), 0);
+  return out;
+}
 function silentSay(text) {
-  const sec = text.length / 5.5 + 0.5;
+  const sec = (text.length / 5.5 + 0.5) / playRate;
   revealCaption(sec * 0.8);
   return new Promise(resolve => {
     const id = setTimeout(resolve, sec * 1000);
@@ -2539,8 +2637,10 @@ async function repoPushCore() {
       rate: $("rate").value, style: $("style").value,
       title: script.meta?.title || script.videoId, items
     };
-    await ghPut(`${dir}/index.json`, new TextEncoder().encode(JSON.stringify(meta, null, 2)),
-                `更新: 音声一覧 ${key}`, shas[`${dir}/index.json`]);
+    // この端末の台本が古いこともあるので、リポジトリの一覧にある音声は消さずに合わせる
+    const mine = new Set(items.map(x => x.h));
+    await changeJson(`${dir}/index.json`, `更新: 音声一覧 ${key}`,
+      old => ({ ...meta, items: [...items, ...(old?.items || []).filter(x => !mine.has(x.h))] }));
   }
   const made = await ensureGuide();
   status(items.length
@@ -2551,7 +2651,7 @@ async function repoPushCore() {
 
 // 台本を読み込んだら、その台本の音声も自動で取り込む。
 // 取り込み済みは飛ばすので、2回目以降は一覧を1回取るだけで終わる
-let autoPullKey = "", pulling = null;
+let pulling = null;
 // audio/<key>/ 配下の声フォルダを列挙する（声ごとに index.json を持つ）
 async function listVoices(key) {
   const out = [];
@@ -2626,8 +2726,6 @@ async function pullVoice(key, tag, meta, quiet) {
 async function autoPullAudio(data) {
   if (!lsGet("data-repo") || !lsGet("github-pat")) return;
   const key = scriptKey(data);
-  if (autoPullKey === key) return;   // 同じ台本で何度も走らせない
-  autoPullKey = key;
   let done;
   const mine = pulling = new Promise(r => { done = r; });
   try {
@@ -2639,7 +2737,8 @@ async function autoPullAudio(data) {
     const { got, have } = await pullVoice(key, chosen.tag, chosen.meta);
     if (got) status(`保存済みの音声を取り込みました（${chosen.label}／新規 ${got}件・取り込み済み ${have}件）。`, "ok");
   } catch (e) {
-    status(`音声の取り込みに失敗しました（${e.message}）。データタブの「まとめて読み込む」で再試行できます。`, "warn");
+    if (!window.WATCH_MODE) status(`音声の取り込みに失敗しました（${e.message}）。データタブの「まとめて読み込む」で再試行できます。`, "warn");
+    else if (script === data) window.__watchToast?.(`声の取り込みに失敗しました（${e.message}）。台本を選び直すと、もう一度取り込みます。`);
   } finally {
     done();
     if (pulling === mine) pulling = null;
@@ -2697,7 +2796,7 @@ $("btnSyncPull").onclick = async () => {
   try {
     repoReady();
     try { await window.__charPull?.(true); } catch (e) {}
-    if (script) { autoPullKey = ""; await autoPullAudio(script); }
+    if (script) await autoPullAudio(script);
     await avatarPull();   // アバターが置いてあれば、最後に画面の読み直しがかかる
   } catch (e) {
     status(e.message, "err");
@@ -2710,6 +2809,27 @@ const face = $("face"), fx = face.getContext("2d");
 let wheel = 0, wheelTarget = 0;     // ハンドル角（-1〜1）
 let gaze = 0, gazeTarget = 0;       // 0=前方 / 1=カメラ
 let blink = 0, nextBlink = 1500;
+// ときどきこちらを見る（見る画面だけ）。曲がっているあいだは道路を見る
+let glance = 0, glanceT = 6000, roadT = 0, chatT = 0;
+const LOOK_GAP = { few: [24000, 48000], mid: [9000, 20000], many: [4000, 9000] };
+function wantedGaze(dt) {
+  if (!window.WATCH_MODE) return gazeTarget;
+  const turning = Math.abs(wheelTarget) > 0.3;
+  if (gazeTarget > 0.5) {   // 雑談：こちらを見て話し、合間に道路へ目を戻す
+    if (roadT > 0) { roadT -= dt; return 0.1; }
+    chatT -= dt;
+    if (chatT <= 0) { roadT = 900 + Math.random() * 1100; chatT = 2600 + Math.random() * 2800; }
+    return turning ? 0.2 : 1;
+  }
+  if (glance > 0) { glance -= dt; return turning ? gazeTarget : 1; }
+  glanceT -= dt;
+  if (glanceT <= 0) {
+    const [a, b] = LOOK_GAP[lsGet("look", "mid")] || LOOK_GAP.mid;
+    glanceT = a + Math.random() * (b - a);
+    if (!turning) glance = 1100 + Math.random() * 1100;
+  }
+  return gazeTarget;
+}
 let lastFrame = performance.now();
 
 function setAct(act, amount) {
@@ -2724,7 +2844,7 @@ function drawAvatar(now) {
   const W = face.width, H = face.height;
 
   wheel += (wheelTarget - wheel) * (1 - Math.pow(0.001, dt / 1000));
-  gaze  += (gazeTarget  - gaze)  * (1 - Math.pow(0.004, dt / 1000));
+  gaze  += (wantedGaze(dt) - gaze) * (1 - Math.pow(0.004, dt / 1000));
   nextBlink -= dt;
   if (nextBlink <= 0) { blink = 1; nextBlink = 1800 + Math.random() * 3200; }
   blink = Math.max(0, blink - dt / 90);
@@ -2811,15 +2931,31 @@ let fired = new Set();
 let queue = [];
 let lastT = -1;
 let draining = false;
+// 待っているセリフを捨てる。音声の用意を待っている途中のセリフも、番号が変わるので捨てられる
+let sayGen = 0, onDrop = () => {};
+function dropQueue() { queue = []; sayGen++; onDrop(); }
 
 let tickRAF = 0;
 // いまの動画の再生時間。広告のあいだは null を返す。
 // 広告中は YouTube から「再生中」の合図が来ないが、時間だけは広告のものになることがある（iPhone）
-let seekOk = 0, adHold = null;
-function noteSeek() { seekOk = Date.now() + 8000; adHold = null; }
+// seekMark は、自分で動かした先。再生がそこに着くまでは、時間の飛びを広告と決めつけない
+let seekMark = null, adHold = null;
+function noteSeek(to) { seekMark = { to: +to || 0, since: 0, ad: false }; adHold = null; }
+// 動かした先に着いたか。着く前に来るのは、動かす前の古い時間か、動かした直後の広告の時間
+function seekArrived(t) {
+  const m = seekMark;
+  if (t >= m.to - 5 && t <= m.to + 3) return true;
+  m.ad = t < m.to - 5 && (lastT < 0 || t < lastT - 2);
+  m.since = m.since || Date.now();
+  // 着かないまま再生が続くなら、いまの時間を正とする（動かす指示が捨てられたときなど）
+  return Date.now() - m.since > (m.ad ? 60000 : 8000);
+}
 function contentTime() {
   if (!player || !player.getCurrentTime || !player.getPlayerState) return null;
-  if (player.getPlayerState() !== 1) return null;
+  if (player.getPlayerState() !== 1) {
+    if (seekMark) { seekMark.since = 0; seekMark.ad = false; }
+    return null;
+  }
   const t = player.getCurrentTime();
   // 長さや動画IDが台本のものと違えば、別の映像（広告）
   const d = player.getDuration?.() || 0, want = script?.meta?.duration || 0;
@@ -2827,7 +2963,10 @@ function contentTime() {
   const id = player.getVideoData?.()?.video_id;
   if (id && script && id !== script.videoId) return null;
   // 途中の広告：操作していないのに時間が大きく戻ったら、元の位置に帰ってくるまで待つ
-  if (window.WATCH_MODE && lastT >= 0 && Date.now() > seekOk) {
+  // 印を外すのは tick。ここで外すと、ほかから呼ばれたときに lastT が古いまま比べることになる
+  if (window.WATCH_MODE && seekMark) {
+    if (!seekArrived(t)) return null;
+  } else if (window.WATCH_MODE && lastT >= 0) {
     if (adHold) {
       if (t < adHold.from - 6 && Date.now() - adHold.since < 180000) return null;
       adHold = null;
@@ -2852,9 +2991,10 @@ function tick() {
   } else if (Math.abs(t - lastT) > 2) {
     if (t < lastT) fired = new Set(cues.filter(c => c.at < t).map(c => c.id));
     else cues.filter(c => c.at <= t).forEach(c => fired.add(c.id));
-    queue = [];
+    dropQueue();
   }
   lastT = t;
+  seekMark = null;
 
   for (const c of cues) {
     if (c.at > t) break;
@@ -2877,13 +3017,17 @@ async function drain() {
       // 溜まりすぎたら古いものは捨てる（映像から離れた発話は不自然なため）
       if (queue.length > 3) queue = queue.slice(-2);
       const c = queue.shift();
+      const gen = sayGen, dropped = new Promise(r => { onDrop = r; });
       // 音声が用意できていなければここで作る。字幕は鳴り始めに合わせて出す
       const eng = engine();
       if (!audioCache.has(c.id)) {
         let hit = await cacheGet(c.text);
         // 保存済みの声を取り込んでいる途中なら、少し待つ（待たずに作ると、最初の数件だけ違う声になる）
         if (!hit && pulling) {
-          await Promise.race([pulling, new Promise(r => setTimeout(r, 6000))]);
+          await Promise.race([pulling, dropped, sleep(6000)]);
+          // 待つ間に広告や読み込みに入っていたら、映像に戻ってから話す
+          while (gen === sayGen && contentTime() === null) await Promise.race([dropped, sleep(250)]);
+          if (gen !== sayGen) continue;
           hit = await cacheGet(c.text);
         }
         if (hit) audioCache.set(c.id, hit);
@@ -2892,6 +3036,7 @@ async function drain() {
           catch (e) { audioCache.set(c.id, null); }
         }
       }
+      if (gen !== sayGen) continue;   // 待つ間に、台本が替わった・位置が動いた・止められた
       setAct(c.act, c.amount);
       gazeTarget = c.kind === "chat" ? 1 : 0.15;   // 雑談は視聴者を見る
       if ($("showCaption").checked) setCaption(c.text);
@@ -2914,7 +3059,7 @@ $("btnStart").onclick = async () => {
   // 話者が決まる前に鳴らすと、作った音声を引く鍵が変わって作り直しになる
   await voicesReady;
   cues = buildCues(script, $("useComments").checked);
-  fired = new Set(); queue = []; lastT = -1;
+  fired = new Set(); dropQueue(); lastT = -1;
   // iOSは利用者の操作を起点にしないと音が出せないので、ここで一度鳴らして解錠する
   primeAudio();
   started = true;
@@ -2956,22 +3101,17 @@ async function readScriptIndex() {
     return raw ? JSON.parse(new TextDecoder().decode(raw)) : {};
   } catch (e) { return {}; }
 }
-async function writeScriptIndex(idx) {
-  const cur = (await ghList("scripts")).find(f => f.path === SCRIPT_INDEX);
-  await ghPut(SCRIPT_INDEX, new TextEncoder().encode(JSON.stringify(idx, null, 2)), "更新: 台本の一覧", cur?.sha);
-}
 // 台本を保存したときに一覧へ追記する。表示名は動画のタイトルを初期値にする
 window.__noteScriptSaved = async data => {
   try {
-    const key = scriptKey(data), idx = await readScriptIndex();
+    const key = scriptKey(data);
     const title = data.meta?.title || await ytTitle(data.videoId);
-    idx[key] = {
-      ...idx[key],
-      label: idx[key]?.label || title || key,
+    await changeJson(SCRIPT_INDEX, "更新: 台本の一覧", idx => ({ ...(idx || {}), [key]: {
+      ...idx?.[key],
+      label: idx?.[key]?.label || title || key,
       videoId: data.videoId, start: data.start || 0, end: data.covered ?? data.end ?? 0,
       savedAt: new Date().toISOString()
-    };
-    await writeScriptIndex(idx);
+    } }));
   } catch (e) {}   // 一覧の更新に失敗しても台本の保存は成立している
 };
 
@@ -3007,6 +3147,18 @@ function changeJson(path, message, fn) {
 
 // どこまで見たか（この端末だけの記録）。player- で始めると設定の保存に混ざるので別の名前にする
 function watchPos() { try { return JSON.parse(lsGet("watch-pos", "{}")) || {}; } catch (e) { return {}; } }
+// 記録が伸びて名前が変わった台本は、古い名前（was）で残した記録を引き継ぐ
+function inheritPos(idx) {
+  const all = watchPos();
+  let hit = false;
+  for (const [key, info] of Object.entries(idx)) for (const old of [].concat(info?.was || [])) {
+    const w = all[old];
+    if (!w || (all[key] && (all[key].at || 0) >= (w.at || 0))) continue;
+    all[key] = { ...w, d: Math.round(info.end || w.d) };
+    hit = true;
+  }
+  if (hit) lsSet("watch-pos", JSON.stringify(all));
+}
 function resumeAt(key) {
   const w = watchPos()[key];
   return w && w.t > 15 && w.t < w.d - 20 ? w.t : 0;
@@ -3044,6 +3196,7 @@ async function openPicker() {
     let files, idx, voices;
     [files, idx, voices, lists] = await Promise.all([ghList("scripts"), readScriptIndex(), ghList("audio").catch(() => null), readPlaylists().catch(() => null)]);
     if (seq !== pickSeq) return;
+    inheritPos(idx);
     files = files.filter(f => f.name.endsWith(".json") && f.name !== "_index.json");
     if (!files.length) { $("pickHint").textContent = "まだ台本が保存されていません。台本を作ってから「リポジトリに保存」を押してください。"; return; }
     const dirs = voices && new Set(voices.filter(v => v.type === "dir").map(v => v.name));
@@ -3171,21 +3324,24 @@ function favButton(b, x) {
   };
 }
 
-// 台本を読み込んで再生する
-async function playScript(key) {
+// 台本を読み込んで再生する。読み込む間に別の台本が頼まれていたら（番号 my が古ければ）何もしない
+async function playScript(key, my) {
   const bytes = await ghGetRaw(`scripts/${key}.json`);
+  if (my !== plSeq) return false;
   if (!bytes) throw new Error("台本が見つかりません。");
   loadScript(JSON.parse(new TextDecoder().decode(bytes)));
   $("btnStart").click();
+  return true;
 }
 async function pickPlay(x) {
+  const my = ++plSeq;
   try { primeAudio(); } catch (e) {}   // 押した直後でないと、iPhoneでは音を出せるようにならない
   $("pickHint").textContent = "読み込んでいます…";
   try {
-    await playScript(x.key);
+    if (!await playScript(x.key, my)) return;
     plStop();
     $("pickDlg").close();
-  } catch (e) { $("pickHint").textContent = e.message; }
+  } catch (e) { if (my === plSeq) $("pickHint").textContent = e.message; }
 }
 
 /* ---------- 台本の一覧 ---------- */
@@ -3582,7 +3738,7 @@ async function plGo(i, tries = 0) {
   const my = ++plSeq;
   pl.i = i; pl.done = false;
   window.__plRender?.();
-  try { await playScript(pl.order[i]); }
+  try { await playScript(pl.order[i], my); }
   catch (e) {
     if (my !== plSeq || !pl) return;
     // 読み込めない台本は飛ばす
@@ -4267,7 +4423,7 @@ if (THREE && VRMLoaderPlugin) {
 
   const clock = new THREE.Clock();
   const euler = new THREE.Euler();
-  const fwdPoint = new THREE.Vector3();
+  const fwdPoint = new THREE.Vector3(), gazeV = new THREE.Vector3();
   const wheelCenter = new THREE.Vector3();   // 直前フレームのハンドル中心（指を曲げる向きに使う）
   const _fd = new THREE.Vector3(), _fc = new THREE.Vector3();
   const lookAtV = new THREE.Vector3();
@@ -4381,9 +4537,15 @@ if (THREE && VRMLoaderPlugin) {
     const k = ease(gestureT / gesture.dur) * idle;
     return { yaw: gesture.yaw * k, pitch: gesture.pitch * k };
   }
+  let lastDraw = 0;
   function loop() {
     requestAnimationFrame(loop);
-    const dt = clock.getDelta();
+    if (window.WATCH_MODE) {
+      const now = performance.now(), hid = getComputedStyle($("avatar")).visibility === "hidden" || $("avatar").classList.contains("stash");
+      if (hid || now - lastDraw < 30) return;
+      lastDraw = now;
+    }
+    const dt = Math.min(0.1, clock.getDelta());
     if (!vrm) return;
     const s = window.avatarState || { wheel: 0, gaze: 0, mouth: 0, blink: 0, sway: 0, breathe: 0 };
     // 「ハンドルの見え方を確認」中は切り角を往復させ、腕の追従を目で見られるようにする
@@ -4403,6 +4565,18 @@ if (THREE && VRMLoaderPlugin) {
       fwdPoint.set(0, headY - 0.02, 4);
       lookTarget.position.lerpVectors(fwdPoint, camera.position, Math.min(1, s.gaze));
     }
+    // 目だけでは分かりにくいので、首もカメラのほうへ向ける
+    let turnYaw = 0, turnPitch = 0;
+    if (window.WATCH_MODE && s.gaze > 0.01) {
+      const hd = vrm.humanoid?.getNormalizedBoneNode("head");
+      if (hd) {
+        hd.getWorldPosition(gazeV);
+        const cx = camera.position.x - gazeV.x, cy = camera.position.y - gazeV.y, cz = camera.position.z - gazeV.z;
+        const yaw = Math.atan2(fwdSign * cx, fwdSign * cz);
+        turnYaw = Math.max(-0.95, Math.min(0.95, yaw)) * s.gaze;
+        turnPitch = -Math.max(-0.3, Math.min(0.3, Math.atan2(cy, Math.hypot(cx, cz)))) * s.gaze * fwdSign;
+      }
+    }
 
     // 上体と首。ハンドルの切り角で軽く傾け、路面の揺れを乗せる
     const h = vrm.humanoid;
@@ -4419,10 +4593,10 @@ if (THREE && VRMLoaderPlugin) {
       // 喋っている間は音量に合わせて小さくうなずく
       const nod = speakingNod(s.mouth) * idle;
       if (spine) { euler.set(bob, -s.wheel * 0.10 + g.yaw * 0.15, roll); spine.rotation.copy(euler); }
-      if (neck) { euler.set(Math.sin(t * 0.6) * 0.03 * idle + g.pitch * 0.35, -s.wheel * 0.12 + g.yaw * 0.35, -roll * 0.6); neck.rotation.copy(euler); }
+      if (neck) { euler.set(Math.sin(t * 0.6) * 0.03 * idle + g.pitch * 0.35, -s.wheel * 0.12 + g.yaw * 0.35 + turnYaw * 0.35, -roll * 0.6); neck.rotation.copy(euler); }
       if (headB) {
-        euler.set(Math.sin(t * 1.1) * 0.025 * idle + g.pitch * 0.65 + nod,
-                  -s.wheel * 0.18 + Math.sin(t * 0.37) * 0.10 * idle + g.yaw * 0.65,
+        euler.set(Math.sin(t * 1.1) * 0.025 * idle + g.pitch * 0.65 + nod + turnPitch * 0.5,
+                  -s.wheel * 0.18 + Math.sin(t * 0.37) * 0.10 * idle + g.yaw * 0.65 + turnYaw * 0.5,
                   Math.sin(t * 0.83) * 0.02 * idle);
         headB.rotation.copy(euler);
       }
@@ -6132,7 +6306,7 @@ $("btnCopy").onclick = async () => {
     const moving = (st === -1 || st === 3) && raw > adPrev + 0.05 && raw < adPrev + 2;
     adRun = moving ? adRun + 1 : st === -1 || st === 3 ? Math.max(0, adRun - 1) : 0;
     adPrev = raw;
-    let other = !!adHold;
+    let other = !!adHold || !!seekMark?.ad;
     try {
       const d = player.getDuration() || 0, want = script.meta?.duration || 0;
       if (st === 1 && d && want && Math.abs(d - want) > Math.max(5, want * 0.02)) other = true;
@@ -6236,45 +6410,204 @@ $("btnCopy").onclick = async () => {
   });
   prog.addEventListener("pointerleave", () => { if (!dragging) $("wTip").style.display = "none"; });
 
-  // 余白の使い方を決める。映像（16:9）の下に十分な空きがあれば、そこをキャラと字幕の場所にする
+  // 余白の使い方を決める。映像（16:9）の下に十分な空きがあれば、映像を上に寄せて、空いたところを字幕とキャラに使う
   function layout() {
     const st = $("stage");
     const w = st.clientWidth, h = st.clientHeight;
     if (!w || !h) return;
-    const vh = w * 9 / 16, spare = h - vh;
-    // 操作の帯を引いても、キャラを置ける高さ（140px）が残るときだけ余白を使う
-    const booth = spare - ($("wBar").offsetHeight || 84) >= 140;
-    const was = root.classList.contains("booth");
-    root.style.setProperty("--bar-h", ($("wBar").offsetHeight || 96) + "px");
+    const vh = w * 9 / 16, barH = $("wBar").offsetHeight || 84;
+    const booth = h - vh - barH >= 140;
+    root.style.setProperty("--bar-h", barH + "px");
+    root.style.setProperty("--b-vh", vh + "px");
     root.classList.toggle("booth", booth);
-    if (!booth) root.classList.remove("booth-tall");
-    if (booth) {
-      const barH = $("wBar").offsetHeight || 80;
-      const top = vh + 8, regionH = Math.max(60, h - top - barH);
-      // ワイプの形（設定の縦横比）は保ったまま、帯に収まるいちばん大きい寸法にする
-      const m = getComputedStyle(root).getPropertyValue("--wipe-ar").match(/([\d.]+)\s*\/\s*([\d.]+)/);
-      const ar = m ? (+m[1]) / (+m[2]) : 3 / 4;
-      let avH = Math.min(regionH, 340), avW = avH * ar;
-      if (avW > w * 0.44) { avW = w * 0.44; avH = avW / ar; }
-      // 帯が縦に長いとき（スマホの縦持ち）は横に並べず、キャラを大きく上に、字幕をその下に置く
-      const tall = regionH > avH * 1.7;
-      root.classList.toggle("booth-tall", tall);
-      const s = root.style;
-      if (tall) {
-        avW = Math.min(w * 0.92, 460); avH = avW / ar;
-        if (avH > regionH * 0.6) { avH = regionH * 0.6; avW = avH * ar; }
-        s.setProperty("--b-captop", Math.round(top + 8 + avH + 10) + "px");
-        s.setProperty("--b-caph", Math.round(Math.max(40, regionH - avH - 18)) + "px");
-      }
-      s.setProperty("--b-vh", vh + "px");
-      s.setProperty("--b-top", top + "px");
-      s.setProperty("--b-h", regionH + "px");
-      s.setProperty("--b-avw", Math.round(avW) + "px");
-      s.setProperty("--b-avh", Math.round(avH) + "px");
-    }
-    // アバターの描画は窓の大きさが変わったときにしか寸法を取り直さないので、知らせる
-    if (booth || was) setTimeout(() => { selfResize = true; window.dispatchEvent(new Event("resize")); selfResize = false; }, 50);
+    placeWipe();
+    applyQuality();
   }
+
+  // ---- ワイプ（iPhoneのピクチャインピクチャにならう） ----
+  // 大きさは画面の幅に対する割合、位置は動ける範囲に対する割合で、縦持ちと横持ちを別々に覚える
+  const av = $("avatar");
+  $("stage").appendChild(av);
+  const wTab = el('<button type="button" id="wTab" aria-label="キャラクターを出す"></button>');
+  $("stage").appendChild(wTab);
+  const wipeKey = () => $("stage").clientHeight > $("stage").clientWidth ? "wipe-p" : "wipe-l";
+  const wipeDef = () => wipeKey() === "wipe-p" ? { w: 0.62, x: 1, y: 1 } : { w: 0.3, x: 1, y: 1 };
+  function wipeGet() {
+    try { return { ...wipeDef(), ...JSON.parse(lsGet(wipeKey(), "") || "{}") }; } catch (e) { return wipeDef(); }
+  }
+  const wipeSet = v => lsSet(wipeKey(), JSON.stringify(v));
+  function wipeAr() {
+    const m = getComputedStyle(root).getPropertyValue("--wipe-ar").match(/([\d.]+)\s*\/\s*([\d.]+)/);
+    return m ? (+m[1]) / (+m[2]) : 3 / 4;
+  }
+  // 動ける範囲。操作の帯が出ているあいだは、帯の上まで
+  function wipeArea() {
+    const st = $("stage"), W = st.clientWidth, H = st.clientHeight, barH = $("wBar").offsetHeight || 84;
+    const bar = root.classList.contains("booth") || root.classList.contains("list-open") || root.classList.contains("ui-on");
+    return { l: 8, t: 8, r: W - 8, b: H - (bar ? barH : 8), W, H, barH };
+  }
+  function wipeSize(want, a = wipeArea()) {
+    const ar = wipeAr(), maxH = a.H - a.barH - 16;
+    const max = Math.min(a.W - 16, maxH * ar), min = Math.min(96, max);
+    const w = Math.max(min, Math.min(max, want));
+    return { w, h: w / ar, min, max };
+  }
+  let wipeNow = { x: 0, y: 0, w: 0, h: 0 };
+  function showWipe(x, y, w, h) {
+    const sized = Math.abs(w - wipeNow.w) > 0.5 || Math.abs(h - wipeNow.h) > 0.5;
+    wipeNow = { x, y, w, h };
+    const s = av.style;
+    s.setProperty("--w-x", x + "px"); s.setProperty("--w-y", y + "px");
+    s.setProperty("--w-w", w + "px"); s.setProperty("--w-h", h + "px");
+    return sized;
+  }
+  let drawTimer = 0;
+  function wipeRedraw() {   // 描画の細かさを、新しい大きさに合わせる
+    clearTimeout(drawTimer);
+    drawTimer = setTimeout(() => { selfResize = true; window.dispatchEvent(new Event("resize")); selfResize = false; }, 300);
+  }
+  function placeWipe() {
+    const v = wipeGet(), a = wipeArea(), z = wipeSize(v.w * a.W, a);
+    let x = a.l + v.x * Math.max(0, a.r - a.l - z.w);
+    const y = a.t + v.y * Math.max(0, a.b - a.t - z.h);
+    if (v.stash === "l") x = -z.w - 10;
+    if (v.stash === "r") x = a.W + 10;
+    av.classList.toggle("stash", !!v.stash);
+    if (showWipe(x, y, z.w, z.h)) wipeRedraw();
+    wTab.classList.toggle("on", !!v.stash);
+    wTab.classList.toggle("right", v.stash === "r");
+    wTab.textContent = v.stash === "r" ? "‹" : "›";
+    wTab.style.transform = `translate(${v.stash === "r" ? a.W - 26 : 0}px, ${Math.round(y + z.h / 2 - 32)}px)`;
+    av.classList.toggle("over", y < a.W * 9 / 16 || !root.classList.contains("booth"));
+    placeCaption(v.stash ? null : { l: x, t: y, r: x + z.w, b: y + z.h }, a);
+  }
+  // 字幕は、ワイプのない広いほうに出す
+  function placeCaption(r, a) {
+    const hidden = !r || root.classList.contains("no-avatar");
+    const s = root.style;
+    if (!root.classList.contains("booth")) {
+      const ow = Math.min(a.W, a.H * 16 / 9), ol = (a.W - ow) / 2;
+      let left = ow * 0.06, right = ow * 0.06;
+      if (!hidden && r.b > a.H * 0.62) {
+        if ((r.l + r.r) / 2 > a.W / 2) right = Math.max(right, ol + ow - r.l + 12);
+        else left = Math.max(left, r.r - ol + 12);
+        if (ow - left - right < ow * 0.3) left = right = ow * 0.06;   // ワイプが大きくて余らないときは、重ねて出す
+      }
+      s.setProperty("--c-left", left + "px"); s.setProperty("--c-right", right + "px");
+      return;
+    }
+    const R = { l: 12, r: a.W - 12, t: a.W * 9 / 16 + 8, b: a.H - a.barH - 4 };
+    const boxes = hidden || r.b <= R.t || r.t >= R.b ? [R] : [
+      { ...R, b: r.t - 8 }, { ...R, t: r.b + 8 }, { ...R, r: r.l - 12 }, { ...R, l: r.r + 12 },
+    ];
+    const area = b => Math.max(0, b.r - b.l) * Math.max(0, b.b - b.t);
+    const b = boxes.sort((p, q) => area(q) - area(p))[0];
+    const cw = Math.max(60, b.r - b.l), ch = Math.max(30, b.b - b.t);
+    // いちばん長いセリフ（70字）が収まる、いちばん大きい文字にする
+    let fs = Math.min(30, Math.max(16, a.W * 0.05));
+    while (fs > 12 && Math.ceil(70 / Math.max(1, Math.floor(cw / fs))) * fs * 1.5 > ch) fs -= 0.5;
+    s.setProperty("--c-l", b.l + "px"); s.setProperty("--c-w", cw + "px");
+    s.setProperty("--c-t", b.t + "px"); s.setProperty("--c-h", ch + "px"); s.setProperty("--c-fs", fs + "px");
+  }
+
+  // 指の動き：1本でなぞると移動、2本でつまむと大きさ、2回たたくと小・中・大
+  const fingers = new Map();
+  let g = null, lastTap = 0, tapTimer = 0;
+  const local = e => { const b = $("stage").getBoundingClientRect(); return { x: e.clientX - b.left, y: e.clientY - b.top }; };
+  av.addEventListener("pointerdown", e => {
+    if (!root.classList.contains("watch")) return;
+    e.preventDefault(); e.stopPropagation();
+    try { av.setPointerCapture(e.pointerId); } catch (err) {}
+    fingers.set(e.pointerId, local(e));
+    startGesture();
+  });
+  function startGesture() {
+    const pts = [...fingers.values()];
+    if (!pts.length) return;
+    const c = pts.length > 1 ? { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 } : pts[0];
+    g = { n: pts.length, c, d: pts.length > 1 ? Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) : 0,
+          from: { ...wipeNow }, moved: g?.moved || 0, pinched: g?.pinched || pts.length > 1, track: [], at: performance.now() };
+    av.classList.add("grab");
+  }
+  av.addEventListener("pointermove", e => {
+    if (!fingers.has(e.pointerId) || !g) return;
+    fingers.set(e.pointerId, local(e));
+    const pts = [...fingers.values()];
+    const c = pts.length > 1 ? { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 } : pts[0];
+    const dx = c.x - g.c.x, dy = c.y - g.c.y;
+    g.moved = Math.max(g.moved, Math.hypot(dx, dy));
+    let { x, y, w, h } = g.from;
+    if (pts.length > 1 && g.d > 0) {
+      const z = wipeSize(g.from.w * Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) / g.d);
+      const k = z.w / g.from.w;   // つまんだ所を中心に広げる
+      x = g.c.x - (g.c.x - x) * k; y = g.c.y - (g.c.y - y) * k; w = z.w; h = z.h;
+    }
+    if (g.moved < 6 && !g.pinched) return;
+    showWipe(x + dx, y + dy, w, h);
+    g.track.push({ t: performance.now(), x: c.x, y: c.y });
+    if (g.track.length > 8) g.track.shift();
+  });
+  const endFinger = e => {
+    if (!fingers.delete(e.pointerId) || !g) return;
+    if (fingers.size) { startGesture(); return; }
+    const done = g; g = null;
+    av.classList.remove("grab");
+    if (done.moved < 6 && !done.pinched) { tapWipe(e); return; }
+    settleWipe(done);
+  };
+  av.addEventListener("pointerup", endFinger);
+  av.addEventListener("pointercancel", endFinger);
+  // 指を離した勢いの先で、いちばん近い角に落ち着く。大きいときは左右の中央。端の外へ出したら、しまう
+  function settleWipe(done) {
+    const a = wipeArea(), n = wipeNow;
+    const tr = done.track, f = tr[0], l = tr[tr.length - 1];
+    const dt = f && l ? Math.max(16, l.t - f.t) : 1;
+    const vx = f && l && performance.now() - l.t < 80 ? (l.x - f.x) / dt : 0, vy = f && l && performance.now() - l.t < 80 ? (l.y - f.y) / dt : 0;
+    const px = n.x + vx * 160, py = n.y + vy * 160;
+    const v = { w: n.w / a.W, x: 0, y: 0 };
+    const out = px + n.w / 2 < 0 ? "l" : px + n.w / 2 > a.W ? "r" : "";
+    const freeX = Math.max(1, a.r - a.l - n.w), freeY = Math.max(1, a.b - a.t - n.h);
+    const xs = n.w > a.W * 0.75 ? [0.5] : [0, 1];
+    // 縦持ちでは、動画のすぐ下にも止まれる
+    const ys = [0, 1];
+    if (root.classList.contains("booth")) { const u = (a.W * 9 / 16 + 8 - a.t) / freeY; if (u > 0.05 && u < 0.95) ys.push(u); }
+    const near = (list, p) => list.reduce((m, q) => Math.abs(q - p) < Math.abs(m - p) ? q : m);
+    v.x = near(xs, (px - a.l) / freeX);
+    v.y = near(ys, (py - a.t) / freeY);
+    if (out && !done.pinched) v.stash = out;
+    wipeSet(v);
+    placeWipe();
+  }
+  function tapWipe() {
+    const now = performance.now();
+    if (now - lastTap < 320) {
+      lastTap = 0; clearTimeout(tapTimer);
+      cycleWipe();
+    } else {
+      lastTap = now;
+      // 1回だけなら、操作の帯を出す（動画の上をたたいたときと同じ）
+      tapTimer = setTimeout(() => { if (!root.classList.contains("ui-on")) poke(); else if (!root.classList.contains("booth")) togglePlay(); }, 330);
+    }
+  }
+  function cycleWipe() {
+    const v = wipeGet(), a = wipeArea(), z = wipeSize(1e9, a);
+    const steps = [0.45, 0.7, 1].map(k => z.max * k);
+    const cur = wipeNow.w;
+    const next = steps.find(s => s > cur + 6) || steps[0];
+    if (next > a.W * 0.75) v.x = 0.5; else if (v.x === 0.5) v.x = 1;
+    v.w = next / a.W;
+    wipeSet(v);
+    placeWipe();
+  }
+  av.addEventListener("wheel", e => {
+    e.preventDefault();
+    const v = wipeGet(), a = wipeArea();
+    v.w = wipeSize(wipeNow.w * (e.deltaY < 0 ? 1.06 : 0.94), a).w / a.W;
+    wipeSet(v); placeWipe();
+  }, { passive: false });
+  wTab.onclick = () => { const v = wipeGet(); delete v.stash; wipeSet(v); placeWipe(); };
+  // 操作の帯が出入りしたら、かぶらない位置へ動かす
+  new MutationObserver(() => { if (!g) placeWipe(); }).observe(root, { attributes: true, attributeFilter: ["class"] });
   // 画面が隠れている間は下の見張りが動かないので、窓の大きさが変わったときにも取り直す
   let selfResize = false;
   window.addEventListener("resize", () => { if (!selfResize) layout(); });
@@ -6369,29 +6702,98 @@ $("btnCopy").onclick = async () => {
   // タブの消し方は、設定の画面と、初めて横持ちにしたときの案内で伝える
   if (!(document.fullscreenEnabled || document.webkitFullscreenEnabled)) $("wFs").style.display = "none";
 
+  const QNAME = { highres: "4320p", hd2880: "2880p", hd2160: "2160p", hd1440: "1440p", hd1080: "1080p", hd720: "720p", large: "480p", medium: "360p", small: "240p", tiny: "144p" };
+  const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+  const curQuality = () => { try { return QNAME[player.getPlaybackQuality()] || ""; } catch (e) { return ""; } };
+  function setPage(name) {
+    for (const p of document.querySelectorAll("#wSet .page")) p.classList.toggle("on", p.dataset.name === name);
+    refreshSet();
+  }
+  function refreshSet() {
+    const on = k => lsGet("show-" + k, "1") !== "0";
+    const q = lsGet("quality", "auto"), now = curQuality();
+    $("svQ").textContent = (q === "auto" ? "自動" : q + "p") + (now && now !== q + "p" ? `（${now}）` : "");
+    $("svS").textContent = playRate === 1 ? "標準" : playRate + "倍";
+    $("svC").textContent = on("caption") ? "オン" : "オフ";
+    $("svA").textContent = on("avatar") ? "オン" : "オフ";
+    $("svT").textContent = on("topic") && on("place") ? "オン" : on("topic") ? "記事だけ" : on("place") ? "場所だけ" : "オフ";
+    $("svD").textContent = lsGet("data-repo") && lsGet("github-pat") ? lsGet("data-repo").split("/").pop() : "まだ";
+    $("svO").textContent = window.APP_VERSION;
+    const radio = (box, list, cur, pick) => {
+      box.innerHTML = "";
+      for (const [v, name] of list) {
+        const b = el('<button type="button" class="sh" role="radio"><span class="ck">✓</span><span class="l"></span></button>');
+        b.querySelector(".l").textContent = name;
+        b.setAttribute("aria-checked", String(v) === String(cur));
+        b.onclick = () => { pick(v); setPage("main"); };
+        box.appendChild(b);
+      }
+    };
+    let levels = [];
+    try { levels = player.getAvailableQualityLevels().map(x => parseInt(QNAME[x])).filter(n => n >= 480); } catch (e) {}
+    if (!levels.length) levels = [1080, 720, 480];
+    radio($("wQual"), [["auto", "自動"], ...levels.map(n => [n, n + "p"])], q, v => { lsSet("quality", String(v)); applyQuality(); });
+    radio($("wSpeed"), SPEEDS.map(n => [n, n === 1 ? "標準" : n + "倍"]), playRate, v => setRate(v));
+    for (const b of document.querySelectorAll("#wLook button")) b.setAttribute("aria-checked", b.dataset.v === lsGet("look", "mid"));
+  }
+  // 画質：YouTubeは画質を選ばせないが、枠の大きさで決めている。枠を大きく（小さく）作り、縮めて（伸ばして）見せる
+  function applyQuality() {
+    const f = document.querySelector("#ytbox iframe"), box = $("ytbox");
+    if (!f) return;
+    const w = box.clientWidth, h = box.clientHeight, q = +lsGet("quality", "auto");
+    if (!q || !w || !h) { f.style.width = f.style.height = f.style.transform = ""; return; }
+    const fh = Math.max(200, q / (window.devicePixelRatio || 1)), k = h / fh;
+    f.style.width = Math.round(w / k) + "px";
+    f.style.height = Math.round(fh) + "px";
+    f.style.transformOrigin = "0 0";
+    f.style.transform = `scale(${k})`;
+  }
+  function setRate(v) {
+    playRate = +v || 1;
+    try { player.setPlaybackRate(playRate); } catch (e) {}
+  }
   function openSet(msg) {
     $("wRepo").value = lsGet("data-repo");
     $("wPat").value = "";
     $("wSetMsg").textContent = msg || (lsGet("github-pat") ? "トークンは保存されています。" : "トークンがまだ入っていません。");
     $("wSetMsg").className = "hint";
-    $("wSet").showModal();
+    setPage(msg ? "repo" : "main");
+    if (!$("wSet").open) $("wSet").showModal();
   }
   $("wVer").textContent = window.APP_VERSION;
+  const prevLog = lsGet("play-log", "");
+  setInterval(() => { if (playLog.length) lsSet("play-log", new Date().toISOString() + "\n" + playLog.slice(-60).join("\n")); }, 5000);
   $("wLog").onclick = async () => {
-    const text = `${window.APP_VERSION} ${navigator.userAgent}\n${script ? scriptKey(script) : "-"}\n秒 状態 時間 長さ 判定 開始\n` + playLog.slice(-400).filter((x, i, a) => i % 2 === 0 || /ad/.test(x)).join("\n");
-    try { await navigator.clipboard.writeText(text); $("wLog").textContent = "コピーしました"; } catch (e) { $("wLog").textContent = "コピーできませんでした"; }
-    setTimeout(() => { $("wLog").textContent = "再生の記録をコピー"; }, 3000);
+    const text = `${window.APP_VERSION} ${navigator.userAgent}\n${script ? scriptKey(script) : "-"} ${innerWidth}x${innerHeight}@${devicePixelRatio}\n秒 状態 時間 長さ 判定 開始\n` + playLog.slice(-400).filter((x, i) => i % 2 === 0 || /ad/.test(x)).join("\n") + "\n--- 開き直す前\n" + prevLog;
+    try { await navigator.clipboard.writeText(text); $("wLogV").textContent = "コピーしました"; } catch (e) { $("wLogV").textContent = "コピーできませんでした"; }
+    setTimeout(() => { $("wLogV").textContent = ""; }, 3000);
   };
   // 画面に表示するもの。この端末で覚える
-  for (const c of document.querySelectorAll("#wShow input")) {
+  for (const c of document.querySelectorAll("#wSet [data-show]")) {
     const k = c.dataset.show;
     c.checked = lsGet("show-" + k, "1") !== "0";
     const apply = () => root.classList.toggle("no-" + k, !c.checked);
     apply();
-    c.onchange = () => { lsSet("show-" + k, c.checked ? "1" : "0"); apply(); };
+    c.onchange = () => { lsSet("show-" + k, c.checked ? "1" : "0"); apply(); refreshSet(); layout(); };
   }
+  for (const b of document.querySelectorAll("#wSet [data-page]")) b.onclick = () => setPage(b.dataset.page);
+  for (const b of document.querySelectorAll("#wLook button")) b.onclick = () => { lsSet("look", b.dataset.v); refreshSet(); };
+  $("wReset").onclick = () => { lsSet("wipe-p", ""); lsSet("wipe-l", ""); layout(); $("wSet").close(); };
+  // シートの外を押すか、つまみを下へなぞると閉じる
+  $("wSet").addEventListener("click", e => { if (e.target === $("wSet")) $("wSet").close(); });
+  const grab = document.querySelector("#wSet .grab");
+  grab.onclick = () => $("wSet").close();
+  grab.onpointerdown = e => {
+    const y0 = e.clientY;
+    grab.setPointerCapture(e.pointerId);
+    grab.onpointermove = ev => { $("wSet").style.transform = `translateY(${Math.max(0, ev.clientY - y0)}px)`; };
+    grab.onpointerup = grab.onpointercancel = ev => {
+      grab.onpointermove = grab.onpointerup = grab.onpointercancel = null;
+      $("wSet").style.transform = "";
+      if (ev.clientY - y0 > 60) $("wSet").close();
+    };
+  };
   $("wSetBtn").onclick = () => openSet();
-  $("wSetClose").onclick = () => $("wSet").close();
   $("wSetSave").onclick = async () => {
     const slug = repoSlug($("wRepo").value);
     const msg = $("wSetMsg");

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>
   // ふつうに開くと、見るだけの画面になる。台本づくりや細かい設定の画面は ?edit を付けて開く
-  window.APP_VERSION = 'v0.22.7'.startsWith('v') || /^master-/.test('v0.22.7') ? 'v0.22.7' : '開発版';
+  window.APP_VERSION = 'v0.22.8'.startsWith('v') || /^master-/.test('v0.22.8') ? 'v0.22.8' : '開発版';
   // ?v=持ち主/リポジトリ/台本の名前 で開くと、その人が公開した台本を、接続なしで再生する
   (() => {
     const q = new URLSearchParams(location.search);
@@ -2154,6 +2154,7 @@ function startVideo() {
   if (!player || !player.seekTo) { pendingStart = true; return; }
   // 動画を替えた直後の seekTo は捨てられることがあるので、再生が始まってからも位置を確かめる
   seekWant = startPos();
+  window.START_AT = seekWant;   // 小話が、はじめからか続きからかを見る
   window.LINK_T = null;   // リンクの時間は、最初の1回だけ
   try { player.seekTo(seekWant, true); player.playVideo(); } catch (e) {}
 }
@@ -2201,7 +2202,7 @@ function setupPlayer(videoId) {
         if (window.SHARE && talkHeldAt) {
           // 小話で止めているあいだに、YouTube の再生ボタンで動かしたら、話を切り上げる
           if (e.data === YT.PlayerState.PAUSED) talkPaused = true;
-          if (e.data === YT.PlayerState.PLAYING && talkPaused) talkCancel();
+          if (e.data === YT.PlayerState.PLAYING && talkPaused && Date.now() - talkHeldAt > 1500) talkCancel();
         }
         if (e.data === YT.PlayerState.PLAYING) {
           if (window.SHARE) try { if (rateWant) player.setPlaybackRate(rateWant); else playRate = player.getPlaybackRate() || playRate; } catch (err) {}
@@ -3051,7 +3052,7 @@ async function textHash(text) {
   return [...new Uint8Array(d).slice(0, 6)].map(b => b.toString(16).padStart(2, "0")).join("");
 }
 // いま使う取り置き。人の選択は台本ごとに覚え、取り置きは読み込み時に解決する
-let currentImportTake = "";
+let currentImportTake = "", currentImportKey = "";
 function importTag() {
   if (!script) return "";
   if (window.SHARE) return currentImportTake;
@@ -3397,6 +3398,7 @@ async function refreshImportVoices(data) {
     + `<option value="__generate">その場で生成（取り込まない）</option>`;
   sel.disabled = false;
   const saved = lsGet("import-voice:" + key);
+  currentImportKey = key;
   if (saved === "__generate" && !window.WATCH_MODE) { sel.value = "__generate"; currentImportTake = ""; return null; }
   if (!groups.length) { sel.value = "__generate"; currentImportTake = ""; return null; }
   // 選択は人を覚える。その人の中でどの取り置きを使うかは毎回解決する（新しいものに自動で追従）
@@ -3476,6 +3478,7 @@ $("btnRepoSave").onclick = () => {
   $("dataRepo").value = slug;
   lsSet("data-repo", slug);
   if ($("ghPat").value.trim()) lsSet("github-pat", $("ghPat").value.trim());
+  document.documentElement.classList.toggle("no-share", !window.SHARE && !lsGet("github-pat"));
   status(lsGet("github-pat") ? "保存しました。" : "トークンも入れてください。", lsGet("github-pat") ? "ok" : "warn");
 };
 $("btnSyncPush").onclick = async () => {
@@ -3522,7 +3525,7 @@ const LOOK_GAP = {   // こちらを見る間隔（ミリ秒）。雑談のと�
   many: { chat: [3500, 6500],   road: [8000, 16000] },
 };
 function wantedGaze(dt) {
-  if (!window.WATCH_MODE) return gazeTarget;
+  if (!window.WATCH_MODE) { peek = 0; return gazeTarget; }
   if (window.__introOn) return 1;
   if (talkFace) return 1;   // 小話のあいだは、車を止めてこちらを向いている見立て
   if (talkBusy) return 0;   // 小話のあと、前を向いてから走り出す
@@ -3935,7 +3938,8 @@ async function loadTalks(data) {
         return;
       }
       // 台本の声が決まるのを待つ（音声の取り込みが終わるのは待たない）
-      for (let n = 0; n < 60 && live() && !currentImportTake; n++) await sleep(250);
+      for (let n = 0; n < 60 && live() && !(currentImportTake && currentImportKey === scriptKey(data)); n++) await sleep(250);
+      if (currentImportKey !== scriptKey(data)) return;
       const want = currentImportTake.replace(/_\d+$/, ""), k = `talks-voice:${home}:${want}`;
       if (!want || !live()) return;
       const had = await idbGet(k).catch(() => null);
@@ -3985,7 +3989,7 @@ function markHeard(id) {
 }
 // 話を1つ選ぶ。動画の話 → まだ聞いていない記事の話・いつでも使える話 → 聞いてから長くたったもの
 function pickTalk(phase, skip = []) {
-  const heard = talkHeard(), pos = Math.max(lastT, 0);
+  const heard = talkHeard(), pos = lastT >= 0 ? lastT : (window.START_AT ?? startPos());
   const fresh = l => l.filter(t => !heard[t.id] && !skip.includes(t.id));
   const video = talks.filter(t => t.kind === "video" && t.videoId === script?.videoId && t.when === phase
     && (t.from == null || (pos >= t.from && pos <= t.to)));
@@ -4009,7 +4013,7 @@ function talkHoldVideo() {
   try { player.pauseVideo(); } catch (e) {}
 }
 function talkEnd() {
-  if (talkBusy) talkQuiet = Date.now() + 1500;
+  if (talkBusy) { talkQuiet = Date.now() + 1500; lastSpokeAt = Date.now(); }
   talkBusy = talkFace = false; talkHeldAt = 0;
   document.documentElement.classList.remove("talk");
   moodStop(); setHand("");
@@ -4017,7 +4021,7 @@ function talkEnd() {
 }
 function talkCancel() {
   if (!talkBusy) return;
-  talkSeq++;
+  talkSeq++; sayGen++;
   try { cancelSpeak(); } catch (e) {}
   talkEnd();
 }
@@ -4030,38 +4034,42 @@ function introDue() {
 }
 async function runTalk(mode) {
   if (talkBusy || !talks.length || !started) return;
-  const root = document.documentElement, my = ++talkSeq, again = startPos() >= 30, live = () => my === talkSeq;
+  const root = document.documentElement, my = ++talkSeq, again = (window.START_AT ?? startPos()) >= 30, live = () => my === talkSeq;
   const phase = !talkSeen && !again ? "start" : "mid";   // 出発前の話は、はじめから見るときだけ
   // 動画の前に話すとき、続きから見る人には、短く声をかけるだけ
   const first = mode === "before" && again ? null : pickTalk(phase);
   if (!first && !(mode === "before" && bridgeTalk("back"))) return;
-  talkBusy = talkFace = true; talkHeldAt = 0; talkAdOver = false;
+  talkBusy = talkFace = true; talkHeldAt = 0; talkAdOver = false; peek = 0;
   root.classList.add("talk");
   dropQueue();
   // 話しかけのセリフがあれば、言い終わるのを待つ
   for (let i = 0; i < 80 && draining && live(); i++) await sleep(100);
+  if (draining && live()) {
+    try { cancelSpeak(); } catch (e) {}
+    for (let i = 0; i < 20 && draining && live(); i++) await sleep(100);
+  }
   window.__playLog?.push(`${Math.round(performance.now() / 100) / 10} 小話: ${first?.title || "続きから"}`);
-  const speak = async l => {
+  const speak = async (l, nx) => {
     if ($("showCaption").checked) setCaption(l.line);
     moodPlan(l.line, l, "talk");
     setHand(l.hand);
-    let clip = await talkClip(l.line);
+    let clip = await Promise.race([talkClip(l.line), sleep(5000).then(() => null)]);
     if (clip && window.SHARE && await voiceBlocked()) clip = null;
     if (!live()) return;
     speaking = true;
     try { if (clip) await playClip(clip, +$("rate").value, true); else await silentSay(l.line); }
     catch (e) {} finally { speaking = false; }
-    if (live()) { moodStop(); setHand(""); $("caption").textContent = ""; await sleep(250); }
+    if (live()) { moodStop(); if (!nx?.hand) setHand(""); $("caption").textContent = ""; await sleep(250); }
   };
   try {
     if (!live()) return;
     if (mode === "before") await sleep(500);
     for (const t of first ? [first] : []) {   // 1回に1つ。続けて別の話をすると、話がころころ変わって聞こえる
       let all = true;
-      for (const l of t.lines) {
+      for (const [i, l] of t.lines.entries()) {
         if (!live()) return;
         if (talkHeldAt && Date.now() - talkHeldAt > (mode === "ad" ? 10000 : TALK_HOLD_MAX)) { all = false; break; }
-        await speak(l);
+        await speak(l, t.lines[i + 1]);
       }
       if (!live()) return;
       if (all) {
@@ -4120,7 +4128,7 @@ async function drain() {
       if (gen !== sayGen) continue;   // 待つ間に、台本が替わった・位置が動いた・止められた
       setAct(c.act, c.amount);
       gazeTarget = c.kind === "chat" ? 1 : 0.15;   // 雑談は視聴者を見る
-      if (c.kind === "chat" && !c.follow && Date.now() - lastSpokeAt > PEEK_GAP) peekStart();
+      if (c.kind === "chat" && !c.follow && lastSpokeAt && Date.now() - lastSpokeAt > PEEK_GAP) peekStart();
       if ($("showCaption").checked) setCaption(c.text);
       const vol = player?.getVolume ? player.getVolume() : 100;
       // 声が無いときは、動画の音を下げない
@@ -4821,16 +4829,18 @@ function parseClock(str) {
   if (!m || +m[3] > 59 || (m[1] && +m[2] > 59)) return null;
   return (+m[1] || 0) * 3600 + +m[2] * 60 + +m[3];
 }
-let pickTopics = [];
+let pickTopics = [], pickMax = 0;
 function setupPick(box, t, topic) {
   box.appendChild($("sharePick"));
   $("sharePick").hidden = false;
   const s = box.id === "sharePickT" || (shareTarget && script && shareTarget.key === scriptKey(script)) ? script : null;
   pickTopics = (s?.topics || []).filter(x => x && Number.isFinite(x.start) && x.title).sort((a, b) => a.start - b.start);
+  pickMax = s ? (s.covered ?? s.end ?? 0) : (+shareTarget?.info?.end || 0);
   $("sfTopicSel").replaceChildren(...pickTopics.map((x, i) => { const o = document.createElement("option"); o.value = i; o.textContent = `${fmtTime(x.start)}　${x.title}`; return o; }));
   $("sfTopicRow").hidden = $("sfTopicSel").hidden = !pickTopics.length;
   const at = topic ?? t ?? -1;
-  let k = pickTopics.findIndex(x => at >= x.start - 1 && at <= (x.end ?? x.start));
+  let k = topic != null ? pickTopics.findIndex(x => Math.abs(x.start - topic) < 0.5) : -1;
+  if (k < 0) k = pickTopics.findIndex(x => at >= x.start - 1 && at <= (x.end ?? x.start));
   if (k < 0) k = Math.max(0, pickTopics.findIndex(x => x.start > at));
   $("sfTopicSel").value = String(k);
   $("sfTime").value = fmtTime(t ?? 0);
@@ -4843,12 +4853,12 @@ function pickT() {
   if (v === "topic") return { ok: true, t: Math.floor(pickTopics[+$("sfTopicSel").value]?.start ?? 0) || null };
   if (v !== "time") return { ok: true, t: null };
   const t = parseClock($("sfTime").value);
-  if (t == null || (total && t >= total)) return { ok: false, t: null };
+  if (t == null || (pickMax && t >= pickMax)) return { ok: false, t: null };
   return { ok: true, t: t >= 1 ? t : null };
 }
 function pickChanged() {
   const p = pickT();
-  $("sfErr").textContent = p.ok ? "" : `時間は「12:34」か「1234」のように、分と秒で入れてください${total ? `（${fmtTime(total)} まで）` : ""}。`;
+  $("sfErr").textContent = p.ok ? "" : `時間は「12:34」か「1234」のように、分と秒で入れてください${pickMax ? `（${fmtTime(pickMax)} まで）` : ""}。`;
   if ($("shareDlg").open && shareTarget) shareUrlNow();
 }
 for (const r of document.querySelectorAll('input[name="shareFrom"]')) r.onchange = pickChanged;
@@ -6133,10 +6143,13 @@ if (THREE && VRMLoaderPlugin) {
   let introSpread = 0;
   // ハンドルから離す手の行き先。カメラに近いほうの手を使う
   const _sh = new THREE.Vector3(), _cam = new THREE.Vector3(), _lat = new THREE.Vector3(), _goal = new THREE.Vector3();
+  let freeSide = "";
   function freeHand(hand) {
     const h = vrm.humanoid, pos = {};
     for (const sd of ["left", "right"]) { const b = h.getNormalizedBoneNode(sd + "UpperArm"); if (!b) return ""; pos[sd] = b.getWorldPosition(new THREE.Vector3()); }
-    const side = pos.left.distanceTo(camera.position) < pos.right.distanceTo(camera.position) ? "left" : "right";
+    const dl = pos.left.distanceTo(camera.position), dr = pos.right.distanceTo(camera.position);
+    if (!freeSide || Math.abs(dl - dr) > 0.03) freeSide = dl < dr ? "left" : "right";
+    const side = freeSide;
     _sh.copy(pos[side]);
     _cam.subVectors(camera.position, _sh); _cam.y = 0; _cam.normalize();
     _lat.set(-_cam.z, 0, _cam.x);
@@ -6458,7 +6471,7 @@ if (THREE && VRMLoaderPlugin) {
   }
   async function reveal() {
     const root = document.documentElement, box = $("vrmLoad");
-    if (!window.WATCH_MODE) { root.classList.add("vrm-done"); return; }
+    if (!window.WATCH_MODE || root.classList.contains("vrm-done")) { root.classList.add("vrm-done"); return; }
     progress(100);
     // 一覧を開いているあいだは見えないので、ワイプが見えるまで待つ
     while (document.hidden || $("pickDlg").open || root.classList.contains("brk") || getComputedStyle($("avatar")).visibility === "hidden") await new Promise(r => setTimeout(r, 200));
@@ -8209,6 +8222,7 @@ $("btnCopy").onclick = async () => {
     if (typeof topic !== "number") topic = null;
     if (window.SHARE) {
       if ($("shareTDlg").open) return;
+      if ($("wDesc").open) $("wDesc").close();   // 開いたままだと、外を押したときの「閉じる」が最初の1回を取ってしまう
       setupPick($("sharePickT"), nowSec(), topic);
       $("shareTDlg").showModal();
       return;
@@ -8427,7 +8441,12 @@ $("btnCopy").onclick = async () => {
   // 広告のあいだに話す。横持ちでは、キャラクターが映像の上にあって出せないので話さない。
   // 「動画の前」の人と、共有で開いた人には、広告のあいだは小話をしない
   function adTalk(ad) {
-    if (!ad) { adTalkWait = false; if (wasAd) talkQuiet = Math.max(talkQuiet, Date.now() + 1500); adTalkT = 0; return; }
+    if (!ad) {
+      adTalkWait = false;
+      if (wasAd) { talkQuiet = Math.max(talkQuiet, Date.now() + 1500); adGoneAt = Date.now(); }
+      if (Date.now() - adGoneAt > 4000) adTalkT = 0;
+      return;
+    }
     // 横持ちでは、広告のあいだキャラクターを隠している。姿が見えないまま話さない
     if (!root.classList.contains("booth")) {
       talkCancel();
@@ -8448,7 +8467,7 @@ $("btnCopy").onclick = async () => {
     runTalk("ad");
     if (talkBusy) adTalkT = -1;
   }
-  let adTalkT = 0, adTalkWait = false;
+  let adTalkT = 0, adTalkWait = false, adGoneAt = 0;
   const playLog = [];
   window.__playLog = playLog;
 
@@ -9373,8 +9392,9 @@ $("btnCopy").onclick = async () => {
     else if (k === "m") { if (!e.repeat) toggleMute(); }
     else if (k === "f") { if (!e.repeat) $("wFs").click(); }
     else if (/^[0-9]$/.test(k) && script && started) {
+      const held = talkBusy && talkHeldAt;
       talkCancel();
-      try { player.seekTo(total * +k / 10, true); } catch (err) {}
+      try { player.seekTo(total * +k / 10, true); if (held) player.playVideo(); } catch (err) {}
       poke();
     }
   });

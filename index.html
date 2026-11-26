@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>
   // ふつうに開くと、見るだけの画面になる。台本づくりや細かい設定の画面は ?edit を付けて開く
-  window.APP_VERSION = 'v0.22.5'.startsWith('v') || /^master-/.test('v0.22.5') ? 'v0.22.5' : '開発版';
+  window.APP_VERSION = 'v0.22.6'.startsWith('v') || /^master-/.test('v0.22.6') ? 'v0.22.6' : '開発版';
   // ?v=持ち主/リポジトリ/台本の名前 で開くと、その人が公開した台本を、接続なしで再生する
   (() => {
     const q = new URLSearchParams(location.search);
@@ -700,7 +700,7 @@
     display: flex; align-items: center; justify-content: center; text-align: center;
     font-size: var(--c-fs, 20px); line-height: 1.5;
   }
-  html.watch.booth #caption span { background: none; padding: 0; border-radius: 0; }
+  html.watch.booth #caption b, html.watch.booth #caption i { background: none; padding: 0; margin: 0; border-radius: 0; }
   /* 帯の中は操作が常に見えていてよい。映像に重ならないので、消す必要がない */
   html.watch.booth #wBar { opacity: 1; pointer-events: auto; background: none; padding-top: 6px; }
   html.watch.booth:not(.ui-on) #stage { cursor: auto; }
@@ -711,10 +711,16 @@
   html.watch.booth #wTime { order: -3; margin: 0 6px 0 2px; }
   html.watch.booth #wNow { order: -2; }
   html.watch.booth #wList { margin-left: auto; }
-  html.watch #caption span {
-    background: rgba(0,0,0,.66); padding: .12em .5em; border-radius: 4px;
+  /* 背景は、出した文字（b）にだけ敷く。まだ出していない文字（i）は透明のまま場所だけ取る（空の帯が見えないように）。
+     i にも同じ余白を付け、つなぎ目の余白は i の左の負の余白で打ち消して、文字が出ても並びが動かないようにする */
+  html.watch #caption b, html.watch #caption i {
+    padding: .12em .5em; border-radius: 4px;
     -webkit-box-decoration-break: clone; box-decoration-break: clone;
   }
+  html.watch #caption b { background: rgba(0,0,0,.66); }
+  html.watch #caption i { margin-left: -1em; }
+  html.watch #caption b:empty, html.watch #caption i:empty { display: none; }
+  html.watch #caption b:empty + i { margin-left: 0; }
   /* 札：左上に話題、右上に場所 */
   .wCard {
     position: absolute; top: 14px; z-index: 3; pointer-events: none; color: #fff;

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>
   // ふつうに開くと、見るだけの画面になる。台本づくりや細かい設定の画面は ?edit を付けて開く
-  window.APP_VERSION = 'v0.22.4'.startsWith('v') || /^master-/.test('v0.22.4') ? 'v0.22.4' : '開発版';
+  window.APP_VERSION = 'v0.22.5'.startsWith('v') || /^master-/.test('v0.22.5') ? 'v0.22.5' : '開発版';
   // ?v=持ち主/リポジトリ/台本の名前 で開くと、その人が公開した台本を、接続なしで再生する
   (() => {
     const q = new URLSearchParams(location.search);
@@ -488,6 +488,7 @@
   html.watch.no-caption #caption, html.watch.no-topic #wTopic, html.watch.no-place #wPlace, html.watch.no-avatar #avatar { visibility: hidden !important; }
   #wSet { border: 0; padding: 0; color: #fff; background: #212121; border-radius: 16px; width: calc(100% - 16px); max-width: 480px; max-height: 80dvh; margin: auto auto 8px; overflow: hidden; }
   #wSet[open] { display: flex; flex-direction: column; animation: shUp .22s ease-out; }
+  #wSet:focus { outline: none; }   /* 開いたときは、最初の行ではなく、シートそのものに合わせる（iPhone で青い枠が出ないように） */
   #wSet::backdrop { background: rgba(0,0,0,.35); }
   @keyframes shUp { from { transform: translateY(40px); opacity: .4; } to { transform: none; opacity: 1; } }
   @media (max-height: 500px) { #wSet { margin: auto 16px 8px auto; width: 380px; max-height: calc(100dvh - 16px); } }
@@ -596,6 +597,16 @@
   html:not(.shared) #wDesc #wMine { display: none; }
   #shareUrl { width: 100%; box-sizing: border-box; font-size: 16px; }
   #shareDlg p { margin: 8px 0; }
+  #sharePick .spH { margin: 12px 0 4px; font-size: 14px; color: #aaa; }
+  #sharePick .spRow { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 16px; }
+  #sharePick .spRow input[type=radio] { width: 20px; height: 20px; margin: 0; flex: 0 0 auto; }
+  #sfTime { width: 6.5em; font-size: 16px; padding: 6px 10px; margin-left: 4px; }
+  #sfTopicSel { width: 100%; font-size: 16px; margin: 0 0 4px; }
+  #sharePick #sfErr { margin: 4px 0 0; color: #ff8a80; min-height: 0; }
+  #sharePick #sfErr:empty { display: none; }
+  #wDesc .artShare { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; min-height: 0; margin: -4px -6px 0 0; padding: 0; border: 0; border-radius: 50%; background: none; color: #ccc; }
+  #wDesc .artShare svg { width: 20px; height: 20px; fill: currentColor; }
+  html.no-share #wDesc .artShare { display: none; }
   /* 広告のあいだは、映像の上に何もかぶせない */
   html.watch.brk #wTap { pointer-events: none; }
   html.watch.brk #wTopic, html.watch.brk #wPlace, html.watch.brk #avatar.over, html.watch.brk:not(.talk) #caption, html.watch.brk:not(.booth) #caption { visibility: hidden !important; }
@@ -1698,9 +1709,9 @@
 <!-- URLで共有 -->
 <dialog id="shareTDlg">
   <h2 style="margin-top:0;font-size:17px">共有</h2>
+  <div id="sharePickT"></div>
   <div class="row" style="margin-top:12px">
-    <button id="shareT1" class="fixed primary"></button>
-    <button id="shareT0" class="fixed">最初から</button>
+    <button id="shareT1" class="fixed primary">共有</button>
     <button id="shareTClose" class="fixed">閉じる</button>
   </div>
 </dialog>
@@ -1708,8 +1719,15 @@
   <h2 style="margin-top:0;font-size:17px">URLで共有</h2>
   <p id="shareWhat"></p>
   <p class="hint">共有すると、URL を知っている人は誰でも台本を見られます。公開されるのは、セリフと声とキャラクター、動画と台本の題、取り上げた記事の題とリンクです。リポジトリのほかの中身は、公開されません。</p>
+  <div id="sharePickHome"><div id="sharePick" hidden>
+    <p class="spH">どこから見てもらうか</p>
+    <label class="spRow"><input type="radio" name="shareFrom" value="top" id="sfTop">動画の最初から</label>
+    <label class="spRow"><input type="radio" name="shareFrom" value="time" id="sfNow">この時間から<input type="text" id="sfTime" inputmode="numeric" autocomplete="off" aria-label="始める時間（分:秒）"></label>
+    <label class="spRow" id="sfTopicRow"><input type="radio" name="shareFrom" value="topic" id="sfTopic">話題から</label>
+    <select id="sfTopicSel" aria-label="始める話題"></select>
+    <p class="hint" id="sfErr"></p>
+  </div></div>
   <input type="text" id="shareUrl" readonly aria-label="共有のURL">
-  <label class="hint" id="shareAtRow" hidden style="display:flex;align-items:center;gap:8px;margin-top:8px"><input type="checkbox" id="shareAt" style="width:auto;margin:0"><span id="shareAtTxt"></span></label>
   <p class="hint" id="shareMsg"></p>
   <div class="row" style="margin-top:12px">
     <button id="shareOn" class="fixed primary">共有する</button>
@@ -1759,7 +1777,7 @@
 </dialog>
 
 <!-- 見る画面の設定（再生中でも開ける） -->
-<dialog id="wSet" aria-label="設定">
+<dialog id="wSet" aria-label="設定" tabindex="-1" autofocus>
   <div class="grab"></div>
   <div class="page on" data-name="main">
     <button type="button" class="sh" data-page="quality"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M19 7h1M4 17h1M11 17h9"/><circle cx="16" cy="7" r="2.4"/><circle cx="8" cy="17" r="2.4"/></svg><span class="l">画質</span><span class="v" id="svQ"></span></button>
@@ -3488,6 +3506,10 @@ let gaze = 0, gazeTarget = 0;       // 0=前方 / 1=カメラ
 let blink = 0, nextBlink = 1500;
 // 運転中なので、ふだんは道路を見る。話しているあいだも、ちらっとこちらを見るだけ（見る画面だけ）
 let glance = 0, glanceT = 6000, wasChat = false;
+// しばらく黙っていたあとの話しかけ。顔は前のまま少し傾けて、目だけでこちらを見る
+let peek = 0, peekAmt = 0, lastSpokeAt = 0;
+const PEEK_GAP = 8000, PEEK_LEN = 1900;
+function peekStart() { peek = PEEK_LEN; glance = 0; glanceT = Math.max(glanceT, PEEK_LEN + 3000); }
 const LOOK_GAP = {   // こちらを見る間隔（ミリ秒）。雑談のときと、そうでないとき
   few:  { chat: [14000, 26000], road: [35000, 70000] },
   mid:  { chat: [6500, 12000],  road: [18000, 36000] },
@@ -3499,6 +3521,7 @@ function wantedGaze(dt) {
   if (talkFace) return 1;   // 小話のあいだは、車を止めてこちらを向いている見立て
   if (talkBusy) return 0;   // 小話のあと、前を向いてから走り出す
   const turning = Math.abs(wheelTarget) > 0.3, chat = gazeTarget > 0.5, rest = chat ? 0.05 : gazeTarget;
+  if (peek > 0) { peek -= dt; return turning ? rest : 1; }
   if (glance > 0) { glance -= dt; return turning ? rest : 1; }
   const [a, b] = (LOOK_GAP[lsGet("look", "mid")] || LOOK_GAP.mid)[chat ? "chat" : "road"];
   if (chat && !wasChat) glanceT = Math.min(glanceT, b);   // 話しはじめたら、間隔を短いほうに切り替える
@@ -3652,7 +3675,8 @@ function drawAvatar(now) {
   const face2d = { ...fw, smile: Math.max(fw.smile, fw.laugh, fw.soft * 0.45) };   // 簡単な絵の顔は、笑う系を1つにまとめる
 
   // VRM側（module script）から読むための状態。描画方式を差し替えても共通で使う
-  window.avatarState = { wheel, gaze, mouth, blink, sway, breathe, dt, face: fw, gesture: gest, gestureOn: !!moodGesture, ...handStep(dt) };
+  peekAmt = peek > 0 && gaze > 0.3 ? Math.min(1, peekAmt + dt / 350) : Math.max(0, peekAmt - dt / 600);
+  window.avatarState = { wheel, gaze, mouth, blink, sway, breathe, dt, face: fw, gesture: gest, gestureOn: !!moodGesture, peek: smooth01(peekAmt), ...handStep(dt) };
 
   if (window.__vrmReady) { requestAnimationFrame(drawAvatar); return; }  // VRM表示中は簡易アバターを描かない
   fx.clearRect(0, 0, W, H);
@@ -4090,6 +4114,7 @@ async function drain() {
       if (gen !== sayGen) continue;   // 待つ間に、台本が替わった・位置が動いた・止められた
       setAct(c.act, c.amount);
       gazeTarget = c.kind === "chat" ? 1 : 0.15;   // 雑談は視聴者を見る
+      if (c.kind === "chat" && !c.follow && Date.now() - lastSpokeAt > PEEK_GAP) peekStart();
       if ($("showCaption").checked) setCaption(c.text);
       const vol = player?.getVolume ? player.getVolume() : 100;
       // 声が無いときは、動画の音を下げない
@@ -4097,6 +4122,7 @@ async function drain() {
       moodPlan(c.text, c, c.kind);
       try { await say(c.text, c); } catch (e) { status("音声エラー: " + e.message, "err"); }
       moodStop();
+      lastSpokeAt = Date.now();
       // 話しているあいだに、YouTube の操作で音量を変えていたら、戻さない
       let keep = false;
       if (window.SHARE) try { const v = player.getVolume(); keep = Math.abs(v - vol) > 1 && Math.abs(v - +$("duck").value) > 1; } catch (e) {}
@@ -4779,17 +4805,64 @@ const withT = (url, t) => {
   const u = url.replace(/([?&])t=[^&#]*&?/, "$1").replace(/[?&]$/, "");
   return t == null ? u : u + (u.includes("?") ? "&" : "?") + "t=" + t;
 };
-function shareUrlNow() { $("shareUrl").value = withT(shareInfo(shareTarget.key).url, $("shareAt").checked ? shareT : null); $("shareCopy").textContent = "URLをコピー"; }
-$("shareAt").onchange = shareUrlNow;
-async function openShare(x) {
+// どこから見てもらうか（最初から・この時間から・話題から）。共有の2つの画面で使う
+// 「m:ss」「h:mm:ss」を秒にする。全角の数字やコロンも受ける。形が違えば null
+function parseClock(str) {
+  const v = String(str || "").trim().replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[：]/g, ":");
+  // iPhone の数字のキーボードにはコロンが無いので、「1234」は 12:34、「10203」は 1:02:03 と読む
+  const d = v.match(/^\d{3,6}$/) ? v.padStart(6, "0").match(/^(\d\d)(\d\d)(\d\d)$/) : null;
+  const m = d ? [v, +d[1] ? d[1] : undefined, d[2], d[3]] : v.match(/^(?:(\d{1,2}):)?(\d{1,3}):(\d{1,2})$/);
+  if (!m || +m[3] > 59 || (m[1] && +m[2] > 59)) return null;
+  return (+m[1] || 0) * 3600 + +m[2] * 60 + +m[3];
+}
+let pickTopics = [];
+function setupPick(box, t, topic) {
+  box.appendChild($("sharePick"));
+  $("sharePick").hidden = false;
+  const s = box.id === "sharePickT" || (shareTarget && script && shareTarget.key === scriptKey(script)) ? script : null;
+  pickTopics = (s?.topics || []).filter(x => x && Number.isFinite(x.start) && x.title).sort((a, b) => a.start - b.start);
+  $("sfTopicSel").replaceChildren(...pickTopics.map((x, i) => { const o = document.createElement("option"); o.value = i; o.textContent = `${fmtTime(x.start)}　${x.title}`; return o; }));
+  $("sfTopicRow").hidden = $("sfTopicSel").hidden = !pickTopics.length;
+  const at = topic ?? t ?? -1;
+  let k = pickTopics.findIndex(x => at >= x.start - 1 && at <= (x.end ?? x.start));
+  if (k < 0) k = Math.max(0, pickTopics.findIndex(x => x.start > at));
+  $("sfTopicSel").value = String(k);
+  $("sfTime").value = fmtTime(t ?? 0);
+  $(topic != null && pickTopics.length ? "sfTopic" : t != null ? "sfNow" : "sfTop").checked = true;
+  $("sfErr").textContent = "";
+}
+// 選んだ所の秒。最初からなら null。時間の形が違えば ok: false
+function pickT() {
+  const v = document.querySelector('input[name="shareFrom"]:checked')?.value;
+  if (v === "topic") return { ok: true, t: Math.floor(pickTopics[+$("sfTopicSel").value]?.start ?? 0) || null };
+  if (v !== "time") return { ok: true, t: null };
+  const t = parseClock($("sfTime").value);
+  if (t == null || (total && t >= total)) return { ok: false, t: null };
+  return { ok: true, t: t >= 1 ? t : null };
+}
+function pickChanged() {
+  const p = pickT();
+  $("sfErr").textContent = p.ok ? "" : `時間は「12:34」か「1234」のように、分と秒で入れてください${total ? `（${fmtTime(total)} まで）` : ""}。`;
+  if ($("shareDlg").open && shareTarget) shareUrlNow();
+}
+for (const r of document.querySelectorAll('input[name="shareFrom"]')) r.onchange = pickChanged;
+$("sfTime").onfocus = () => { $("sfNow").checked = true; pickChanged(); };
+$("sfTime").oninput = () => { $("sfNow").checked = true; pickChanged(); };
+$("sfTopicSel").onchange = () => { $("sfTopic").checked = true; pickChanged(); };
+function shareUrlNow() {
+  const p = pickT();
+  $("shareUrl").value = withT(shareInfo(shareTarget.key).url, p.t);
+  $("shareCopy").disabled = !p.ok;
+  $("shareCopy").textContent = "URLをコピー";
+}
+async function openShare(x, topic) {
   shareTarget = x;
   shareT = script && x.key === scriptKey(script) ? nowSec() : null;
-  $("shareAt").checked = false;
-  $("shareAtTxt").textContent = shareT != null ? `いま見ている所（${fmtTime(shareT)}）から始める` : "";
+  setupPick($("sharePickHome"), shareT, topic);
   const seq = ++shareSeq, d = $("shareDlg");
   $("shareWhat").textContent = isOnly(x) ? mainName(x) : `${mainName(x)}（${scriptTitle(x)}）`;
   $("shareUrl").value = shareInfo(x.key).url;
-  $("shareUrl").hidden = $("shareOn").hidden = $("shareOff").hidden = $("shareCopy").hidden = $("shareAtRow").hidden = true;
+  $("shareUrl").hidden = $("shareOn").hidden = $("shareOff").hidden = $("shareCopy").hidden = $("sharePick").hidden = true;
   $("shareMsg").textContent = "確かめています…";
   if (!d.open) d.showModal();
   try {
@@ -4807,7 +4880,8 @@ async function openShare(x) {
 function showShare(on) {
   $("shareOn").hidden = on;
   $("shareUrl").hidden = $("shareOff").hidden = $("shareCopy").hidden = !on;
-  $("shareAtRow").hidden = !on || shareT == null;
+  $("sharePick").hidden = !on;
+  if (on) shareUrlNow();
   $("shareMsg").textContent = on ? "" : "まだ共有していません。";
   $("shareCopy").textContent = "URLをコピー";
 }
@@ -6233,14 +6307,15 @@ if (THREE && VRMLoaderPlugin) {
       lookTarget.position.lerpVectors(fwdPoint, camera.position, Math.min(1, s.gaze));
     }
     // 運転中なので、顔はほとんど前のまま。首は少しだけ向けて、あとは目で見る
-    let turnYaw = 0, turnPitch = 0;
+    let turnYaw = 0, turnPitch = 0, peekSide = 0;
     if (window.WATCH_MODE && s.gaze > 0.01) {
       const hd = vrm.humanoid?.getNormalizedBoneNode("head");
       if (hd) {
         hd.getWorldPosition(gazeV);
         const cx = camera.position.x - gazeV.x, cy = camera.position.y - gazeV.y, cz = camera.position.z - gazeV.z;
         const yaw = Math.atan2(fwdSign * cx, fwdSign * cz);
-        const turn = 0.3 + 0.6 * (s.faceCam || 0);   // 小話のあいだは、顔ごと向く
+        const turn = (0.3 + 0.6 * (s.faceCam || 0)) * (1 - 0.75 * (s.peek || 0));   // 小話のあいだは、顔ごと向く。目だけで見るときは、顔はほぼ前のまま
+        peekSide = Math.sign(yaw);
         turnYaw = Math.max(-0.95, Math.min(0.95, yaw)) * s.gaze * turn;
         turnPitch = -Math.max(-0.3, Math.min(0.3, Math.atan2(cy, Math.hypot(cx, cz)))) * s.gaze * fwdSign * turn;
       }
@@ -6273,7 +6348,8 @@ if (THREE && VRMLoaderPlugin) {
       if (headB) {
         euler.set(Math.sin(t * 1.1) * 0.025 * idle + g.pitch * 0.65 + nod + turnPitch * 0.5 + sg.pitch * 0.7,
                   -s.wheel * 0.18 + Math.sin(t * 0.37) * 0.10 * idle + g.yaw * 0.65 + turnYaw * 0.5 + sg.yaw * 0.65,
-                  Math.sin(t * 0.83) * 0.02 * idle + sg.roll * 0.7);
+                  Math.sin(t * 0.83) * 0.02 * idle + sg.roll * 0.7 + peekSide * 0.18 * (s.peek || 0));
+        if (s.peek) euler.x += 0.06 * s.peek;   // 少しあごを引いて、上目に
         headB.rotation.copy(euler);
       }
 
@@ -8072,6 +8148,13 @@ $("btnCopy").onclick = async () => {
       if (a.article && a.article !== a.title) body.appendChild(mk("i", "", a.article));
       if (a.url) body.appendChild(mk("i", "go", siteOf(a.url) + " で読む"));
       row.appendChild(body);
+      if (a.start != null) {
+        const sh = mk("button", "artShare");
+        sh.type = "button"; sh.title = "この話題から共有"; sh.setAttribute("aria-label", "この話題から共有");
+        sh.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 5l7 6-7 6v-4c-5 0-8 2-9 5 0-6 4-9 9-9z"/></svg>';
+        sh.onclick = () => shareNow(a.start);
+        row.appendChild(sh);
+      }
       box.appendChild(row);
     }
     const told = talked.filter(x => httpUrl(x.url) && !arts.some(a => a.url === x.url));
@@ -8114,24 +8197,21 @@ $("btnCopy").onclick = async () => {
   }
   $("wInfoBtn").onclick = $("wInfoBtn2").onclick = $("wRow").onclick = openInfo;
   // 共有：自分の台本なら共有の画面、共有で開いた人なら、いま見ている URL を渡す
-  async function shareNow() {
+  // topic（秒）を渡すと、その話題を選んだ状態で開く
+  async function shareNow(topic) {
     if (!script) return;
+    if (typeof topic !== "number") topic = null;
     if (window.SHARE) {
-      const t = nowSec();
-      if (t != null && !$("shareTDlg").open) {
-        $("shareT1").textContent = `${fmtTime(t)} から`;
-        $("shareT1").onclick = () => { $("shareTDlg").close(); shareUrl(withT(location.href, t)); };
-        $("shareT0").onclick = () => { $("shareTDlg").close(); shareUrl(withT(location.href, null)); };
-        $("shareTDlg").showModal();
-        return;
-      }
-      shareUrl(withT(location.href, null));
+      if ($("shareTDlg").open) return;
+      setupPick($("sharePickT"), nowSec(), topic);
+      $("shareTDlg").showModal();
       return;
     }
     const key = scriptKey(script);
     if ($("wDesc").open) $("wDesc").close();
-    openShare(pickItems.find(x => x.key === key) || { key, videoId: script.videoId, info: { label: [script.meta?.title || key, script.title].filter(Boolean).join("　") } });
+    openShare(pickItems.find(x => x.key === key) || { key, videoId: script.videoId, info: { label: [script.meta?.title || key, script.title].filter(Boolean).join("　") } }, topic);
   }
+  $("shareT1").onclick = () => { const p = pickT(); if (!p.ok) { pickChanged(); return; } $("shareTDlg").close(); shareUrl(withT(location.href, p.t)); };
   $("shareTClose").onclick = () => $("shareTDlg").close();
   async function shareUrl(url) {
     if (navigator.share) { try { await navigator.share({ title: document.title, url }); return; } catch (e) { if (e.name === "AbortError") return; } }
@@ -8139,7 +8219,7 @@ $("btnCopy").onclick = async () => {
     try { await navigator.clipboard.writeText(url); ok = true; } catch (e) {}
     showToast(ok ? "URL をコピーしました。" : "URL をコピーできませんでした。");
   }
-  $("wShare").onclick = $("iShare").onclick = shareNow;
+  $("wShare").onclick = $("iShare").onclick = () => shareNow();
   root.classList.toggle("no-share", !window.SHARE && (!lsGet("data-repo") || !lsGet("github-pat")));
   $("iClose").onclick = () => $("wDesc").close();
   $("wDesc").addEventListener("click", e => { if (e.target === $("wDesc")) $("wDesc").close(); });

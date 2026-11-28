@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>
   // ふつうに開くと、見るだけの画面になる。台本づくりや細かい設定の画面は ?edit を付けて開く
-  window.APP_VERSION = 'v0.23.1'.startsWith('v') || /^master-/.test('v0.23.1') ? 'v0.23.1' : '開発版';
+  window.APP_VERSION = 'v0.23.2'.startsWith('v') || /^master-/.test('v0.23.2') ? 'v0.23.2' : '開発版';
   // ?v=持ち主/リポジトリ/台本の名前 で開くと、その人が公開した台本を、接続なしで再生する
   (() => {
     const q = new URLSearchParams(location.search);
@@ -3623,25 +3623,33 @@ function moodPlan(text, c, kind) {
   moodSteps = list.filter(m => m && Number.isFinite(m.at)).sort((a, b) => a.at - b.at);
   moodText = text;
   moodSeq++;
-  const now = moodSteps.filter(m => m.at === 0);
-  setMood(now.find(m => m.face)?.face || "", now.find(m => m.gesture)?.gesture || "");
+  const now = moodSteps.filter(m => m.at === 0), f0 = now.find(m => m.face)?.face || "";
+  setMood(REACT_FACES.includes(f0) ? "" : f0, now.find(m => m.gesture)?.gesture || "");   // 反応の顔は、moodRun が文の終わりで出す
 }
+// 驚く・ガーンなどの反応の顔は、何に反応したかを言い終えてから出す（先に顔が変わると、見る人には理由が分からない）。
+// 出したら、セリフが終わっても少しのあいだ残す。ガーンの白目は、長く続けると怖いので、少ししたら困り顔に戻す
+const REACT_FACES = ["surprised", "gaan", "jito", "smug", "pout", "wink"], REACT_HOLD = 1500;
+let reactAt = 0, reactHeld = false;
 function moodRun(sec) {
   const my = ++moodSeq, chars = [...moodText];
   // 読点や句点では間があくので、2文字ぶんと数える
   const weight = n => chars.slice(0, n).reduce((a, c) => a + ("、。？！".includes(c) ? 2 : 1), 0), all = weight(chars.length) || 1;
   const later = (t, f) => setTimeout(() => { if (my === moodSeq && (speaking || talkBusy)) f(); }, t * 1000);
   for (const m of moodSteps) {
-    if (m.at > 0) later(Math.max(0, sec * weight(m.at) / all - 0.35), () => {   // 顔は、言葉より少し早く
-      if (m.face) faceTo(m.face, false);
-      if (m.gesture || FACE_GESTURE[m.face]) gestureGo(m.gesture || FACE_GESTURE[m.face], false);
+    const react = REACT_FACES.includes(m.face), early = !react && m.face, eg = m.gesture || (early && FACE_GESTURE[m.face]);
+    if (m.at > 0 && (early || eg)) later(Math.max(0, sec * weight(m.at) / all - 0.35), () => {   // 顔は、言葉より少し早く
+      if (early) faceTo(m.face, false);
+      if (eg) gestureGo(eg, false);
     });
-    // 記号と効果音は、その文を言い終えたところで出す（先に「？」が出ると、何を言うのか分からない）
+    // 反応の顔と、記号と効果音は、その文を言い終えたところで出す（先に「？」が出ると、何を言うのか分からない）
     const fx = [m.face, m.gesture === "tilt" ? "tilt" : ""].filter(k => FX[k]);
-    if (!fx.length) continue;
+    if (!fx.length && !react) continue;
     let end = chars.findIndex((c, i) => i >= m.at && "。？！?!".includes(c));
     if (end < 0) end = chars.length - 1;
-    later(Math.max(0, sec * weight(end + 1) / all - 0.15), () => fx.forEach(moodFx));
+    later(Math.max(0, sec * weight(end + 1) / all - 0.15), () => {
+      if (react) { faceTo(m.face, false); if (!m.gesture && FACE_GESTURE[m.face]) gestureGo(FACE_GESTURE[m.face], false); }
+      fx.forEach(moodFx);
+    });
   }
 }
 // 出てくるところの顔。もう話しはじめていたら、台本の表情を優先する
@@ -3649,6 +3657,8 @@ window.__introMood = on => { if (speaking) return; if (on) { moodFace = "smile";
 const FACE_LOOKAT = ["wink", "smug", "jito", "gaan", "dreamy"];   // 強い表情は、少しこちらを見て見せる
 function faceTo(f, fx = true) {
   const nf = FACE_IDS.includes(f) ? f : "";
+  if (!nf && moodFace && reactAt) { reactHeld = true; return; }   // 出したばかりの反応の顔は、すぐには戻さない
+  if (nf !== moodFace) { reactAt = REACT_FACES.includes(nf) ? performance.now() : 0; reactHeld = false; }
   if (nf && nf !== moodFace) { if (fx) moodFx(nf); if (FACE_LOOKAT.includes(nf)) { glance = Math.max(glance, 2200); peek = 0; faceCamUntil = performance.now() + 2200; } }
   moodFace = nf;
 }
@@ -3710,6 +3720,11 @@ function idleGo(a, now) {
   for (const s of a.notes || []) setTimeout(() => { if (moodGesture === a.g && lsGet("show-manpu", "1") !== "0" && lsGet("show-avatar", "1") !== "0") showManpu("note"); }, s * 1000);
 }
 function moodStep(now, dt) {
+  if (reactAt && now - reactAt >= REACT_HOLD) {
+    reactAt = 0;
+    if (reactHeld) { reactHeld = false; moodFace = ""; }
+    else if (moodFace === "gaan") moodFace = "troubled";
+  }
   for (const k of FACE_IDS) {
     const v = faceMix[k] || 0, want = k === moodFace ? 1 : 0;
     faceMix[k] = want > v ? Math.min(want, v + dt / 250) : Math.max(want, v - dt / 250);

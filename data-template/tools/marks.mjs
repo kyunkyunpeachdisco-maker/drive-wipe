@@ -8,7 +8,22 @@
 //   {御用邸|ごようてい}の前から。                 字幕は「御用邸」、声は「ごようてい」と読む
 // 読みは say に入る（字幕の line には入らない）。読みを直すと、その発話の声だけ作り直しになる。
 
-export const FACES = { "笑う": "smile", "微笑む": "soft", "大笑い": "laugh", "驚く": "surprised", "困る": "troubled", "むっとする": "pout", "ふつう": "none" };
+export const FACES = { "笑う": "smile", "微笑む": "soft", "大笑い": "laugh", "驚く": "surprised", "困る": "troubled", "むっとする": "pout",
+  "ウインク": "wink", "ドヤ顔": "smug", "ジト目": "jito", "ガーン": "gaan", "うっとり": "dreamy", "ふつう": "none" };
+// セリフのはじめの表情に合わせた言い方（VOICEVOX）。pitch は声の高さに足す値、int は抑揚、speed は速さの倍率。
+// make-audio.mjs が使う。ここを変えると、その表情のセリフの声が作り直しになる
+export const TONES = {
+  smile:     { pitch: 0.02,  int: 1.15, speed: 1 },
+  laugh:     { pitch: 0.03,  int: 1.3,  speed: 1.03 },
+  surprised: { pitch: 0.04,  int: 1.35, speed: 1.05 },
+  troubled:  { pitch: -0.02, int: 0.9,  speed: 0.95 },
+  pout:      { pitch: -0.01, int: 1.1,  speed: 1 },
+  wink:      { pitch: 0.03,  int: 1.2,  speed: 1 },
+  smug:      { pitch: 0,     int: 1.2,  speed: 0.97 },
+  jito:      { pitch: -0.03, int: 0.65, speed: 0.93 },
+  gaan:      { pitch: -0.04, int: 0.8,  speed: 0.9 },
+  dreamy:    { pitch: 0.01,  int: 0.9,  speed: 0.92 },
+};
 export const GESTURES = { "うなずく": "nod", "首をかしげる": "tilt", "首を振る": "shake", "ちらっと横を見る": "glance" };
 export const HANDS = { "手を振る": "wave", "片手を上げる": "raise", "指をさす": "point" };
 const PLACES = 3;   // 1つのセリフで、印を書ける場所の数

@@ -175,6 +175,15 @@ function build(name) {
   if (marked) console.log(`表情・しぐさの印: ${marked}件（発話 ${lines.length}件のうち）`);
   if (marked * 4 < lines.length) console.log(`  印が少なめです。目安は、セリフ2本に1つです`);
   if (marked * 4 > lines.length * 3) console.log(`  印が多めです。目安は、セリフ2本に1つです`);
+  // 記事の話は、終わりまで散らす。終盤に記事の話がないと、単調になる
+  if (spans.length && covered >= 1200) {
+    const last = spans[spans.length - 1];
+    if (covered - last.end > 600) console.log(`  最後のコーナーが ${fmt(Math.round(last.end))} ごろに終わり、終点まで${Math.round((covered - last.end) / 60)}分、記事の話がありません。終点の10分前ごろに始めて、数分前までに話し終えるのが目安です`);
+    for (let i = 1; i < spans.length; i++) {
+      const gap = spans[i].start - spans[i - 1].end;
+      if (gap > 900) console.log(`  ${fmt(Math.round(spans[i - 1].end))}〜${fmt(spans[i].start)} の${Math.round(gap / 60)}分、記事の話がありません。コーナーは、だいたい同じ間をあけて置きます`);
+    }
+  }
   if (lines.length && lines[0].abs > 20) errors.push(`最初の発話が ${fmt(lines[0].abs)} です（冒頭20秒以内に導入を入れる）`);
   if (lines.length && covered - lines[lines.length - 1].abs > MAX_SILENCE) errors.push(`最後の発話のあと、終わりまで無言が長すぎます`);
   const seen = new Map();

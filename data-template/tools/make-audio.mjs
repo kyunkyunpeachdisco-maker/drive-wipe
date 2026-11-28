@@ -17,11 +17,13 @@
 // - audio/読み辞書.txt に「表記 よみ [アクセント]」を書くと、どの台本でもその読みになる
 //     行って いって          … よみだけ：声を作る前に、文を書き換える
 //     七里ヶ浜 シチリガハマ 4  … アクセント（高く読む最後の音が何音目か。0は平ら）付き：VOICEVOX の辞書に入れる
+// - セリフのはじめの表情（[驚く] など）に合わせて、声の高さ・抑揚・速さを変える（marks.mjs の TONES）。表情を変えると、その発話は作り直す
 // - 読みが変わった発話は、ファイル名（字幕のハッシュ）が同じでも作り直す。index.json の items[].yomi に、作ったときの読みを控える
 // - 作るたびに、全部の発話の読み（VOICEVOX がどう読むつもりか）を 読み.txt に書く。読み違いはこれで見つける
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, unlinkSync, copyFileSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { TONES } from "./marks.mjs";
 
 if (process.argv[2] === "--voices") {
   const url = process.argv[3] || "http://127.0.0.1:50021";
@@ -45,6 +47,9 @@ const script = key === "talks"
 // 字幕ごとに、読む文（say があればそれ）
 const sayOf = new Map();
 for (const it of script.items) if (it.line && !sayOf.has(it.line)) sayOf.set(it.line, it.say || it.line);
+// 字幕ごとに、言い方を決める表情（セリフのはじめの表情）
+const toneOf = new Map();
+for (const it of script.items) if (it.line && !toneOf.has(it.line)) toneOf.set(it.line, TONES[it.face] ? it.face : "");
 const lines = [...sayOf.keys()];
 const hash12 = text => createHash("sha256").update(text, "utf8").digest("hex").slice(0, 12);
 
@@ -76,7 +81,8 @@ function spoken(text) {
   let s = sayOf.get(text) || text;
   for (const e of plain) s = s.split(e.surface).join(e.yomi);
   const acc = accented.filter(e => s.includes(e.surface)).map(e => `${e.surface}=${kata(e.yomi)}${e.acc}`);
-  return { say: s, yomi: s + (acc.length ? "／" + acc.join("、") : "") };
+  const tone = toneOf.get(text) || "";
+  return { say: s, tone, yomi: s + (acc.length ? "／" + acc.join("、") : "") + (tone ? "／声:" + tone : "") };
 }
 const dictIds = [];
 for (const e of accented) {
@@ -92,9 +98,10 @@ async function query(text) {
   if (!q.ok) throw new Error(`audio_query ${q.status}`);
   return q.json();
 }
-async function synth(text) {
-  const q = await query(text);
-  q.speedScale = 1;
+async function synth(text, tone) {
+  const q = await query(text), t = TONES[tone];
+  q.speedScale = t ? t.speed : 1;
+  if (t) { q.pitchScale = (q.pitchScale || 0) + t.pitch; q.intonationScale = (q.intonationScale ?? 1) * t.int; }
   q.outputSamplingRate = 16000;   // アプリと同じ。24kHzステレオのままだと台本1本で13MBを超える
   q.outputStereo = false;
   const s = await fetch(`${engineUrl}/synthesis?speaker=${speakerId}`, {
@@ -124,7 +131,7 @@ let made = 0, kept = 0, shared = 0, reread = 0;
 const readings = [];
 try {
   for (const text of lines) {
-    const h = hash12(text), { say, yomi } = spoken(text);
+    const h = hash12(text), { say, yomi, tone } = spoken(text);
     const same = d => existsSync(`${d}/${h}.wav`) && (d === dir ? yomiHere : yomiOthers.get(d)).get(h) === yomi;
     const from = others.find(same);
     if (same(dir)) kept++;
@@ -133,7 +140,7 @@ try {
       shared++;
     } else {
       if (existsSync(`${dir}/${h}.wav`)) reread++;
-      writeFileSync(`${dir}/${h}.wav`, await synth(say));
+      writeFileSync(`${dir}/${h}.wav`, await synth(say, tone));
       partial[h] = yomi;
       made++;
       if (made % 10 === 0) console.log(`  ${made}件 作りました`);
